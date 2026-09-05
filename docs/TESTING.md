@@ -58,7 +58,7 @@ The release harness creates a uniquely named disposable database, starts an isol
 & 'C:\xampp\php\php.exe' .\tests\e2e_release.php
 ```
 
-It exercises the complete guardian-to-expert-to-administrator workflow, schema compatibility upgrades, real image uploads, photo ownership/IDOR controls, badge and certificate delivery, follow-ups, audit integrity, role denials, host-header-safe redirects, third-party asset integrity attributes, and PHP warning/fatal scans.
+It exercises the complete guardian-to-expert-to-administrator workflow, schema compatibility upgrades, real image uploads, photo ownership/IDOR controls, public role-escalation prevention, correction/confirmation/rejection paths, badge and certificate delivery, follow-ups, staff provisioning/suspension/deletion, profile and password changes, Appendix H analytics permissions, audit integrity, role denials, host-header-safe redirects, third-party asset integrity attributes, and PHP warning/fatal scans.
 
 ## Manual end-to-end acceptance run
 
@@ -72,7 +72,7 @@ It exercises the complete guardian-to-expert-to-administrator workflow, schema c
 8. Use the follow-up alert to create a parent-linked report and verify it.
 9. Confirm the timeline preserves both photos/health states and the badge metrics count only verified rows.
 10. As admin, test role/status changes, the required suspend-before-delete sequence, species/badge edits, audit filters, Python chart refresh, and browser **Print / Save as PDF**. Confirm all-time static snapshots are absent from the filtered printout.
-11. Confirm experts do not see the static-chart regeneration action.
+11. Confirm experts see health summaries/high-risk sites but do not receive computed survival values, the PDF action, or the static-chart regeneration action on web or mobile.
 12. Attempt direct access to admin pages as a guardian and confirm HTTP 403.
 13. Confirm an owner, expert, and administrator can retrieve a report through `photo.php`; another guardian receives 404, and no direct `storage/uploads` URL is public.
 14. Attempt a POST without/with an invalid CSRF token and confirm it is rejected. Submit array-shaped values where scalar login/species fields are expected and confirm a controlled validation response without warnings.

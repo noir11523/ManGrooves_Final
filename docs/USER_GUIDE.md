@@ -44,13 +44,13 @@
    - **Reject** requires a clear reason for the guardian.
 5. Add coaching feedback and optionally mark a verified site as **Needs attention**.
 6. Submit once. The transaction updates the report, cluster/timeline, 30-day follow-up date, notification, audit trail, and eligible badges together.
-7. Use **Analytics** and maps to review verified results and high-risk sites. Experts can filter and print live analytics, but only system administrators can run the server-side static chart generator.
+7. Use **Analytics** and maps to review verified health summaries, monitoring volume, and high-risk sites. Computed survival rates, PDF export, and the server-side static chart generator are restricted to system administrators.
 
 ## System Administrator
 
 Administrators can use every expert workflow plus:
 
-- **Users**: search, change roles, suspend/activate accounts, or delete unused accounts. An active account must be suspended before deletion. The application prevents self-demotion/self-suspension, removal of the last active administrator, and deletion where retained environmental records require the account.
+- **Users**: securely create expert/administrator accounts, search users, change roles, suspend/activate accounts, open eligible guardian certificates, or delete unused accounts. Public self-registration remains guardian-only. An active account must be suspended before deletion. The application prevents self-demotion/self-suspension, removal of the last active administrator, and deletion where retained environmental records require the account.
 - **Species**: add, edit, activate, or retire taxonomy and observable traits.
 - **Badges**: configure name, metric, threshold, description, icon, and active state.
 - **Clusters**: review generated sites and chronological evidence.
