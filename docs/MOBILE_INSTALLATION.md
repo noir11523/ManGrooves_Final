@@ -104,6 +104,6 @@ Run these checks separately on Android and iPhone before public distribution:
 7. Turn the PHP server off temporarily and verify connection errors are understandable; then restart it.
 8. Test on at least one small Android phone and one current iPhone before release.
 
-The older `mobile/android-apk` WebView wrapper and the PWA remain as legacy fallbacks. New mobile development should use `mobile/flutter_app`.
+The older Android WebView wrapper has been retired. The PWA remains available as a browser-installable fallback, while new mobile development uses `mobile/flutter_app`.
 
 See `docs/MOBILE_RELEASE_VERIFICATION.md` for the exact clean-build hash, automated test results, verified APK metadata, and the remaining physical-device and store-signing gates.

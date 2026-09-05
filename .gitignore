@@ -1,0 +1,15 @@
+/.env
+/public/uploads/*
+!/public/uploads/.gitkeep
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+/tmp/
+/.phpunit.cache/
+/database/*.log
+/database/*.bak
+/backups/
+/storage/sessions/*
+!/storage/sessions/.gitkeep
+/storage/*.log
+/mobile/flutter_app/dist/
+/mobile/android-apk/

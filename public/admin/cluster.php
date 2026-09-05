@@ -26,7 +26,7 @@ if ($clusterId) {
     $timelineStatement = $pdo->prepare(
         "SELECT r.id, r.report_code, r.status, r.suggested_health, r.final_health, r.rarity_level,
                 r.observed_alive_count, r.needs_attention, r.submitted_at, r.verified_at,
-                r.expert_feedback, u.full_name AS guardian_name, e.full_name AS expert_name,
+                r.expert_feedback, r.photo_path, u.full_name AS guardian_name, e.full_name AS expert_name,
                 s.common_name AS species_name
          FROM reports r
          JOIN users u ON u.id = r.user_id
@@ -39,13 +39,15 @@ if ($clusterId) {
     $timeline = $timelineStatement->fetchAll();
 
     $survivalPoints = [];
-    foreach (array_reverse($timeline) as $report) {
-        if ($report['status'] === 'verified' && (int) $cluster['initial_seedlings'] > 0 && $report['observed_alive_count'] !== null) {
-            $survivalPoints[] = [
-                'date' => substr((string) $report['submitted_at'], 0, 10),
-                'alive' => (int) $report['observed_alive_count'],
-                'rate' => round(min(100, ((int) $report['observed_alive_count'] / (int) $cluster['initial_seedlings']) * 100), 1),
-            ];
+    if ($currentUser['role'] === 'system_admin') {
+        foreach (array_reverse($timeline) as $report) {
+            if ($report['status'] === 'verified' && (int) $cluster['initial_seedlings'] > 0 && $report['observed_alive_count'] !== null) {
+                $survivalPoints[] = [
+                    'date' => substr((string) $report['submitted_at'], 0, 10),
+                    'alive' => (int) $report['observed_alive_count'],
+                    'rate' => round(min(100, ((int) $report['observed_alive_count'] / (int) $cluster['initial_seedlings']) * 100), 1),
+                ];
+            }
         }
     }
     render('admin/cluster', [

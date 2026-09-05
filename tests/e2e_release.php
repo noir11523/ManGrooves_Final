@@ -486,6 +486,7 @@ try {
         'password' => $registeredPassword,
         'password_confirmation' => $registeredPassword,
         'privacy_consent' => '1',
+        'role' => 'system_admin',
     ]);
     require_result($registration->status === 200 && str_contains($registration->body, 'Dashboard'),
         'guardian registration signs in to dashboard', 'HTTP ' . $registration->status);
@@ -494,7 +495,7 @@ try {
     $guardianRow = $registeredUser->fetch();
     require_result(
         (bool) $guardianRow && $guardianRow['role'] === 'guardian' && $guardianRow['privacy_consent_at'] !== null,
-        'registered account is an active consented guardian'
+        'public registration ignores role escalation and creates an active consented guardian'
     );
     $guardianId = (int) $guardianRow['id'];
 
@@ -619,6 +620,56 @@ try {
         && (int) $databasePdo->query('SELECT COUNT(*) FROM verification_logs WHERE report_id = ' . $firstReportId)->fetchColumn() === 1,
         'verification and audit logs are committed atomically'
     );
+    $expertAnalytics = $expert->request('GET', '/admin/analytics.php');
+    record_result(
+        $expertAnalytics->status === 200
+        && str_contains($expertAnalytics->body, 'Health distribution')
+        && str_contains($expertAnalytics->body, 'High-risk and attention-flagged reports')
+        && !str_contains($expertAnalytics->body, 'Overall survival')
+        && !str_contains($expertAnalytics->body, 'Print / Save PDF')
+        && !str_contains($expertAnalytics->body, 'Cluster survival'),
+        'expert analytics follows Appendix H without survival or PDF export',
+        'HTTP ' . $expertAnalytics->status
+    );
+    $expertCluster = $expert->request('GET', '/admin/cluster.php?id=' . $clusterId);
+    record_result(
+        $expertCluster->status === 200
+        && str_contains($expertCluster->body, 'Observation timeline')
+        && str_contains($expertCluster->body, 'photo.php?id=' . $firstReportId)
+        && !str_contains($expertCluster->body, 'Latest survival')
+        && !str_contains($expertCluster->body, 'Survival trend'),
+        'expert cluster timeline shows protected photo evidence and omits administrator-only survival',
+        'HTTP ' . $expertCluster->status
+    );
+    $expertMobile = new Browser($baseUrl);
+    $browsers[] = $expertMobile;
+    $expertMobileLogin = $expertMobile->request('POST', '/mobile-api/login.php', [
+        'email' => 'expert@test.com',
+        'password' => 'Mangrooves123!',
+        'device_name' => 'Appendix H expert test',
+    ]);
+    $expertMobileLoginJson = json_decode($expertMobileLogin->body, true);
+    $expertToken = is_array($expertMobileLoginJson) ? (string) ($expertMobileLoginJson['token'] ?? '') : '';
+    $expertMobileAnalytics = $expertMobile->request(
+        'GET',
+        '/mobile-api/analytics.php',
+        null,
+        true,
+        ['Authorization: Bearer ' . $expertToken]
+    );
+    $expertMobileJson = json_decode($expertMobileAnalytics->body, true);
+    $expertMobileData = is_array($expertMobileJson) ? ($expertMobileJson['analytics'] ?? []) : [];
+    $expertGrowthPoint = is_array($expertMobileData['growth'] ?? null) ? ($expertMobileData['growth'][0] ?? []) : [];
+    $expertMapPoint = is_array($expertMobileData['map'] ?? null) ? ($expertMobileData['map'][0] ?? []) : [];
+    record_result(
+        $expertMobileAnalytics->status === 200
+        && ($expertMobileData['capabilities']['can_view_survival'] ?? null) === false
+        && !array_key_exists('overall_survival', $expertMobileData)
+        && !array_key_exists('survival_rate', is_array($expertGrowthPoint) ? $expertGrowthPoint : [])
+        && !array_key_exists('survival', is_array($expertMapPoint) ? $expertMapPoint : []),
+        'expert mobile analytics payload excludes computed survival fields',
+        'HTTP ' . $expertMobileAnalytics->status
+    );
 
     foreach (['/admin/users.php', '/admin/species.php', '/admin/badges.php', '/admin/audit.php'] as $path) {
         $denied = $expert->request('GET', $path, null, false);
@@ -715,6 +766,38 @@ try {
         'badge award remains idempotent across later verification'
     );
 
+    $rejectedReportPage = $guardian->request('GET', '/submit-report.php');
+    $rejectedPayload = report_payload(csrf_token($rejectedReportPage->body), 9, $clusterId);
+    $rejectedFixture = $root . '/public/assets/img/guides/bark.png';
+    require_result(is_file($rejectedFixture), 'distinct rejection-path PNG fixture is available');
+    $rejectedPayload['photo'] = new CURLFile($rejectedFixture, 'image/png', 'rejected-evidence.png');
+    $rejectedSubmission = $guardian->request('POST', '/submit-report.php', $rejectedPayload);
+    require_result(
+        $rejectedSubmission->status === 200 && str_contains($rejectedSubmission->body, 'submitted for expert verification'),
+        'guardian submits a report for rejection-path testing',
+        'HTTP ' . $rejectedSubmission->status
+    );
+    $firstStatement->execute(['user_id' => $guardianId]);
+    $rejectedReport = $firstStatement->fetch();
+    $rejectedReportId = (int) $rejectedReport['id'];
+    $uploadedPaths[] = (string) $rejectedReport['photo_path'];
+    $rejectionPage = $expert->request('GET', '/admin/report.php?id=' . $rejectedReportId);
+    $rejection = $expert->request('POST', '/admin/report.php', [
+        'csrf_token' => csrf_token($rejectionPage->body),
+        'report_id' => (string) $rejectedReportId,
+        'action' => 'reject',
+        'expert_feedback' => 'The photo is too distant for reliable health validation. Please submit a closer image.',
+    ]);
+    $firstStatement->execute(['user_id' => $guardianId]);
+    $rejectedReport = $firstStatement->fetch();
+    record_result(
+        $rejection->status === 200 && $rejectedReport['status'] === 'rejected'
+        && str_contains((string) $rejectedReport['expert_feedback'], 'closer image')
+        && (int) $databasePdo->query('SELECT COUNT(*) FROM verification_logs WHERE action = \'reject\' AND report_id = ' . $rejectedReportId)->fetchColumn() === 1,
+        'expert rejects a report with actionable feedback and validation history',
+        'HTTP ' . $rejection->status
+    );
+
     $admin = new Browser($baseUrl);
     $browsers[] = $admin;
     $adminLogin = login($admin, 'admin@test.com', 'Mangrooves123!');
@@ -736,8 +819,112 @@ try {
         record_result($adminPage->status === 200 && str_contains($adminPage->body, $needle),
             'administrator route ' . $path, 'HTTP ' . $adminPage->status);
     }
+    $adminAnalytics = $admin->request('GET', '/admin/analytics.php');
+    record_result(
+        $adminAnalytics->status === 200
+        && str_contains($adminAnalytics->body, 'Overall survival')
+        && str_contains($adminAnalytics->body, 'Cluster survival')
+        && str_contains($adminAnalytics->body, 'Print / Save PDF'),
+        'administrator receives survival analytics and PDF export',
+        'HTTP ' . $adminAnalytics->status
+    );
+    $adminMobile = new Browser($baseUrl);
+    $browsers[] = $adminMobile;
+    $adminMobileLogin = $adminMobile->request('POST', '/mobile-api/login.php', [
+        'email' => 'admin@test.com',
+        'password' => 'Mangrooves123!',
+        'device_name' => 'Appendix H admin test',
+    ]);
+    $adminMobileLoginJson = json_decode($adminMobileLogin->body, true);
+    $adminToken = is_array($adminMobileLoginJson) ? (string) ($adminMobileLoginJson['token'] ?? '') : '';
+    $adminMobileAnalytics = $adminMobile->request(
+        'GET',
+        '/mobile-api/analytics.php',
+        null,
+        true,
+        ['Authorization: Bearer ' . $adminToken]
+    );
+    $adminMobileJson = json_decode($adminMobileAnalytics->body, true);
+    $adminMobileData = is_array($adminMobileJson) ? ($adminMobileJson['analytics'] ?? []) : [];
+    record_result(
+        $adminMobileAnalytics->status === 200
+        && ($adminMobileData['capabilities']['can_view_survival'] ?? null) === true
+        && array_key_exists('overall_survival', $adminMobileData),
+        'administrator mobile analytics payload includes computed survival',
+        'HTTP ' . $adminMobileAnalytics->status
+    );
+    $adminUsers = $admin->request('GET', '/admin/users.php');
+    record_result(
+        str_contains($adminUsers->body, 'certificate.php?user=' . $guardianId),
+        'administrator user list links to an earned guardian certificate'
+    );
+    $adminCertificate = $admin->request('GET', '/certificate.php?user=' . $guardianId);
+    record_result(
+        $adminCertificate->status === 200
+        && str_contains($adminCertificate->body, 'E2E Release Guardian')
+        && str_contains($adminCertificate->body, 'First Report'),
+        'administrator can generate an eligible guardian certificate',
+        'HTTP ' . $adminCertificate->status
+    );
     $adminSubmitDenied = $admin->request('GET', '/submit-report.php', null, false);
     record_result($adminSubmitDenied->status === 403, 'administrator cannot submit guardian reports', 'HTTP ' . $adminSubmitDenied->status);
+
+    $staffEmail = 'e2e.staff.' . bin2hex(random_bytes(3)) . '@example.test';
+    $staffCreate = $admin->request('POST', '/admin/users.php', [
+        'csrf_token' => csrf_token($adminUsers->body),
+        'action' => 'create_staff',
+        'full_name' => 'E2E Temporary Expert',
+        'email' => $staffEmail,
+        'phone' => '+63 917 222 2222',
+        'role' => 'expert',
+        'password' => 'Temporary123!',
+        'password_confirmation' => 'Temporary123!',
+    ]);
+    $staffLookup = $databasePdo->prepare('SELECT id, role, status, password_hash FROM users WHERE email = :email LIMIT 1');
+    $staffLookup->execute(['email' => $staffEmail]);
+    $staff = $staffLookup->fetch();
+    require_result(
+        $staffCreate->status === 200 && (bool) $staff
+        && $staff['role'] === 'expert' && $staff['status'] === 'active'
+        && password_verify('Temporary123!', (string) $staff['password_hash'])
+        && str_contains($staffCreate->body, 'Staff account created'),
+        'administrator securely provisions a staff account',
+        'HTTP ' . $staffCreate->status
+    );
+    $staffId = (int) $staff['id'];
+    record_result(
+        (int) $databasePdo->query("SELECT COUNT(*) FROM audit_logs WHERE action = 'admin.user_created' AND entity_id = '" . $staffId . "'")->fetchColumn() === 1,
+        'staff provisioning is recorded in the audit log'
+    );
+    $staffUpdatePage = $admin->request('GET', '/admin/users.php');
+    $staffSuspend = $admin->request('POST', '/admin/users.php', [
+        'csrf_token' => csrf_token($staffUpdatePage->body),
+        'action' => 'update',
+        'user_id' => (string) $staffId,
+        'role' => 'expert',
+        'status' => 'suspended',
+    ]);
+    $staffLookup->execute(['email' => $staffEmail]);
+    $staff = $staffLookup->fetch();
+    record_result(
+        $staffSuspend->status === 200 && $staff['status'] === 'suspended'
+        && str_contains($staffSuspend->body, 'User role and status updated'),
+        'administrator suspends a staff account',
+        'HTTP ' . $staffSuspend->status
+    );
+    $staffDeletePage = $admin->request('GET', '/admin/users.php');
+    $staffDelete = $admin->request('POST', '/admin/users.php', [
+        'csrf_token' => csrf_token($staffDeletePage->body),
+        'action' => 'delete',
+        'user_id' => (string) $staffId,
+    ]);
+    $staffLookup->execute(['email' => $staffEmail]);
+    record_result(
+        $staffDelete->status === 200 && $staffLookup->fetch() === false
+        && str_contains($staffDelete->body, 'Unused user account deleted'),
+        'administrator deletes an unused suspended staff account',
+        'HTTP ' . $staffDelete->status
+    );
 
     $speciesPage = $admin->request('GET', '/admin/species.php');
     $speciesToken = csrf_token($speciesPage->body);
@@ -789,6 +976,51 @@ try {
     record_result(
         $markAll->status === 200 && (int) $unreadStatement->fetchColumn() === 0,
         'guardian can mark all notifications read', 'HTTP ' . $markAll->status
+    );
+
+    $settingsPage = $otherGuardian->request('GET', '/settings.php');
+    $profileUpdate = $otherGuardian->request('POST', '/settings.php', [
+        'csrf_token' => csrf_token($settingsPage->body),
+        'action' => 'profile',
+        'full_name' => 'E2E Updated Guardian',
+        'email' => 'guardian@test.com',
+        'phone' => '+63 917 333 3333',
+        'barangay_id' => '1',
+    ]);
+    $updatedProfile = $databasePdo->query("SELECT full_name, phone FROM users WHERE email = 'guardian@test.com'")->fetch();
+    record_result(
+        $profileUpdate->status === 200
+        && $updatedProfile['full_name'] === 'E2E Updated Guardian'
+        && $updatedProfile['phone'] === '+63 917 333 3333'
+        && str_contains($profileUpdate->body, 'profile information has been updated'),
+        'guardian edits profile and account information',
+        'HTTP ' . $profileUpdate->status
+    );
+    $passwordPage = $otherGuardian->request('GET', '/settings.php');
+    $changedPassword = 'E2EChanged456!';
+    $passwordUpdate = $otherGuardian->request('POST', '/settings.php', [
+        'csrf_token' => csrf_token($passwordPage->body),
+        'action' => 'password',
+        'current_password' => 'Mangrooves123!',
+        'new_password' => $changedPassword,
+        'new_password_confirmation' => $changedPassword,
+    ]);
+    $changedHash = (string) $databasePdo->query("SELECT password_hash FROM users WHERE email = 'guardian@test.com'")->fetchColumn();
+    record_result(
+        $passwordUpdate->status === 200 && password_verify($changedPassword, $changedHash)
+        && str_contains($passwordUpdate->body, 'password has been changed securely'),
+        'guardian changes password with a current-password check',
+        'HTTP ' . $passwordUpdate->status
+    );
+    $logoutPage = $otherGuardian->request('GET', '/settings.php');
+    $logout = $otherGuardian->request('POST', '/logout.php', [
+        'csrf_token' => csrf_token($logoutPage->body),
+    ]);
+    $relogin = login($otherGuardian, 'guardian@test.com', $changedPassword);
+    record_result(
+        $logout->status === 200 && $relogin->status === 200 && str_contains($relogin->body, 'Dashboard'),
+        'changed password works on the next secure login',
+        'HTTP ' . $relogin->status
     );
 
     $integrity = [

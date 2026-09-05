@@ -71,6 +71,9 @@ python .\analytics\generate_charts.py
 
 # Timestamped database backup
 .\scripts\backup.cmd
+
+# Build and test the proper Flutter Android client
+.\mobile\flutter_app\build-apk.cmd -ApiBaseUrl "http://YOUR-PC-IP/mangrooves_v2/public/mobile-api"
 ```
 
 Automated database and HTTP tests are for disposable development/test environments only; see `docs/TESTING.md` before running them.
@@ -84,6 +87,9 @@ Automated database and HTTP tests are for disposable development/test environmen
 - [Data and scoring decisions](docs/DATA_AND_SCORING.md)
 - [Generated image assets](docs/IMAGE_ASSETS.md)
 - [Testing guide](docs/TESTING.md)
+- [Appendix H module verification](docs/APPENDIX_H_VERIFICATION.md)
+- [Mobile release verification](docs/MOBILE_RELEASE_VERIFICATION.md)
+- [Flutter Android and iPhone installation](docs/MOBILE_INSTALLATION.md)
 
 ## Technology
 
@@ -91,5 +97,6 @@ Automated database and HTTP tests are for disposable development/test environmen
 - MariaDB/MySQL with InnoDB
 - Bootstrap 5, custom responsive CSS, Leaflet/OpenStreetMap, and Chart.js
 - Browser Geolocation API and camera/file capture
-- Installable progressive web app for mobile field use
+- Native Flutter client for Android and iOS using secure PHP JSON APIs
+- Installable progressive web app as a fallback
 - Optional Python/pandas/matplotlib static analytics generation

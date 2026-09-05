@@ -1,0 +1,17 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(?:app|config|database|docs|scripts|storage|tests|analytics|backups)(?:/|$) - [F,L,NC]
+</IfModule>
+
+<FilesMatch "(^\.|\.(?:env|ini|log|sql|md|ps1|cmd)$)">
+    Require all denied
+</FilesMatch>
+
+<IfModule !mod_authz_core.c>
+    <FilesMatch "(^\.|\.(?:env|ini|log|sql|md|ps1|cmd)$)">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>

@@ -1,0 +1,48 @@
+{
+  "id": "./",
+  "name": "ManGROOVES Community Mangrove Monitoring",
+  "short_name": "ManGROOVES",
+  "description": "Community-powered mangrove monitoring, expert verification, and conservation follow-ups.",
+  "start_url": "./index.php?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F4F7F6",
+  "theme_color": "#2D5A27",
+  "lang": "en-PH",
+  "categories": ["education", "utilities", "lifestyle"],
+  "icons": [
+    {
+      "src": "assets/img/icons/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/img/icons/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/img/badges/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Submit a report",
+      "short_name": "New report",
+      "url": "submit-report.php?source=pwa",
+      "icons": [{"src": "assets/img/icons/app-icon-192.png", "sizes": "192x192", "type": "image/png"}]
+    },
+    {
+      "name": "Explore mangroves",
+      "short_name": "Explore",
+      "url": "explore.php?source=pwa",
+      "icons": [{"src": "assets/img/icons/app-icon-192.png", "sizes": "192x192", "type": "image/png"}]
+    }
+  ]
+}

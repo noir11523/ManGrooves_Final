@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-08-28T02:17:52.649144+00:00",
+  "health_counts": {
+    "Healthy": 2,
+    "Stressed": 1,
+    "At Risk": 1
+  },
+  "survival_points": [
+    {
+      "month": "2026-06",
+      "survival_rate": 85.0,
+      "report_count": 1
+    },
+    {
+      "month": "2026-07",
+      "survival_rate": 78.0,
+      "report_count": 1
+    },
+    {
+      "month": "2026-08",
+      "survival_rate": 77.92,
+      "report_count": 2
+    }
+  ],
+  "methodology": "Verified reports only; survival uses observed alive seedlings divided by each cluster's initial seedlings, capped at 100%."
+}

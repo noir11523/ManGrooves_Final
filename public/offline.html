@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#2D5A27">
+    <title>Offline | ManGROOVES</title>
+    <style>
+        :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        * { box-sizing: border-box; }
+        body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 1.5rem; color: #4E342E; background: #F4F7F6; }
+        main { width: min(100%, 36rem); padding: clamp(2rem, 6vw, 4rem); text-align: center; background: #fff; border: 1px solid #E6D5B8; border-radius: 1.5rem; box-shadow: 0 1.25rem 3rem rgba(78, 52, 46, .12); }
+        svg { width: 5rem; color: #2D5A27; }
+        h1 { margin: 1rem 0 .75rem; font-size: clamp(1.75rem, 5vw, 2.5rem); }
+        p { margin: 0 auto 1.5rem; max-width: 28rem; line-height: 1.7; color: #675954; }
+        button { border: 0; border-radius: 999px; padding: .8rem 1.35rem; color: #fff; background: #2D5A27; font: inherit; font-weight: 700; cursor: pointer; }
+        button:focus-visible { outline: 3px solid #E6D5B8; outline-offset: 3px; }
+    </style>
+</head>
+<body>
+<main>
+    <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 5c-7 4-11 10-11 17 0 7 4 12 11 16 7-4 11-9 11-16 0-7-4-13-11-17Z" fill="currentColor" opacity=".18"/><path d="M24 9v25M24 17c-5-4-9-4-12-3M24 22c5-4 9-4 12-3M24 29c-5-3-8-3-11-2M24 34l-7 8m7-8 7 8m-7-8v9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h1>You are currently offline</h1>
+    <p>A saved page may still be available from your browser history. Connect to the internet before signing in or submitting a field report.</p>
+    <button type="button" onclick="location.reload()">Try again</button>
+</main>
+</body>
+</html>

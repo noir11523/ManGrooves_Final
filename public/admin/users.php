@@ -12,8 +12,75 @@ $statuses = ['active', 'suspended'];
 if (is_post()) {
     Csrf::validateOrFail();
     $action = scalar_string($_POST['action'] ?? null);
-    $targetId = filter_var($_POST['user_id'] ?? null, FILTER_VALIDATE_INT);
     try {
+        if ($action === 'create_staff') {
+            $name = trim(scalar_string($_POST['full_name'] ?? null));
+            $email = strtolower(trim(scalar_string($_POST['email'] ?? null)));
+            $phone = trim(scalar_string($_POST['phone'] ?? null));
+            $role = scalar_string($_POST['role'] ?? null);
+            $password = scalar_string($_POST['password'] ?? null);
+            $confirmation = scalar_string($_POST['password_confirmation'] ?? null);
+            $staffRoles = ['expert', 'system_admin'];
+            $errors = [];
+
+            if (mb_strlen($name) < 2 || mb_strlen($name) > 120) {
+                $errors[] = 'Enter a full name between 2 and 120 characters.';
+            }
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
+                $errors[] = 'Enter a valid email address.';
+            }
+            if ($phone !== '' && !preg_match('/^[0-9+() .-]{7,30}$/', $phone)) {
+                $errors[] = 'Enter a valid phone number or leave it blank.';
+            }
+            if (!in_array($role, $staffRoles, true)) {
+                $errors[] = 'Choose Scientific Expert or System Administrator.';
+            }
+            if (strlen($password) < 8 || strlen($password) > 72 || str_contains($password, "\0")) {
+                $errors[] = 'Use a temporary password between 8 and 72 characters.';
+            }
+            if ($password !== $confirmation) {
+                $errors[] = 'The password confirmation does not match.';
+            }
+            if ($errors !== []) {
+                throw new InvalidArgumentException(implode(' ', $errors));
+            }
+
+            $successMessage = Database::transaction(static function (PDO $pdo) use (
+                $name,
+                $email,
+                $phone,
+                $role,
+                $password
+            ): string {
+                $exists = $pdo->prepare('SELECT 1 FROM users WHERE email = :email LIMIT 1');
+                $exists->execute(['email' => $email]);
+                if ($exists->fetchColumn()) {
+                    throw new DomainException('An account already uses that email address.');
+                }
+
+                $create = $pdo->prepare(
+                    'INSERT INTO users (full_name, email, phone, password_hash, role, barangay_id, status, privacy_consent_at)
+                     VALUES (:full_name, :email, :phone, :password_hash, :role, NULL, \'active\', NULL)'
+                );
+                $create->execute([
+                    'full_name' => $name,
+                    'email' => $email,
+                    'phone' => $phone === '' ? null : $phone,
+                    'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                    'role' => $role,
+                ]);
+                $createdId = (int) $pdo->lastInsertId();
+                Audit::logRequired('admin.user_created', 'user', $createdId, [
+                    'role' => $role,
+                    'email' => $email,
+                ]);
+                return 'Staff account created. Ask the staff member to change the temporary password after signing in.';
+            });
+            flash('success', $successMessage);
+            redirect('admin/users.php');
+        }
+
+        $targetId = filter_var($_POST['user_id'] ?? null, FILTER_VALIDATE_INT);
         if (!$targetId || $targetId < 1) {
             throw new InvalidArgumentException('Select a valid user.');
         }
@@ -150,7 +217,8 @@ $total = (int) $counter->fetchColumn();
 $statement = $pdo->prepare(
     "SELECT u.id, u.full_name, u.email, u.phone, u.role, u.status, u.last_login_at, u.created_at,
             b.name AS barangay_name,
-            (SELECT COUNT(*) FROM reports r WHERE r.user_id = u.id) AS report_count
+            (SELECT COUNT(*) FROM reports r WHERE r.user_id = u.id) AS report_count,
+            (SELECT COUNT(*) FROM user_badges ub WHERE ub.user_id = u.id) AS badge_count
      FROM users u LEFT JOIN barangays b ON b.id = u.barangay_id
      WHERE {$where} ORDER BY u.created_at DESC, u.id DESC LIMIT :limit OFFSET :offset"
 );
