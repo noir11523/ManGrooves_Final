@@ -1,7 +1,23 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div><h1 class="h3 mb-1">User management</h1><p class="text-muted mb-0">Control roles and access without erasing conservation or verification history.</p></div>
-    <a class="btn btn-outline-secondary" href="<?= e(url('admin/audit.php')) ?>">View audit log</a>
+    <div class="d-flex gap-2"><button class="btn btn-success" type="button" data-bs-toggle="collapse" data-bs-target="#create-staff-account" aria-expanded="false" aria-controls="create-staff-account"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Create staff account</button><a class="btn btn-outline-secondary" href="<?= e(url('admin/audit.php')) ?>">View audit log</a></div>
 </div>
+
+<section class="collapse mb-4" id="create-staff-account" aria-labelledby="create-staff-heading">
+    <div class="card card-body">
+        <div class="mb-3"><h2 class="h5 mb-1" id="create-staff-heading">Create a protected staff account</h2><p class="small text-muted mb-0">Public registration is intentionally limited to guardians. Create expert and administrator access here, then share the temporary password securely.</p></div>
+        <form method="post" action="<?= e(url('admin/users.php')) ?>" class="row g-3">
+            <?= Csrf::field() ?><input type="hidden" name="action" value="create_staff">
+            <div class="col-md-6"><label class="form-label" for="staff-full-name">Full name</label><input class="form-control" id="staff-full-name" name="full_name" type="text" minlength="2" maxlength="120" autocomplete="name" required></div>
+            <div class="col-md-6"><label class="form-label" for="staff-email">Email</label><input class="form-control" id="staff-email" name="email" type="email" maxlength="190" autocomplete="email" required></div>
+            <div class="col-md-6"><label class="form-label" for="staff-phone">Phone <span class="text-muted">(optional)</span></label><input class="form-control" id="staff-phone" name="phone" type="tel" maxlength="30" autocomplete="tel"></div>
+            <div class="col-md-6"><label class="form-label" for="staff-role">Role</label><select class="form-select" id="staff-role" name="role" required><option value="expert">Scientific Expert</option><option value="system_admin">System Administrator</option></select></div>
+            <div class="col-md-6"><label class="form-label" for="staff-password">Temporary password</label><input class="form-control" id="staff-password" name="password" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></div>
+            <div class="col-md-6"><label class="form-label" for="staff-password-confirmation">Confirm temporary password</label><input class="form-control" id="staff-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></div>
+            <div class="col-12"><button class="btn btn-success" type="submit">Create staff account</button></div>
+        </form>
+    </div>
+</section>
 
 <form class="card card-body mb-4" method="get" action="<?= e(url('admin/users.php')) ?>">
     <div class="row g-3 align-items-end">
@@ -31,7 +47,10 @@
                 </form>
             </td>
             <td class="text-end">
-                <?php if (!$isSelf): ?><form class="d-inline js-confirm-form" data-confirm="Delete this unused account? This cannot be undone." method="post" action="<?= e(url('admin/users.php')) ?>"><?= Csrf::field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="user_id" value="<?= (int) $managedUser['id'] ?>"><button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form><?php else: ?><span class="small text-muted">Protected</span><?php endif; ?>
+                <div class="d-inline-flex flex-wrap justify-content-end gap-1">
+                    <?php if ($managedUser['role'] === 'guardian' && (int) $managedUser['badge_count'] > 0): ?><a class="btn btn-sm btn-outline-success" href="<?= e(url('certificate.php?user=' . $managedUser['id'])) ?>">Certificate</a><?php endif; ?>
+                    <?php if (!$isSelf): ?><form class="d-inline js-confirm-form" data-confirm="Delete this unused account? This cannot be undone." method="post" action="<?= e(url('admin/users.php')) ?>"><?= Csrf::field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="user_id" value="<?= (int) $managedUser['id'] ?>"><button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form><?php else: ?><span class="small text-muted align-self-center">Protected</span><?php endif; ?>
+                </div>
             </td>
         </tr>
     <?php endforeach; ?>
