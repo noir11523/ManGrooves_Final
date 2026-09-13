@@ -29,7 +29,7 @@
                         <label for="email">Email address</label>
                         <div class="invalid-feedback"><?= e((string) ($fieldErrors['email'] ?? 'Enter a valid email address.')) ?></div>
                     </div>
-                    <div class="input-group password-group mb-2">
+                    <div class="input-group password-group mb-4">
                         <div class="form-floating">
                             <input class="form-control <?= isset($fieldErrors['password']) ? 'is-invalid' : '' ?>" id="password" name="password" type="password" autocomplete="current-password" placeholder="Password" maxlength="72" required>
                             <label for="password">Password</label>
@@ -37,7 +37,6 @@
                         <button class="btn password-toggle" type="button" data-password-toggle="#password" aria-label="Show password"><i class="bi bi-eye" aria-hidden="true"></i></button>
                         <div class="invalid-feedback"><?= e((string) ($fieldErrors['password'] ?? 'Enter your password.')) ?></div>
                     </div>
-                    <p class="form-text mb-4">For your security, repeated failed attempts are temporarily limited.</p>
                     <button class="btn btn-primary btn-lg w-100" type="submit" data-submit-label="Signing in…">Sign in</button>
                 </form>
                 <p class="auth-switch">New to ManGROOVES? <a href="<?= e(url('register.php')) ?>">Create a guardian account</a></p>

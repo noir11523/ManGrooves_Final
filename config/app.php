@@ -31,4 +31,5 @@ return [
     ],
     'cluster_radius_meters' => max(10, (int) env_value('CLUSTER_RADIUS_METERS', '75')),
     'barangay_max_distance_meters' => max(500, (int) env_value('BARANGAY_MAX_DISTANCE_METERS', '5000')),
+    'gps_max_accuracy_meters' => max(10, min(1000, (int) env_value('GPS_MAX_ACCURACY_METERS', '100'))),
 ];

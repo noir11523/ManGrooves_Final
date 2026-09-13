@@ -13,3 +13,4 @@
 /storage/*.log
 /mobile/flutter_app/dist/
 /mobile/android-apk/
+/dist/

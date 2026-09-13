@@ -2,6 +2,11 @@
 
 Verified on September 5, 2026 against the source project, a disposable fresh database, and the XAMPP browser installation.
 
+September 12 update: the latest APK is `1.1.5+7`, with accurate GPS, manual map-pin, and
+registration-navigation fixes. See [Mobile release verification](MOBILE_RELEASE_VERIFICATION.md)
+for the new test results and the current XAMPP InnoDB startup failure. The
+historical database-health result below does not describe the current live server.
+
 ## Role key and safe interpretation
 
 - **SA** — System Administrator
@@ -79,7 +84,7 @@ flutter analyze
 flutter test
 ```
 
-Latest recorded results:
+Earlier recorded module-audit results (superseded by the mobile release report above):
 
 - Database/application health check: **OK**
 - PHP domain/integration suite: **27 passed, 0 failed**
@@ -87,7 +92,7 @@ Latest recorded results:
 - Live XAMPP route and access-control smoke suite: **54 passed, 0 failed**
 - Flutter analyzer: **No issues found**
 - Flutter widget tests: **All tests passed**
-- Android release: package `org.mangrooves.mobile`, version `1.1.1+3`, minimum Android API 24, APK Signature Scheme v2 verified
+- Android release: package `org.mangrooves.mobile`, version `1.1.3+5`, minimum Android API 24, APK Signature Scheme v2 verified
 
 ## Honest release boundary
 

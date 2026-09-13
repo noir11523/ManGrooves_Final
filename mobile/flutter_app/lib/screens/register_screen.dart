@@ -3,14 +3,9 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({
-    super.key,
-    required this.api,
-    required this.onAuthenticated,
-  });
+  const RegisterScreen({super.key, required this.api});
 
   final ApiClient api;
-  final ValueChanged<Map<String, dynamic>> onAuthenticated;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -29,6 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _loading = true;
   bool _busy = false;
   bool _hidePassword = true;
+  String? _configurationError;
   String? _error;
 
   @override
@@ -38,17 +34,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _loadConfiguration() async {
+    if (!_loading && mounted) {
+      setState(() {
+        _loading = true;
+        _configurationError = null;
+      });
+    } else {
+      _configurationError = null;
+    }
     try {
       final response = await widget.api.configuration();
-      _barangays = (response['barangays'] as List? ?? const [])
+      final barangays = (response['barangays'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
+      if (barangays.isEmpty) {
+        throw const ApiException('No barangays are available from the server.');
+      }
+      if (mounted) {
+        setState(() {
+          _barangays = barangays;
+          _barangayId = null;
+        });
+      }
     } catch (error) {
-      _error = error is ApiException
-          ? error.message
-          : 'Unable to connect. Check your internet or Wi-Fi connection.';
+      if (mounted) {
+        setState(() {
+          _barangays = [];
+          _barangayId = null;
+          _configurationError = error is ApiException ? error.message : 'Unable to connect. Check that the phone and server are on the same Wi-Fi.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -62,6 +80,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submit() async {
+    if (_busy) return;
     if (!_formKey.currentState!.validate()) return;
     if (!_consent) {
       setState(
@@ -84,7 +103,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'privacy_consent': true,
       });
       if (!mounted) return;
-      widget.onAuthenticated(Map<String, dynamic>.from(result['user'] as Map));
+      Navigator.of(context)
+          .pop(Map<String, dynamic>.from(result['user'] as Map));
     } catch (error) {
       if (mounted) {
         setState(
@@ -120,6 +140,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 18),
+                        if (_configurationError != null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .errorContainer,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _configurationError!,
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onErrorContainer,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                TextButton.icon(
+                                  onPressed: _loadConfiguration,
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Retry connection'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
                         if (_error != null) ...[
                           Text(
                             _error!,
@@ -142,6 +193,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           optional: true,
                         ),
                         DropdownButtonFormField<int>(
+                          isExpanded: true,
                           initialValue: _barangayId,
                           decoration: const InputDecoration(
                             labelText: 'Barangay',
@@ -157,10 +209,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) =>
-                              setState(() => _barangayId = value),
-                          validator: (value) =>
-                              value == null ? 'Select your barangay.' : null,
+                          onChanged: _barangays.isEmpty
+                              ? null
+                              : (value) => setState(() => _barangayId = value),
+                          validator: (value) {
+                            if (_barangays.isEmpty) {
+                              return 'Connect to the server and load the barangay list.';
+                            }
+                            return value == null
+                                ? 'Select your barangay.'
+                                : null;
+                          },
                         ),
                         const SizedBox(height: 14),
                         TextFormField(
@@ -209,9 +268,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 12),
                         FilledButton(
-                          onPressed: _busy ? null : _submit,
+                          onPressed: _busy || _barangays.isEmpty
+                              ? null
+                              : _submit,
                           child: _busy
-                              ? const CircularProgressIndicator(strokeWidth: 2)
+                              ? const SizedBox.square(
+                                  dimension: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
                               : const Text('Create guardian account'),
                         ),
                       ],
@@ -237,9 +303,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
       validator: optional
           ? null
-          : (value) => value == null || value.trim().isEmpty
-                ? '$label is required.'
-                : null,
+          : (value) {
+              if (value == null || value.trim().isEmpty) {
+                return '$label is required.';
+              }
+              if (type == TextInputType.emailAddress &&
+                  !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                      .hasMatch(value.trim())) {
+                return 'Enter a valid email address.';
+              }
+              return null;
+            },
     ),
   );
 }

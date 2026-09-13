@@ -965,6 +965,64 @@ try {
         'administrator deletes the unused disposable species', 'HTTP ' . $speciesDelete->status
     );
 
+    // Exercise the native client's successful registration and manual-pin payload
+    // against the real API, in this disposable database only.
+    $mobileGuardian = new Browser($baseUrl);
+    $browsers[] = $mobileGuardian;
+    $mobileRegistration = $mobileGuardian->request('POST', '/mobile-api/register.php', [
+        'full_name' => 'E2E Mobile Guardian',
+        'email' => 'mobile.' . $registeredEmail,
+        'barangay_id' => '1',
+        'password' => $registeredPassword,
+        'password_confirmation' => $registeredPassword,
+        'privacy_consent' => '1',
+    ]);
+    $mobileSession = json_decode($mobileRegistration->body, true);
+    require_result(
+        $mobileRegistration->status === 201 && ($mobileSession['ok'] ?? false) === true
+        && !empty($mobileSession['token']) && ($mobileSession['user']['role'] ?? '') === 'guardian',
+        'mobile registration returns an authenticated guardian session', 'HTTP ' . $mobileRegistration->status
+    );
+    $mobileHeaders = ['Authorization: Bearer ' . $mobileSession['token']];
+    $mobileDashboard = $mobileGuardian->request('GET', '/mobile-api/dashboard.php', null, true, $mobileHeaders);
+    $mobileDashboardJson = json_decode($mobileDashboard->body, true);
+    record_result(
+        $mobileDashboard->status === 200
+        && ($mobileDashboardJson['user']['id'] ?? null) === $mobileSession['user']['id'],
+        'new mobile account can immediately open its dashboard'
+    );
+    $mobileForm = $mobileGuardian->request('GET', '/mobile-api/report-form.php', null, true, $mobileHeaders);
+    $mobileFormJson = json_decode($mobileForm->body, true);
+    record_result(
+        $mobileForm->status === 200
+        && (int) ($mobileFormJson['location']['barangay']['id'] ?? 0) === 1
+        && is_numeric($mobileFormJson['location']['barangay']['center_lat'] ?? null)
+        && (float) ($mobileFormJson['location']['max_distance_meters'] ?? 0) > 0,
+        'mobile report form supplies the manual map center and monitoring boundary'
+    );
+    $manualPayload = report_payload('', 10);
+    unset($manualPayload['csrf_token'], $manualPayload['location_accuracy']);
+    $manualPayload['photo'] = new CURLFile($fixture, 'image/png', 'mobile-field.png');
+    $mobileSubmission = $mobileGuardian->request('POST', '/mobile-api/submit-report.php', $manualPayload, true, $mobileHeaders);
+    $mobileSubmissionJson = json_decode($mobileSubmission->body, true);
+    $mobileReportLookup = $databasePdo->prepare('SELECT * FROM reports WHERE user_id = :user_id ORDER BY id DESC LIMIT 1');
+    $mobileReportLookup->execute(['user_id' => $mobileSession['user']['id']]);
+    $mobileReport = $mobileReportLookup->fetch();
+    if ($mobileReport) {
+        $uploadedPaths[] = (string) $mobileReport['photo_path'];
+    }
+    require_result(
+        $mobileSubmission->status === 201 && ($mobileSubmissionJson['ok'] ?? false) === true && $mobileReport,
+        'mobile multipart report accepts a manual pin without GPS accuracy', 'HTTP ' . $mobileSubmission->status
+    );
+    record_result(
+        $mobileReport['location_accuracy'] === null
+        && abs((float) $mobileReport['latitude'] - (float) $manualPayload['latitude']) < 0.00000001
+        && abs((float) $mobileReport['longitude'] - (float) $manualPayload['longitude']) < 0.00000001
+        && $mobileReport['status'] === 'pending',
+        'manual pin coordinates are saved without GPS accuracy in the pending report'
+    );
+
     $notificationPage = $guardian->request('GET', '/notifications.php?filter=unread');
     $markAll = $guardian->request('POST', '/notifications.php', [
         'csrf_token' => csrf_token($notificationPage->body),

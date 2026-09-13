@@ -49,6 +49,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _openRegistration() async {
+    final user = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => RegisterScreen(api: widget.api)),
+    );
+    if (!mounted || user == null) return;
+    widget.onAuthenticated(user);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -124,17 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: _busy
-                          ? null
-                          : () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => RegisterScreen(
-                                  api: widget.api,
-                                  onAuthenticated: widget.onAuthenticated,
-                                ),
-                              ),
-                            ),
+                      onPressed: _busy ? null : _openRegistration,
                       child: const Text('Create guardian account'),
                     ),
                   ],
@@ -164,18 +162,20 @@ class _BrandHeader extends StatelessWidget {
         child: const Icon(Icons.park, color: Colors.white, size: 34),
       ),
       const SizedBox(width: 12),
-      const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ManGROOVES',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-          ),
-          Text(
-            'MONITOR · PROTECT · RESTORE',
-            style: TextStyle(fontSize: 10, letterSpacing: 1.2),
-          ),
-        ],
+      const Flexible(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ManGROOVES',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            Text(
+              'MONITOR · PROTECT · RESTORE',
+              style: TextStyle(fontSize: 10, letterSpacing: 1.2),
+            ),
+          ],
+        ),
       ),
     ],
   );

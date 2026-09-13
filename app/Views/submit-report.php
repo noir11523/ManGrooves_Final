@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 $extraHead = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">';
+$reportWizardVersion = (string) (filemtime(APP_ROOT . '/public/assets/js/report-wizard.js') ?: 1);
 $pageScripts = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>'
-    . '<script src="' . e(asset('js/report-wizard.js')) . '"></script>';
+    . '<script src="' . e(asset('js/report-wizard.js') . '?v=' . rawurlencode($reportWizardVersion)) . '"></script>';
 $oldObservations = old('observations', []);
 $oldObservations = is_array($oldObservations) ? $oldObservations : [];
 $selectedCluster = (string) old('cluster_id', $prefill['cluster_id'] ?? '');
@@ -30,6 +31,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
       data-species-match-url="<?= e(url('api/species-match.php')) ?>"
       data-previous-reports-url="<?= e(url('api/previous-reports.php')) ?>"
       data-selected-parent="<?= e($selectedParent) ?>"
+      data-max-gps-accuracy="<?= (int) config('gps_max_accuracy_meters', 100) ?>"
       data-max-photo-bytes="<?= (int) config('uploads.max_bytes', 5242880) ?>">
     <?= Csrf::field() ?>
     <input type="hidden" name="MAX_FILE_SIZE" value="<?= (int) config('uploads.max_bytes', 5242880) ?>">
@@ -85,10 +87,11 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
 
                 <hr class="my-4">
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button class="btn btn-success" type="button" data-use-gps><i class="bi bi-crosshair me-2" aria-hidden="true"></i>Use my live location</button>
+                    <button class="btn btn-success" type="button" data-use-gps><i class="bi bi-crosshair me-2" aria-hidden="true"></i>Use accurate live GPS</button>
                     <button class="btn btn-outline-success" type="button" data-use-manual><i class="bi bi-pin-map me-2" aria-hidden="true"></i>Place pin manually</button>
                     <span class="align-self-center small text-body-secondary" role="status" aria-live="polite" data-location-status>No location selected.</span>
                 </div>
+                <p class="small text-body-secondary mt-n2 mb-3">Live GPS waits up to 30 seconds for ±<?= (int) config('gps_max_accuracy_meters', 100) ?> m or better. A coarse network estimate is not accepted.</p>
                 <input type="hidden" name="location_source" value="<?= e(old('location_source')) ?>" data-location-source>
                 <input type="hidden" name="location_accuracy" value="<?= e(old('location_accuracy')) ?>" data-location-accuracy>
                 <div class="row g-3 mb-3">

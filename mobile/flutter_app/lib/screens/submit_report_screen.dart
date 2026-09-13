@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/api_client.dart';
+import '../core/report_location.dart';
+import 'location_picker_screen.dart';
 
 class SubmitReportScreen extends StatefulWidget {
   const SubmitReportScreen({
@@ -41,10 +45,11 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
   String? _leafShape;
   String? _barkTexture;
   XFile? _photo;
-  Position? _position;
+  ReportLocation? _location;
   String? _error;
   bool _busy = false;
   bool _gettingLocation = false;
+  double? _gpsProgressAccuracy;
   bool _loadingParents = false;
   bool _confirmed = false;
 
@@ -142,6 +147,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
   Future<void> _captureLocation() async {
     setState(() {
       _gettingLocation = true;
+      _gpsProgressAccuracy = null;
       _error = null;
     });
     try {
@@ -155,21 +161,128 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         throw const ApiException(
-          'Location permission is required for field reports.',
+          'GPS permission was denied. You can choose your location manually on the map.',
         );
       }
-      _position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
+      final position = await _findAccurateGps(_maxGpsAccuracy);
+      if (!mounted) return;
+      _location = ReportLocation.gps(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy,
       );
     } catch (error) {
       _error = error is ApiException
           ? error.message
-          : 'Could not capture the GPS location.';
+          : 'Could not capture GPS. Try again or choose a location on the map.';
     }
-    if (mounted) setState(() => _gettingLocation = false);
+    if (mounted) {
+      setState(() {
+        _gettingLocation = false;
+        _gpsProgressAccuracy = null;
+      });
+    }
+  }
+
+  double get _maxGpsAccuracy =>
+      double.tryParse(
+        (_form?['location'] as Map?)?['max_gps_accuracy_meters']?.toString() ??
+            '',
+      ) ??
+      100;
+
+  Future<Position> _findAccurateGps(double maxAccuracy) async {
+    final result = Completer<Position>();
+    StreamSubscription<Position>? subscription;
+    Position? best;
+    Timer? deadline;
+
+    subscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 0,
+          ),
+        ).listen(
+          (position) {
+            if (!position.accuracy.isFinite || position.accuracy < 0) return;
+            if (best == null || position.accuracy < best!.accuracy) {
+              best = position;
+              if (mounted) {
+                setState(() => _gpsProgressAccuracy = position.accuracy);
+              }
+            }
+            if (position.accuracy <= maxAccuracy && !result.isCompleted) {
+              result.complete(position);
+            }
+          },
+          onError: (Object error) {
+            if (!result.isCompleted) result.completeError(error);
+          },
+        );
+    deadline = Timer(const Duration(seconds: 30), () {
+      if (result.isCompleted) return;
+      final bestAccuracy = best?.accuracy.round();
+      result.completeError(
+        ApiException(
+          bestAccuracy == null
+              ? 'No GPS reading was received. Enable precise location, move outdoors, or choose a location on the map.'
+              : 'This device only reached ±$bestAccuracy m accuracy. Move outdoors and retry, or choose a location on the map.',
+        ),
+      );
+    });
+
+    try {
+      return await result.future;
+    } finally {
+      deadline.cancel();
+      await subscription.cancel();
+    }
+  }
+
+  LatLng? _coordinates(Map? value) {
+    final latitude = double.tryParse(value?['center_lat']?.toString() ?? '');
+    final longitude = double.tryParse(value?['center_lng']?.toString() ?? '');
+    if (latitude == null ||
+        longitude == null ||
+        !latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude.abs() > 85.05112878 ||
+        longitude.abs() > 180) {
+      return null;
+    }
+    return LatLng(latitude, longitude);
+  }
+
+  Future<void> _chooseManualLocation() async {
+    final settings = _form?['location'] as Map?;
+    final barangayCenter = _coordinates(settings?['barangay'] as Map?);
+    LatLng? clusterCenter;
+    for (final cluster in _clusters) {
+      if (cluster['id'] == _clusterId) clusterCenter = _coordinates(cluster);
+    }
+    final location = await Navigator.of(context).push<ReportLocation>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          // The fallback centers the map only. It never selects a report pin.
+          initialCenter:
+              _location?.point ??
+              clusterCenter ??
+              barangayCenter ??
+              const LatLng(10.2833, 123.8833),
+          initialLocation: _location,
+          barangayCenter: barangayCenter,
+          maxDistanceMeters: double.tryParse(
+            settings?['max_distance_meters']?.toString() ?? '',
+          ),
+        ),
+      ),
+    );
+    if (location == null || !mounted) return;
+    setState(() {
+      _location = location;
+      _error = null;
+    });
   }
 
   void _nextFromSite() {
@@ -178,8 +291,10 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
       setState(() => _error = 'Take or select a current mangrove photo.');
       return;
     }
-    if (_position == null) {
-      setState(() => _error = 'Capture the field GPS location.');
+    if (_location == null) {
+      setState(
+        () => _error = 'Capture GPS or choose your field location on the map.',
+      );
       return;
     }
     if (_sitio.text.trim().isEmpty) {
@@ -238,10 +353,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     });
     try {
       final fields = <String, String>{
-        'latitude': _position!.latitude.toStringAsFixed(8),
-        'longitude': _position!.longitude.toStringAsFixed(8),
-        'location_accuracy': _position!.accuracy.toStringAsFixed(2),
-        'location_source': 'gps',
+        ..._location!.fields,
         'sitio_name': _sitio.text,
         'guardian_remarks': _remarks.text,
         'root_type': _rootType!,
@@ -296,7 +408,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     _leafShape = null;
     _barkTexture = null;
     _photo = null;
-    _position = null;
+    _location = null;
     _confirmed = false;
     _step = 0;
   }
@@ -468,11 +580,38 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                     )
                   : const Icon(Icons.my_location),
               label: Text(
-                _position == null
+                _gettingLocation
+                    ? (_gpsProgressAccuracy == null
+                          ? 'Finding live GPS…'
+                          : 'Improving GPS · ±${_gpsProgressAccuracy!.round()} m')
+                    : _location?.source != 'gps'
                     ? 'Capture GPS location'
-                    : 'GPS captured · ±${_position!.accuracy.toStringAsFixed(0)} m',
+                    : 'GPS captured · ±${_location!.accuracy!.toStringAsFixed(0)} m',
               ),
             ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              key: const ValueKey('manual-location'),
+              onPressed: _gettingLocation || _busy
+                  ? null
+                  : _chooseManualLocation,
+              icon: const Icon(Icons.pin_drop_outlined),
+              label: Text(
+                _location == null
+                    ? 'Choose location on map'
+                    : 'Adjust pin on map',
+              ),
+            ),
+            if (_location != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '${_location!.source == 'manual' ? 'Manual pin' : 'GPS location'}: '
+                  '${_location!.latitude.toStringAsFixed(6)}, '
+                  '${_location!.longitude.toStringAsFixed(6)}',
+                  key: const ValueKey('report-location-summary'),
+                ),
+              ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _sitio,

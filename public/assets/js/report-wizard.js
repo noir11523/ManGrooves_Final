@@ -23,12 +23,17 @@
     const parentSelect = form.querySelector('[data-parent-report]');
     const photoInput = form.querySelector('[data-photo-input]');
     const photoPreview = form.querySelector('[data-photo-preview]');
+    const gpsButton = form.querySelector('[data-use-gps]');
+    const maxGpsAccuracy = Math.max(10, Number(form.dataset.maxGpsAccuracy) || 100);
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
     let currentStep = 1;
     let map = null;
     let marker = null;
     let manualMode = source?.value === 'manual';
     let previewObjectUrl = null;
+    let gpsWatchId = null;
+    let gpsTimer = 0;
+    let bestGpsPosition = null;
 
     const setStep = (step) => {
         currentStep = Math.max(1, Math.min(3, step));
@@ -80,6 +85,12 @@
             if (!latitude.value || !longitude.value || !['gps', 'manual'].includes(source.value)) {
                 return showFieldError(latitude, 'Capture your GPS location or place a manual map pin.');
             }
+            if (source.value === 'gps') {
+                const gpsAccuracy = Number(accuracy.value);
+                if (accuracy.value.trim() === '' || !Number.isFinite(gpsAccuracy) || gpsAccuracy < 0 || gpsAccuracy > maxGpsAccuracy) {
+                    return showFieldError(gpsButton, `Wait for GPS accuracy of ±${maxGpsAccuracy} m or better, or place the pin manually.`);
+                }
+            }
             if (!photoInput.files?.length) return showFieldError(photoInput, 'Take or choose a mangrove photo.');
             const file = photoInput.files[0];
             const allowed = ['image/jpeg', 'image/png', 'image/webp'];
@@ -105,7 +116,11 @@
         latitude.value = parsedLat.toFixed(8);
         longitude.value = parsedLng.toFixed(8);
         source.value = mode;
-        accuracy.value = mode === 'gps' && Number.isFinite(Number(measuredAccuracy)) ? Number(measuredAccuracy).toFixed(2) : '';
+        accuracy.value = mode === 'gps'
+            && String(measuredAccuracy).trim() !== ''
+            && Number.isFinite(Number(measuredAccuracy))
+            ? Number(measuredAccuracy).toFixed(2)
+            : '';
         manualMode = mode === 'manual';
         if (map && window.L) {
             if (!marker) {
@@ -138,7 +153,19 @@
             maxZoom: 20,
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
-        if (latitude.value && longitude.value) setLocation(latitude.value, longitude.value, source.value || 'manual', accuracy.value);
+        if (latitude.value && longitude.value) {
+            const savedAccuracy = Number(accuracy.value);
+            if (source.value === 'gps' && (accuracy.value.trim() === '' || !Number.isFinite(savedAccuracy) || savedAccuracy > maxGpsAccuracy)) {
+                latitude.value = '';
+                longitude.value = '';
+                source.value = '';
+                accuracy.value = '';
+                manualMode = false;
+                locationStatus.textContent = 'The previous GPS reading was too approximate and was removed. Capture GPS again or place the pin manually.';
+            } else {
+                setLocation(latitude.value, longitude.value, source.value || 'manual', accuracy.value);
+            }
+        }
         map.on('click', (event) => {
             if (manualMode) setLocation(event.latlng.lat, event.latlng.lng, 'manual');
         });
@@ -157,27 +184,69 @@
         locationStatus.textContent = 'The map could not load. Enter coordinates manually or use live GPS.';
     }
 
-    form.querySelector('[data-use-gps]')?.addEventListener('click', () => {
+    const stopGpsCapture = () => {
+        if (gpsWatchId !== null) navigator.geolocation.clearWatch(gpsWatchId);
+        if (gpsTimer) window.clearTimeout(gpsTimer);
+        gpsWatchId = null;
+        gpsTimer = 0;
+        if (gpsButton) gpsButton.disabled = false;
+    };
+
+    const rejectGpsCapture = (message) => {
+        stopGpsCapture();
+        locationStatus.textContent = message;
+    };
+
+    const acceptGpsPosition = (position) => {
+        stopGpsCapture();
+        setLocation(position.coords.latitude, position.coords.longitude, 'gps', position.coords.accuracy);
+        locationStatus.textContent = `Live GPS captured (±${Math.round(position.coords.accuracy)} m).`;
+    };
+
+    gpsButton?.addEventListener('click', () => {
         if (!navigator.geolocation) {
             locationStatus.textContent = 'GPS is unavailable in this browser. Use a manual pin.';
             return;
         }
-        locationStatus.textContent = 'Capturing an accurate GPS position…';
-        navigator.geolocation.getCurrentPosition(
-            (position) => setLocation(position.coords.latitude, position.coords.longitude, 'gps', position.coords.accuracy),
+        if (!window.isSecureContext) {
+            locationStatus.textContent = 'Live location requires HTTPS. Open the secure site or use the native mobile app/manual pin.';
+            return;
+        }
+        stopGpsCapture();
+        bestGpsPosition = null;
+        gpsButton.disabled = true;
+        locationStatus.textContent = `Finding live GPS (must reach ±${maxGpsAccuracy} m or better)…`;
+        gpsWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const measured = Number(position.coords.accuracy);
+                if (!Number.isFinite(measured) || measured < 0) return;
+                if (!bestGpsPosition || measured < bestGpsPosition.coords.accuracy) bestGpsPosition = position;
+                if (measured <= maxGpsAccuracy) {
+                    acceptGpsPosition(position);
+                    return;
+                }
+                locationStatus.textContent = `Improving GPS… best reading ±${Math.round(bestGpsPosition.coords.accuracy)} m; need ±${maxGpsAccuracy} m or better.`;
+            },
             (error) => {
                 const messages = {
                     1: 'Location permission was denied. Allow it in browser settings or use a manual pin.',
-                    2: 'A GPS position is unavailable. Move to an open area or use a manual pin.',
-                    3: 'GPS capture timed out. Try again or use a manual pin.'
+                    2: 'A live GPS position is unavailable. Move outdoors, enable precise location, or use a manual pin.',
+                    3: 'GPS capture timed out. Move outdoors and retry, or use a manual pin.'
                 };
-                locationStatus.textContent = messages[error.code] || 'GPS capture failed. Use a manual pin.';
+                rejectGpsCapture(messages[error.code] || 'GPS capture failed. Use a manual pin.');
             },
-            {enableHighAccuracy: true, timeout: 15000, maximumAge: 0}
+            {enableHighAccuracy: true, timeout: 30000, maximumAge: 0}
         );
+        gpsTimer = window.setTimeout(() => {
+            const bestAccuracy = bestGpsPosition ? Math.round(bestGpsPosition.coords.accuracy) : null;
+            rejectGpsCapture(bestAccuracy === null
+                ? 'No GPS reading was received. Enable precise location, move outdoors, or place the pin manually.'
+                : `This device only provided an approximate ±${bestAccuracy} m location, so it was not accepted. Use a GPS-equipped phone outdoors or place the pin manually.`);
+        }, 30000);
     });
 
     form.querySelector('[data-use-manual]')?.addEventListener('click', () => {
+        stopGpsCapture();
         manualMode = true;
         source.value = 'manual';
         accuracy.value = '';
@@ -328,5 +397,6 @@
         submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Submitting securely…';
     });
 
+    window.addEventListener('pagehide', stopGpsCapture, {once: true});
     setStep(1);
 })();

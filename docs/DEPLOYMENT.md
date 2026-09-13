@@ -1,5 +1,9 @@
 # Deployment and operations
 
+For the step-by-step path from XAMPP to online access for classmates, start with
+`docs/ONLINE_HOSTING.md`. Generate an archive with `scripts/package-hosting.ps1`;
+it includes a production configuration template instead of this PC's credentials.
+
 ## Production requirements
 
 - PHP 8.1 or newer with PDO MySQL, Fileinfo, mbstring, OpenSSL, and JSON

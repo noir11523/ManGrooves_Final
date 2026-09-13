@@ -84,6 +84,7 @@ Automated database and HTTP tests are for disposable development/test environmen
 - [User guide](docs/USER_GUIDE.md)
 - [Technical guide](docs/TECHNICAL_GUIDE.md)
 - [Deployment and operations](docs/DEPLOYMENT.md)
+- [Online access for classmates; hosting and online APK](docs/ONLINE_HOSTING.md)
 - [Data and scoring decisions](docs/DATA_AND_SCORING.md)
 - [Generated image assets](docs/IMAGE_ASSETS.md)
 - [Testing guide](docs/TESTING.md)

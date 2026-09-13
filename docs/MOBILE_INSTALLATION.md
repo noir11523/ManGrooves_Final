@@ -2,6 +2,11 @@
 
 ManGROOVES now has a proper Flutter client in `mobile/flutter_app`. Android and iOS share the same Dart screens and call the existing PHP/MariaDB system through the bearer-token JSON API in `public/mobile-api`.
 
+Local testing notice (September 12, 2026): the updated APK is built, but the last
+live check found an InnoDB recovery-log error preventing XAMPP MySQL from starting.
+Registration and reporting require database recovery first. See
+[Mobile release verification](MOBILE_RELEASE_VERIFICATION.md#current-local-database-blocker).
+
 ## Current Android APK
 
 The installable release-mode pilot APK is:
@@ -10,21 +15,23 @@ The installable release-mode pilot APK is:
 mobile/flutter_app/dist/ManGROOVES-Flutter.apk
 ```
 
-It was built for the local PHP API at:
+Its initial local PHP API address is:
 
 ```text
-http://192.168.100.15/mangrooves_v2/public/mobile-api
+http://192.168.100.12/mangrooves_v2/public/mobile-api
 ```
 
-Before testing, start Apache and MySQL in XAMPP. The Android phone and computer must be connected to the same Wi-Fi.
+Before testing, start Apache and MySQL in XAMPP. The Android phone and computer must be connected to the same router or non-guest local network. The computer may use Ethernet while the phone uses Wi-Fi.
 
-The technical server URL is intentionally hidden from the normal app screens so guardians see a clean interface. Hiding it does not disable the connection: the app still uses the URL compiled into the APK. The current pilot APK uses:
+The technical server URL is intentionally hidden from the normal app screens so guardians see a clean interface. The current pilot APK first tries:
 
 ```text
-http://192.168.100.15/mangrooves_v2/public/mobile-api
+http://192.168.100.12/mangrooves_v2/public/mobile-api
 ```
 
-If the computer's IPv4 address changes, rebuild the APK with the new address using the command below. The server address belongs in this installation guide, not in the guardian profile screen.
+If that address changes, the local pilot app searches the phone's private LAN subnet for an endpoint identifying itself as the ManGROOVES API and remembers the address it finds. This product identifier is not server authentication; use LAN discovery only on a trusted development network and HTTPS hosting for public use. Discovery can recover normal router-assigned IP changes without rebuilding. The registration screen also provides **Retry connection** after a failed attempt.
+
+Discovery cannot bypass network separation: it will not work if XAMPP is stopped, the phone uses mobile data or guest Wi-Fi, the router blocks device-to-device traffic, or a VPN blocks local-network access.
 
 To install manually:
 
@@ -32,7 +39,52 @@ To install manually:
 2. Open it from Files or Downloads.
 3. Allow installs from that file-manager source if Android asks.
 4. Tap **Install**, then **Open**.
-5. Grant camera and precise location access when submitting a report.
+5. Grant camera access when taking a photo. Grant precise location access for GPS capture, or select a manual map pin without GPS permission.
+
+### Registration and manual pins (version 1.1.5, build 7)
+
+Install the updated APK over the older pilot app; editing PHP or refreshing the
+website does not update an APK already installed on a phone.
+
+To register:
+
+1. Open **Create guardian account** from the sign-in screen.
+2. Enter your name, a valid email address, barangay, and matching passwords; accept the privacy notice.
+3. Tap **Create guardian account** once and wait for the server response.
+4. On success, the app signs you in and opens **Dashboard**. The registration page is removed, so Back does not reopen it.
+5. If the server rejects the details or cannot be reached, the form remains with your entries and an error. Correct the error and retry. If an earlier version already created your account, use **Sign in** instead of registering it again.
+
+To choose the pin manually:
+
+1. Open **Observe** and stay on the **Site** step.
+2. Tap **Choose location on map** under the GPS button.
+3. Tap your actual field site, or drag the map underneath the centered pin.
+4. Check the coordinates and tap **Use this location**.
+5. Back on the report, confirm the **Manual pin** coordinates. Use **Adjust pin on map** to change them, or **Capture GPS location** to replace them with a GPS reading.
+6. Add the photo, sitio name, living count, health checklist, and species traits, then submit normally.
+
+Opening the map does not silently select its default center. Canceling leaves
+your previous selection unchanged. Manual pins do not require GPS permission or
+invent a GPS accuracy measurement. Pins outside the account's configured barangay
+monitoring area are rejected; choose only the actual location of the observation.
+Map imagery needs internet (or previously cached tiles). **Enter coordinates instead**
+lets you provide known field coordinates if the tiles cannot load. Report submission
+still requires a connection to the PHP backend.
+
+### Accurate live location
+
+**Use my live location** does not read a server IP address. It asks the device
+through the browser or native operating-system location service. A desktop or
+laptop without a GPS sensor may only return a broad Wi-Fi/network estimate such
+as `±50000 m`. Version 1.1.5 refuses GPS readings worse than `±100 m` instead
+of saving that estimate. It listens for improved high-accuracy updates for up to
+30 seconds.
+
+For the most accurate result, use the native Flutter app on a GPS-equipped phone,
+enable **Precise location**, and stand outdoors with a clear sky view. On the web,
+live geolocation requires HTTPS (except the browser's special localhost case).
+If an acceptable GPS fix is unavailable, select the actual observation point
+using **Place pin manually**; never use an inaccurate automatic estimate.
 
 USB installation is also available when USB debugging is enabled:
 
@@ -44,16 +96,21 @@ The current release APK uses the Flutter development signing key and is intended
 
 ## Rebuild Android
 
+For classmates outside your local network, deploy the PHP backend and database to
+hosting first. Follow `docs/ONLINE_HOSTING.md`, then use `build-apk.ps1 -Online`
+with the real HTTPS API URL. An online build ignores stored LAN addresses and does
+not scan local networks. The current downloadable pilot APK is still local-only.
+
 Flutter is installed at `C:\src\flutter`. From the repository root:
 
 ```powershell
-.\mobile\flutter_app\build-apk.ps1 -ApiBaseUrl 'http://YOUR-PC-IP/mangrooves_v2/public/mobile-api'
+.\mobile\flutter_app\build-apk.cmd -ApiBaseUrl 'http://YOUR-PC-IP/mangrooves_v2/public/mobile-api'
 ```
 
 For an Android emulator, the PC loopback alias is `10.0.2.2`:
 
 ```powershell
-.\mobile\flutter_app\build-apk.ps1 -ApiBaseUrl 'http://10.0.2.2/mangrooves_v2/public/mobile-api'
+.\mobile\flutter_app\build-apk.cmd -ApiBaseUrl 'http://10.0.2.2/mangrooves_v2/public/mobile-api'
 ```
 
 The normal sign-in and profile screens do not display the server address. This is intentional for the clean release interface.
@@ -95,12 +152,12 @@ The Flutter app never stores the PHP password or database credentials. It stores
 
 Run these checks separately on Android and iPhone before public distribution:
 
-1. Register a unique guardian and verify it appears in the web administration screen.
+1. Register a unique guardian, confirm the app opens Dashboard without the registration form remaining in Back history, and verify the account appears in web administration.
 2. Sign out, sign in, close the app, reopen it, and verify secure session restoration.
 3. Capture a camera photo, precise GPS location, species traits, and every required health answer.
 4. Submit a report and confirm it appears in both the Flutter Reports tab and PHP expert dashboard.
 5. Verify the report in the PHP dashboard, refresh Flutter, and confirm the status and expert feedback.
-6. Deny and then grant camera/location permissions to confirm recovery messages.
+6. Deny location permission, choose a manual pin, submit a second photo report, and verify the saved coordinates. Reopen the picker, move the map, and cancel to check that the old selection remains. Then grant GPS permission and check GPS capture again.
 7. Turn the PHP server off temporarily and verify connection errors are understandable; then restart it.
 8. Test on at least one small Android phone and one current iPhone before release.
 

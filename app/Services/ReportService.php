@@ -54,7 +54,21 @@ final class ReportService
             $traits[$field] = array_values($values);
         }
 
+        $barangay = null;
+        if (!empty($user['barangay_id'])) {
+            $barangayStatement = $this->pdo->prepare(
+                'SELECT id, name, center_lat, center_lng FROM barangays WHERE id = :id'
+            );
+            $barangayStatement->execute(['id' => (int) $user['barangay_id']]);
+            $barangay = $barangayStatement->fetch() ?: null;
+        }
+
         return [
+            'location' => [
+                'barangay' => $barangay,
+                'max_distance_meters' => (float) \config('barangay_max_distance_meters', 5000),
+                'max_gps_accuracy_meters' => (float) \config('gps_max_accuracy_meters', 100),
+            ],
             'criteria' => $this->classifier->criteriaWithOptions(),
             'clusters' => $clusterStatement->fetchAll(),
             'species' => $species,
@@ -160,6 +174,12 @@ final class ReportService
         }
         if ($locationSource === 'gps' && $accuracy === null) {
             throw new InvalidArgumentException('GPS accuracy is missing. Capture your location again.');
+        }
+        if ($locationSource === 'gps' && $accuracy > (float) \config('gps_max_accuracy_meters', 100)) {
+            throw new InvalidArgumentException(sprintf(
+                'The GPS reading is only accurate to about %d meters. Wait for a better GPS signal or place the map pin manually.',
+                (int) round($accuracy)
+            ));
         }
         if ($locationSource === 'manual') {
             $accuracy = null;

@@ -137,6 +137,19 @@ try {
         )->fetchColumn(), 'missing observation snapshots');
     });
 
+    test_case('report form includes the guardian monitoring area for manual pins', static function () use ($pdo): void {
+        $service = new ReportService($pdo);
+        $form = $service->formData(['role' => 'guardian', 'barangay_id' => 1]);
+        same(1, (int) $form['location']['barangay']['id']);
+        check(is_numeric($form['location']['barangay']['center_lat']), 'Missing map latitude');
+        check(is_numeric($form['location']['barangay']['center_lng']), 'Missing map longitude');
+        same((float) config('barangay_max_distance_meters', 5000), $form['location']['max_distance_meters']);
+        same((float) config('gps_max_accuracy_meters', 100), $form['location']['max_gps_accuracy_meters']);
+        $unassigned = $service->formData(['role' => 'guardian', 'barangay_id' => null]);
+        same(null, $unassigned['location']['barangay']);
+        same([], $unassigned['clusters']);
+    });
+
     test_case('seeded password hashes verify', static function () use ($pdo): void {
         $hashes = $pdo->query('SELECT password_hash FROM users')->fetchAll(PDO::FETCH_COLUMN);
         check($hashes !== [], 'No hashes loaded');
@@ -408,6 +421,23 @@ try {
             'longitude' => '0',
             'location_source' => 'manual',
         ], []), InvalidArgumentException::class);
+    });
+
+    test_case('guardian submissions reject network-level GPS accuracy', static function () use ($pdo): void {
+        $location = $pdo->query('SELECT center_lat, center_lng FROM barangays WHERE id = 1')->fetch();
+        check((bool) $location, 'Missing seeded barangay center');
+        try {
+            (new ReportService($pdo))->submitGuardianReport(1, [
+                'field_confirmation' => '1',
+                'latitude' => (string) $location['center_lat'],
+                'longitude' => (string) $location['center_lng'],
+                'location_source' => 'gps',
+                'location_accuracy' => '50000',
+            ], []);
+            throw new RuntimeException('A 50 km GPS estimate was accepted');
+        } catch (InvalidArgumentException $exception) {
+            check(str_contains($exception->getMessage(), 'better GPS signal'), 'Unexpected accuracy validation message');
+        }
     });
 
     test_case('guardian submissions require a usable living-count baseline', static function () use ($pdo): void {
