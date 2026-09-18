@@ -6,6 +6,7 @@ Options -Indexes
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "camera=(self), geolocation=(self), microphone=()"
 </IfModule>
+
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json image/svg+xml
 </IfModule>
@@ -19,3 +20,4 @@ Options -Indexes
     ExpiresByType image/webp "access plus 30 days"
     ExpiresByType image/svg+xml "access plus 30 days"
 </IfModule>
+

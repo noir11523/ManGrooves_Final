@@ -90,6 +90,7 @@ Automated database and HTTP tests are for disposable development/test environmen
 - [Testing guide](docs/TESTING.md)
 - [Appendix H module verification](docs/APPENDIX_H_VERIFICATION.md)
 - [Mobile release verification](docs/MOBILE_RELEASE_VERIFICATION.md)
+- [Legacy Android WebView guide](mobile/android-apk/README.md)
 - [Flutter Android and iPhone installation](docs/MOBILE_INSTALLATION.md)
 
 ## Technology
