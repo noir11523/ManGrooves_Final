@@ -22,10 +22,18 @@
                 <input type="hidden" name="action" value="profile">
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label" for="settings-full-name">Full name</label>
-                        <input class="form-control" id="settings-full-name" name="full_name" type="text" value="<?= e((string) $profileValues['full_name']) ?>" autocomplete="name" minlength="2" maxlength="120" required>
-                        <div class="invalid-feedback">Enter a full name between 2 and 120 characters.</div>
+                        <label class="form-label" for="settings-first-name">First name</label>
+                        <input class="form-control" id="settings-first-name" name="first_name" type="text" value="<?= e((string) $profileValues['first_name']) ?>" autocomplete="given-name" maxlength="60" required>
+                        <div class="invalid-feedback">Enter your first name.</div>
                     </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="settings-last-name">Last name</label>
+                        <input class="form-control" id="settings-last-name" name="last_name" type="text" value="<?= e((string) $profileValues['last_name']) ?>" autocomplete="family-name" maxlength="59" required>
+                        <div class="invalid-feedback">Enter your last name.</div>
+                    </div>
+                    <?php if (empty($user['first_name']) || empty($user['last_name'])): ?>
+                        <div class="col-12"><p class="form-text mb-0">Your saved name is <?= e($user['full_name']) ?>. Please enter your first and last names separately to confirm them.</p></div>
+                    <?php endif; ?>
                     <div class="col-md-6">
                         <label class="form-label" for="settings-email">Email address</label>
                         <input class="form-control" id="settings-email" name="email" type="email" value="<?= e((string) $profileValues['email']) ?>" autocomplete="email" maxlength="190" required>
@@ -86,7 +94,7 @@
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="new-password-confirmation">Confirm new password</label>
-                        <input class="form-control" id="new-password-confirmation" name="new_password_confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="72" required data-password-confirm="#new-password">
+                        <div class="input-group password-group"><input class="form-control" id="new-password-confirmation" name="new_password_confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="72" required data-password-confirm="#new-password"><button class="btn password-toggle" type="button" data-password-toggle="#new-password-confirmation" aria-label="Show confirm password"><i class="bi bi-eye" aria-hidden="true"></i></button></div>
                         <div class="invalid-feedback">Enter the same new password again.</div>
                     </div>
                     <div class="col-12 pt-2">

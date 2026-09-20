@@ -4,6 +4,30 @@
     const root = document.documentElement;
     root.classList.add('js');
 
+    const privacyNotice = document.getElementById('privacyNotice');
+    let privacyTrigger = null;
+    document.querySelectorAll('[data-privacy-notice]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+            if (!privacyNotice || typeof privacyNotice.showModal !== 'function') return;
+            event.preventDefault();
+            event.stopPropagation();
+            privacyTrigger = link;
+            // Keep the notice inside Bootstrap's focus trap when opened from registration.
+            (link.closest('.modal') || document.body).append(privacyNotice);
+            privacyNotice.showModal();
+            privacyNotice.querySelector('.privacy-dialog-body').scrollTop = 0;
+        });
+    });
+    privacyNotice?.querySelectorAll('[data-close-privacy]').forEach((button) => {
+        button.addEventListener('click', () => privacyNotice.close());
+    });
+    privacyNotice?.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') event.stopPropagation();
+    });
+    privacyNotice?.addEventListener('close', () => {
+        privacyTrigger?.focus({ preventScroll: true });
+    });
+
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {

@@ -15,6 +15,9 @@ try {
     $barangays = Database::connection()
         ->query('SELECT id, name, city_municipality FROM barangays ORDER BY name')
         ->fetchAll();
+    if ($barangays === []) {
+        $errors[] = 'Registration is unavailable because no barangay is configured. Please contact the system administrator.';
+    }
 } catch (Throwable $exception) {
     if (config('debug')) {
         error_log('Unable to load barangays: ' . $exception->getMessage());
@@ -26,7 +29,17 @@ if (is_post()) {
     Csrf::validateOrFail();
     remember_old_input($_POST);
     if ($barangays !== []) {
-        [$registered, $registrationErrors] = Auth::registerGuardian($_POST);
+        // Both fields are required on the website, including requests without JavaScript.
+        $registrationData = $_POST;
+        $registrationData['first_name'] = $_POST['first_name'] ?? '';
+        $registrationData['last_name'] = $_POST['last_name'] ?? '';
+        try {
+            [$registered, $registrationErrors] = Auth::registerGuardian($registrationData);
+        } catch (Throwable $exception) {
+            error_log('Unable to register guardian: ' . $exception->getMessage());
+            $registered = false;
+            $registrationErrors = ['Registration is temporarily unavailable. Please try again shortly.'];
+        }
 
         if ($registered) {
             clear_old_input();

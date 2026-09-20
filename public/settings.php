@@ -9,7 +9,8 @@ $pdo = Database::connection();
 $profileErrors = [];
 $passwordErrors = [];
 $profileValues = [
-    'full_name' => (string) $user['full_name'],
+    'first_name' => (string) ($user['first_name'] ?? ''),
+    'last_name' => (string) ($user['last_name'] ?? ''),
     'email' => (string) $user['email'],
     'phone' => (string) ($user['phone'] ?? ''),
     'barangay_id' => (string) ($user['barangay_id'] ?? ''),
@@ -21,14 +22,17 @@ if (is_post()) {
 
     if ($action === 'profile') {
         $profileValues = [
-            'full_name' => trim(scalar_string($_POST['full_name'] ?? null)),
+            'first_name' => trim(scalar_string($_POST['first_name'] ?? null)),
+            'last_name' => trim(scalar_string($_POST['last_name'] ?? null)),
             'email' => strtolower(trim(scalar_string($_POST['email'] ?? null))),
             'phone' => trim(scalar_string($_POST['phone'] ?? null)),
             'barangay_id' => trim(scalar_string($_POST['barangay_id'] ?? null)),
         ];
 
-        if (mb_strlen($profileValues['full_name']) < 2 || mb_strlen($profileValues['full_name']) > 120) {
-            $profileErrors[] = 'Enter a full name between 2 and 120 characters.';
+        try {
+            $names = \App\Services\UserName::fromInput($profileValues);
+        } catch (InvalidArgumentException $exception) {
+            $profileErrors[] = $exception->getMessage();
         }
         if (!filter_var($profileValues['email'], FILTER_VALIDATE_EMAIL) || mb_strlen($profileValues['email']) > 190) {
             $profileErrors[] = 'Enter a valid email address.';
@@ -57,11 +61,11 @@ if (is_post()) {
 
         if ($profileErrors === []) {
             $statement = $pdo->prepare(
-                'UPDATE users SET full_name = :full_name, email = :email, phone = :phone, barangay_id = :barangay_id WHERE id = :id'
+                'UPDATE users SET first_name = :first_name, last_name = :last_name, full_name = :full_name, email = :email, phone = :phone, barangay_id = :barangay_id WHERE id = :id'
             );
             try {
                 $statement->execute([
-                    'full_name' => $profileValues['full_name'],
+                    ...$names,
                     'email' => $profileValues['email'],
                     'phone' => $profileValues['phone'] === '' ? null : $profileValues['phone'],
                     'barangay_id' => $barangayId,

@@ -477,9 +477,32 @@ try {
     $registerToken = csrf_token($registerPage->body);
     record_result($registerPage->status === 200 && str_contains(strtolower($registerPage->body), 'privacy notice'),
         'registration form exposes privacy consent and CSRF', 'HTTP ' . $registerPage->status);
+    record_result(
+        str_contains($registerPage->body, 'name="first_name"')
+        && str_contains($registerPage->body, 'name="last_name"')
+        && preg_match('/<option value="1"\s+selected>Inayawan, Cebu City<\/option>/', $registerPage->body) === 1,
+        'registration shows separate names and preselects the Inayawan pilot site'
+    );
+    $missingLastName = $guardian->request('POST', '/register.php', [
+        'csrf_token' => $registerToken,
+        'first_name' => 'Maria Elena',
+        'last_name' => '',
+        'email' => $registeredEmail,
+        'barangay_id' => '1',
+        'password' => $registeredPassword,
+        'password_confirmation' => $registeredPassword,
+        'privacy_consent' => '1',
+    ]);
+    record_result(
+        $missingLastName->status === 200
+        && str_contains($missingLastName->body, 'Enter a last name')
+        && str_contains($missingLastName->body, 'value="Maria Elena"'),
+        'server rejects a missing last name and preserves the entered first name'
+    );
     $registration = $guardian->request('POST', '/register.php', [
         'csrf_token' => $registerToken,
-        'full_name' => 'E2E Release Guardian',
+        'first_name' => 'María Elena',
+        'last_name' => "Dela Cruz-O'Neil",
         'email' => $registeredEmail,
         'phone' => '+63 917 000 0000',
         'barangay_id' => '1',
@@ -493,6 +516,10 @@ try {
     $registeredUser = $databasePdo->prepare('SELECT * FROM users WHERE email = :email LIMIT 1');
     $registeredUser->execute(['email' => $registeredEmail]);
     $guardianRow = $registeredUser->fetch();
+    record_result($guardianRow && $guardianRow['full_name'] === "María Elena Dela Cruz-O'Neil",
+        'registration preserves accented, compound and hyphenated name parts');
+    record_result($guardianRow['first_name'] === 'María Elena' && $guardianRow['last_name'] === "Dela Cruz-O'Neil",
+        'registration stores first and last names in separate database columns');
     require_result(
         (bool) $guardianRow && $guardianRow['role'] === 'guardian' && $guardianRow['privacy_consent_at'] !== null,
         'public registration ignores role escalation and creates an active consented guardian'
@@ -705,7 +732,7 @@ try {
         'guardian badge page shows earned badge', 'HTTP ' . $guardianBadges->status);
     $guardianCertificate = $guardian->request('GET', '/certificate.php');
     record_result(
-        $guardianCertificate->status === 200 && str_contains($guardianCertificate->body, 'E2E Release Guardian')
+        $guardianCertificate->status === 200 && str_contains($guardianCertificate->body, 'María Elena Dela Cruz-O&#039;Neil')
         && str_contains($guardianCertificate->body, 'First Report'),
         'guardian certificate becomes available after verification', 'HTTP ' . $guardianCertificate->status
     );
@@ -803,12 +830,18 @@ try {
     $adminLogin = login($admin, 'admin@test.com', 'Mangrooves123!');
     require_result($adminLogin->status === 200 && str_contains($adminLogin->body, 'Dashboard'),
         'system administrator signs in', 'HTTP ' . $adminLogin->status);
+    $nameFilterPage = $admin->request('GET', '/admin/users.php?first_name=' . rawurlencode('María') . '&last_name=' . rawurlencode('Dela Cruz'));
+    record_result($nameFilterPage->status === 200 && str_contains($nameFilterPage->body, $registeredEmail),
+        'administrator can combine first-name and last-name prefix filters');
+    $wrongNameFilter = $admin->request('GET', '/admin/users.php?last_name=' . rawurlencode('María'));
+    record_result($wrongNameFilter->status === 200 && !str_contains($wrongNameFilter->body, $registeredEmail),
+        'last-name filter does not match a first name');
     $adminRoutes = [
         '/admin/analytics.php' => 'Conservation analytics',
         '/admin/verification.php' => 'Verification queue',
         '/admin/cluster.php' => 'Mangrove clusters',
         '/admin/cluster.php?id=' . $clusterId => 'E2E Release Plot',
-        '/admin/report.php?id=' . $firstReportId => 'E2E Release Guardian',
+        '/admin/report.php?id=' . $firstReportId => 'María Elena Dela Cruz-O&#039;Neil',
         '/admin/users.php' => 'User management',
         '/admin/species.php' => 'Species management',
         '/admin/badges.php' => 'Badge management',
@@ -861,7 +894,7 @@ try {
     $adminCertificate = $admin->request('GET', '/certificate.php?user=' . $guardianId);
     record_result(
         $adminCertificate->status === 200
-        && str_contains($adminCertificate->body, 'E2E Release Guardian')
+        && str_contains($adminCertificate->body, 'María Elena Dela Cruz-O&#039;Neil')
         && str_contains($adminCertificate->body, 'First Report'),
         'administrator can generate an eligible guardian certificate',
         'HTTP ' . $adminCertificate->status
@@ -873,7 +906,8 @@ try {
     $staffCreate = $admin->request('POST', '/admin/users.php', [
         'csrf_token' => csrf_token($adminUsers->body),
         'action' => 'create_staff',
-        'full_name' => 'E2E Temporary Expert',
+        'first_name' => 'E2E Temporary',
+        'last_name' => 'Expert',
         'email' => $staffEmail,
         'phone' => '+63 917 222 2222',
         'role' => 'expert',
@@ -984,6 +1018,21 @@ try {
         'mobile registration returns an authenticated guardian session', 'HTTP ' . $mobileRegistration->status
     );
     $mobileHeaders = ['Authorization: Bearer ' . $mobileSession['token']];
+    $mobileNameUpdate = $mobileGuardian->request('POST', '/mobile-api/profile.php', [
+        'first_name' => 'Mobile María', 'last_name' => 'Dela Cruz',
+        'email' => 'mobile.' . $registeredEmail, 'barangay_id' => '1',
+    ], true, $mobileHeaders);
+    $mobileNames = json_decode($mobileNameUpdate->body, true);
+    record_result($mobileNameUpdate->status === 200 && ($mobileNames['user']['first_name'] ?? '') === 'Mobile María'
+        && ($mobileNames['user']['last_name'] ?? '') === 'Dela Cruz',
+        'mobile profile accepts and returns separate name columns');
+    $legacyProfileUpdate = $mobileGuardian->request('POST', '/mobile-api/profile.php', [
+        'full_name' => 'Mobile María Dela Cruz', 'email' => 'mobile.' . $registeredEmail, 'barangay_id' => '1',
+    ], true, $mobileHeaders);
+    $legacyNames = json_decode($legacyProfileUpdate->body, true);
+    record_result($legacyProfileUpdate->status === 200 && ($legacyNames['user']['first_name'] ?? '') === 'Mobile María'
+        && ($legacyNames['user']['last_name'] ?? '') === 'Dela Cruz',
+        'older mobile clients preserve confirmed name parts when the full name is unchanged');
     $mobileDashboard = $mobileGuardian->request('GET', '/mobile-api/dashboard.php', null, true, $mobileHeaders);
     $mobileDashboardJson = json_decode($mobileDashboard->body, true);
     record_result(
@@ -1040,12 +1089,15 @@ try {
     $profileUpdate = $otherGuardian->request('POST', '/settings.php', [
         'csrf_token' => csrf_token($settingsPage->body),
         'action' => 'profile',
-        'full_name' => 'E2E Updated Guardian',
+        'first_name' => 'E2E Updated',
+        'last_name' => 'Guardian',
         'email' => 'guardian@test.com',
         'phone' => '+63 917 333 3333',
         'barangay_id' => '1',
     ]);
-    $updatedProfile = $databasePdo->query("SELECT full_name, phone FROM users WHERE email = 'guardian@test.com'")->fetch();
+    $updatedProfile = $databasePdo->query("SELECT first_name, last_name, full_name, phone FROM users WHERE email = 'guardian@test.com'")->fetch();
+    record_result($updatedProfile['first_name'] === 'E2E Updated' && $updatedProfile['last_name'] === 'Guardian',
+        'profile editing saves separate names and synchronizes the display name');
     record_result(
         $profileUpdate->status === 200
         && $updatedProfile['full_name'] === 'E2E Updated Guardian'

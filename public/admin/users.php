@@ -14,7 +14,7 @@ if (is_post()) {
     $action = scalar_string($_POST['action'] ?? null);
     try {
         if ($action === 'create_staff') {
-            $name = trim(scalar_string($_POST['full_name'] ?? null));
+            $names = \App\Services\UserName::fromInput($_POST);
             $email = strtolower(trim(scalar_string($_POST['email'] ?? null)));
             $phone = trim(scalar_string($_POST['phone'] ?? null));
             $role = scalar_string($_POST['role'] ?? null);
@@ -23,9 +23,6 @@ if (is_post()) {
             $staffRoles = ['expert', 'system_admin'];
             $errors = [];
 
-            if (mb_strlen($name) < 2 || mb_strlen($name) > 120) {
-                $errors[] = 'Enter a full name between 2 and 120 characters.';
-            }
             if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
                 $errors[] = 'Enter a valid email address.';
             }
@@ -46,7 +43,7 @@ if (is_post()) {
             }
 
             $successMessage = Database::transaction(static function (PDO $pdo) use (
-                $name,
+                $names,
                 $email,
                 $phone,
                 $role,
@@ -59,11 +56,11 @@ if (is_post()) {
                 }
 
                 $create = $pdo->prepare(
-                    'INSERT INTO users (full_name, email, phone, password_hash, role, barangay_id, status, privacy_consent_at)
-                     VALUES (:full_name, :email, :phone, :password_hash, :role, NULL, \'active\', NULL)'
+                    'INSERT INTO users (first_name, last_name, full_name, email, phone, password_hash, role, barangay_id, status, privacy_consent_at)
+                     VALUES (:first_name, :last_name, :full_name, :email, :phone, :password_hash, :role, NULL, \'active\', NULL)'
                 );
                 $create->execute([
-                    'full_name' => $name,
+                    ...$names,
                     'email' => $email,
                     'phone' => $phone === '' ? null : $phone,
                     'password_hash' => password_hash($password, PASSWORD_DEFAULT),
@@ -186,6 +183,8 @@ $roleFilter = in_array($rawRoleFilter, $roles, true) ? $rawRoleFilter : '';
 $statusFilter = in_array($rawStatusFilter, $statuses, true) ? $rawStatusFilter : '';
 $barangayFilter = filter_var($_GET['barangay_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
 $search = mb_substr(trim(scalar_string($_GET['q'] ?? null)), 0, 100);
+$firstNameFilter = mb_substr(trim(scalar_string($_GET['first_name'] ?? null)), 0, 60);
+$lastNameFilter = mb_substr(trim(scalar_string($_GET['last_name'] ?? null)), 0, 59);
 $page = max(1, (int) scalar_string($_GET['page'] ?? null, '1'));
 $perPage = 25;
 $offset = ($page - 1) * $perPage;
@@ -210,12 +209,19 @@ if ($search !== '') {
     $params['search_email'] = $like;
     $params['search_phone'] = $like;
 }
+foreach (['first_name' => $firstNameFilter, 'last_name' => $lastNameFilter] as $column => $value) {
+    if ($value !== '') {
+        $clauses[] = "u.{$column} LIKE :{$column}";
+        $params[$column] = strtr($value, ['=' => '==', '%' => '=%', '_' => '=_']) . '%';
+        $clauses[array_key_last($clauses)] .= " ESCAPE '='";
+    }
+}
 $where = implode(' AND ', $clauses);
 $counter = $pdo->prepare("SELECT COUNT(*) FROM users u WHERE {$where}");
 $counter->execute($params);
 $total = (int) $counter->fetchColumn();
 $statement = $pdo->prepare(
-    "SELECT u.id, u.full_name, u.email, u.phone, u.role, u.status, u.last_login_at, u.created_at,
+    "SELECT u.id, u.first_name, u.last_name, u.full_name, u.email, u.phone, u.role, u.status, u.last_login_at, u.created_at,
             b.name AS barangay_name,
             (SELECT COUNT(*) FROM reports r WHERE r.user_id = u.id) AS report_count,
             (SELECT COUNT(*) FROM user_badges ub WHERE ub.user_id = u.id) AS badge_count
@@ -242,6 +248,8 @@ render('admin/users', [
     'statusFilter' => $statusFilter,
     'barangayFilter' => $barangayFilter,
     'search' => $search,
+    'firstNameFilter' => $firstNameFilter,
+    'lastNameFilter' => $lastNameFilter,
     'page' => $page,
     'totalPages' => max(1, (int) ceil($total / $perPage)),
     'total' => $total,

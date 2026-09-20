@@ -52,7 +52,7 @@ try {
     }
 
     $requiredColumns = [
-        'users' => ['session_version'],
+        'users' => ['session_version', 'first_name', 'last_name'],
         'notifications' => ['dedupe_key'],
         'user_badges' => [
             'badge_name_snapshot', 'description_snapshot', 'metric_snapshot',

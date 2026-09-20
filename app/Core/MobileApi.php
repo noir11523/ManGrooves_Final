@@ -136,6 +136,8 @@ final class MobileApi
         return [
             'id' => (int) $user['id'],
             'full_name' => (string) $user['full_name'],
+            'first_name' => $user['first_name'] ?? null,
+            'last_name' => $user['last_name'] ?? null,
             'email' => (string) $user['email'],
             'phone' => $user['phone'] === null ? null : (string) $user['phone'],
             'role' => (string) $user['role'],
