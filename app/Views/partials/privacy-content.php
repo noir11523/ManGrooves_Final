@@ -10,6 +10,9 @@
             <h2 class="h4 mt-4">Retention and protection</h2>
             <p>Records are retained while needed for monitoring history, legal accountability, and approved conservation programs. Administrators should publish a local retention schedule before production use. The application uses role checks, password hashing, CSRF protection, session expiry and revocation, audit logging, validated uploads, and access-controlled report views. No internet service can promise absolute security.</p>
 
+            <h2 class="h4 mt-4">Optional location assistance</h2>
+            <p>Device location is requested through your browser's permission controls; its provider may use GPS, nearby Wi-Fi networks, or other signals. The optional IP-area button contacts GeoJS only after you check its permission box and press the button. GeoJS and its delivery providers receive your public IP address and normal request metadata. ManGROOVES does not send account data, report details, photos, session cookies, or a page referrer with that request. See the <a href="https://www.geojs.io/privacy/" target="_blank" rel="noopener noreferrer">GeoJS privacy policy</a>. The result is approximate map guidance, not proof of a field visit. It is not saved to the report automatically. A point you select on the map is recorded as a manual location. You may skip this service and place the pin yourself.</p>
+
             <h2 class="h4 mt-4">Your choices and rights</h2>
             <p>You may review and correct profile data in Settings. Requests to access, correct, restrict, or delete information that cannot be changed in the app should be sent to the operating CCENRO office. Some verified environmental and audit records may need to be preserved, in which case the account can be suspended and identifying access limited instead of deleting the monitoring history.</p>
 

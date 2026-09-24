@@ -478,6 +478,11 @@ try {
     record_result($registerPage->status === 200 && str_contains(strtolower($registerPage->body), 'privacy notice'),
         'registration form exposes privacy consent and CSRF', 'HTTP ' . $registerPage->status);
     record_result(
+        str_contains($registerPage->body, 'Optional location assistance')
+        && str_contains($registerPage->body, 'https://www.geojs.io/privacy/'),
+        'shared registration privacy dialog retains the opt-in location disclosure'
+    );
+    record_result(
         str_contains($registerPage->body, 'name="first_name"')
         && str_contains($registerPage->body, 'name="last_name"')
         && preg_match('/<option value="1"\s+selected>Inayawan, Cebu City<\/option>/', $registerPage->body) === 1,
@@ -532,6 +537,35 @@ try {
         $reportForm->status === 200
         && preg_match('/name="observed_alive_count"[^>]*required/i', $reportForm->body) === 1,
         'report wizard requires the living-count baseline', 'HTTP ' . $reportForm->status
+    );
+    $locationScriptOffset = strpos($reportForm->body, '/assets/js/live-location.js?v=');
+    $wizardScriptOffset = strpos($reportForm->body, '/assets/js/report-wizard.js?v=');
+    record_result(
+        $locationScriptOffset !== false && $wizardScriptOffset !== false
+        && $locationScriptOffset < $wizardScriptOffset
+        && str_contains($reportForm->body, 'data-save-location')
+        && str_contains($reportForm->body, 'data-cancel-location')
+        && str_contains($reportForm->body, 'data-location-help')
+        && str_contains($reportForm->body, 'data-show-device-area')
+        && str_contains($reportForm->body, 'data-ip-area-consent')
+        && str_contains($reportForm->body, 'data-show-ip-area disabled'),
+        'report page loads versioned live-location helper before wizard and renders capture controls'
+    );
+    record_result(
+        str_contains($reportForm->headers, "connect-src 'self' https://*.tile.openstreetmap.org https://get.geojs.io;")
+        && !str_contains($reportForm->body, '<script src="https://get.geojs.io'),
+        'optional IP assistance permits only provider connections, not third-party provider scripts'
+    );
+    $privacyPage = $anonymous->request('GET', '/privacy.php');
+    record_result(
+        $privacyPage->status === 200 && str_contains($privacyPage->body, 'Optional location assistance')
+        && str_contains($privacyPage->body, 'https://www.geojs.io/privacy/'),
+        'privacy notice explains opt-in IP assistance'
+    );
+    $locationScript = $guardian->request('GET', '/assets/js/live-location.js');
+    record_result(
+        $locationScript->status === 200 && str_contains($locationScript->body, 'enableHighAccuracy: true'),
+        'live-location helper is served successfully', 'HTTP ' . $locationScript->status
     );
     $beforeReports = (int) $databasePdo->query('SELECT COUNT(*) FROM reports')->fetchColumn();
     $invalidCsrf = $guardian->request('POST', '/submit-report.php', ['csrf_token' => 'invalid'], false);

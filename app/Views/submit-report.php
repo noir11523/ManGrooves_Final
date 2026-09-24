@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 $extraHead = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">';
 $reportWizardVersion = (string) (filemtime(APP_ROOT . '/public/assets/js/report-wizard.js') ?: 1);
+$liveLocationVersion = (string) (filemtime(APP_ROOT . '/public/assets/js/live-location.js') ?: 1);
 $pageScripts = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>'
+    . '<script src="' . e(asset('js/live-location.js') . '?v=' . rawurlencode($liveLocationVersion)) . '"></script>'
     . '<script src="' . e(asset('js/report-wizard.js') . '?v=' . rawurlencode($reportWizardVersion)) . '"></script>';
 $oldObservations = old('observations', []);
 $oldObservations = is_array($oldObservations) ? $oldObservations : [];
@@ -53,7 +55,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-body p-lg-4">
                 <h2 class="h4" id="step-one-title">1. Location and photo evidence</h2>
-                <p class="text-body-secondary">Use live GPS where possible. If it is unavailable, choose manual pin and tap the exact observation spot on the map.</p>
+                <p class="text-body-secondary">Capture your live location at the observation site, or select the exact spot on the map.</p>
 
                 <div class="row g-3">
                     <div class="col-lg-7">
@@ -87,11 +89,37 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
 
                 <hr class="my-4">
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button class="btn btn-success" type="button" data-use-gps><i class="bi bi-crosshair me-2" aria-hidden="true"></i>Use accurate live GPS</button>
+                    <button class="btn btn-success" type="button" data-use-gps><i class="bi bi-crosshair me-2" aria-hidden="true"></i>Use my live location</button>
+                    <button class="btn btn-success" type="button" data-save-location hidden disabled>Use this location</button>
+                    <button class="btn btn-outline-secondary" type="button" data-cancel-location hidden>Cancel live location</button>
                     <button class="btn btn-outline-success" type="button" data-use-manual><i class="bi bi-pin-map me-2" aria-hidden="true"></i>Place pin manually</button>
                     <span class="align-self-center small text-body-secondary" role="status" aria-live="polite" data-location-status>No location selected.</span>
                 </div>
-                <p class="small text-body-secondary mt-n2 mb-3">Live GPS waits up to 30 seconds for ±<?= (int) config('gps_max_accuracy_meters', 100) ?> m or better. A coarse network estimate is not accepted.</p>
+                <p class="small text-body-secondary mt-n2 mb-3">Live location waits up to 60 seconds for estimated accuracy of ±<?= (int) config('gps_max_accuracy_meters', 100) ?> m or better, then keeps updating until you choose your point or continue. Previously allowed location access starts automatically when this step opens.</p>
+                <details class="border rounded p-3 mb-3" data-location-options>
+                    <summary class="text-success">Other ways to find the site (device estimate / IP area)</summary>
+                    <p class="small text-body-secondary mt-2">Your browser chooses GPS, Wi-Fi, or other available signals. If its estimate is too broad, use it only to navigate the map, then tap the actual observation spot. These estimates never fill your report coordinates automatically.</p>
+                    <button class="btn btn-outline-success btn-sm mb-2" type="button" data-show-device-area hidden>Show approximate device area</button>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="ip_area_consent" data-ip-area-consent>
+                        <label class="form-check-label small" for="ip_area_consent">Allow a one-time request to GeoJS to estimate my public IP area. GeoJS receives my public IP address and request metadata, but not my account, photos, or report details. <a href="https://www.geojs.io/privacy/" target="_blank" rel="noopener noreferrer">Provider privacy policy</a>.</label>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" data-show-ip-area disabled>Find approximate IP area</button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" data-cancel-area hidden>Cancel area lookup</button>
+                    </div>
+                    <p class="small mb-0 mt-2" role="status" aria-live="polite" data-area-status>IP positioning may show your internet provider's city, not your site. It is not live GPS. Tap the true site on the map to save a manual location.</p>
+                </details>
+                <details class="small text-body-secondary mb-3" data-location-help>
+                    <summary class="text-success">Location help for this computer</summary>
+                    <ol class="mt-2 mb-2">
+                        <li>In Windows Settings → Privacy &amp; security → Location, enable Location services and allow location access for apps and desktop apps where available.</li>
+                        <li>Use the controls beside the browser address to allow Location for this site. Use HTTPS, or localhost on this computer.</li>
+                        <li>Turn Wi-Fi on in Windows Quick Settings (Win + A), or Settings → Network &amp; internet → Wi-Fi. An enabled adapter can still have its radio switched off. Nearby networks can help estimate location, but cannot guarantee GPS accuracy.</li>
+                        <li>If the estimate stays broad, this computer may lack a usable GPS receiver. Use the Flutter app on a GPS-equipped phone at the field site, or a GPS receiver supported by your computer's location service.</li>
+                    </ol>
+                    <p class="mb-0">The browser does not tell us whether a reading came from satellites, Wi-Fi, or another source. Manual pins are saved as manual locations, not measured GPS readings.</p>
+                </details>
                 <input type="hidden" name="location_source" value="<?= e(old('location_source')) ?>" data-location-source>
                 <input type="hidden" name="location_accuracy" value="<?= e(old('location_accuracy')) ?>" data-location-accuracy>
                 <div class="row g-3 mb-3">

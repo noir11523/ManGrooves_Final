@@ -2,6 +2,50 @@
 
 ## Automated suite
 
+Browser live-location logic and report-wizard event tests (Node.js; no database):
+
+```powershell
+node --test tests/live-location.test.cjs tests/report-location-ui.test.cjs
+```
+
+These use simulated device readings to cover coarse/invalid/stale fixes, movement,
+temporary errors, permission denial, cancellation, manual coordinates, automatic
+start with existing permission, freezing the site before continuing, and background
+page cleanup. They verify software behavior, not physical GPS accuracy or rendering.
+On a real device, grant site permission, wait for an accurate fix, move a short
+distance outdoors, confirm the pin updates, then select the point and confirm it
+stays fixed during the health/species steps. Compare the point to a known location.
+Repeat with denied permission and with Wi-Fi/GPS unavailable; no coarse reading
+should be silently saved as an accurate location. Windows PCs without a compatible
+GPS sensor may never obtain an acceptable fix; use a field phone or a manual pin.
+
+Location fallback checks:
+
+- After 15 seconds without a fresh accurate fix (or a transient device error), a
+  one-shot low-power device request runs alongside the high-accuracy watch. This
+  requests another result; it cannot force Wi-Fi or identify the browser's sensor.
+- A coarse reading exposes **Show approximate device area**. Its amber circle is
+  map guidance only. Report fields stay untouched and Continue is blocked until
+  the user selects an actual map point or cancels the preview.
+- IP-area assistance must make **zero GeoJS requests** on page load, permission
+  denial, coarse readings, and checking the consent box alone. A request happens
+  only after the user checks the box and clicks **Find approximate IP area**.
+- The request uses HTTPS, no session cookies, no page referrer or report payload,
+  and a 10-second abort deadline. Test blocked service/CORS, invalid JSON, timeout,
+  canceled requests, revoked consent, hidden pages, and late responses. Manual
+  and newer live selections must never be overwritten.
+- GeoJS radius is in kilometers; 50 means 50,000 meters, not 50 meters. Unknown
+  accuracy stays unknown. IP results are never GPS, regardless of claimed precision.
+- Exact addresses are not inferred from IP areas. The guardian must enter the
+  real sitio/site name and select the actual observation point. A city-level IP
+  label is never copied into the site-name field.
+
+These automated tests mock GeoJS; they do not establish the provider's availability
+or positioning accuracy. A live provider check requires explicit consent to send
+the test connection's public IP and request metadata to `https://get.geojs.io`.
+The browser connection was unavailable during automated verification; perform the
+above interactions on a physical device before treating this as field validated.
+
 Run from the project root against a disposable development/test MySQL server:
 
 ```powershell

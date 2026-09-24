@@ -24,6 +24,15 @@
     const photoInput = form.querySelector('[data-photo-input]');
     const photoPreview = form.querySelector('[data-photo-preview]');
     const gpsButton = form.querySelector('[data-use-gps]');
+    const saveLocationButton = form.querySelector('[data-save-location]');
+    const cancelLocationButton = form.querySelector('[data-cancel-location]');
+    const locationHelp = form.querySelector('[data-location-help]');
+    const locationOptions = form.querySelector('[data-location-options]');
+    const deviceAreaButton = form.querySelector('[data-show-device-area]');
+    const ipAreaButton = form.querySelector('[data-show-ip-area]');
+    const ipConsent = form.querySelector('[data-ip-area-consent]');
+    const cancelAreaButton = form.querySelector('[data-cancel-area]');
+    const areaStatus = form.querySelector('[data-area-status]');
     const maxGpsAccuracy = Math.max(10, Number(form.dataset.maxGpsAccuracy) || 100);
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
     let currentStep = 1;
@@ -31,11 +40,20 @@
     let marker = null;
     let manualMode = source?.value === 'manual';
     let previewObjectUrl = null;
-    let gpsWatchId = null;
-    let gpsTimer = 0;
-    let bestGpsPosition = null;
+    let liveLocation = null;
+    let accuracyCircle = null;
+    let gpsNeedsRefresh = false;
+    let locationChoiceMade = false;
+    let previousLocation = null;
+    let deviceArea = null;
+    let areaCircle = null;
+    let areaPending = false;
+    let ipRequest = null;
+    let ipTimeout = null;
+    let ipGeneration = 0;
 
     const setStep = (step) => {
+        if (step !== 1 && liveLocation?.active && !freezeLiveLocation()) return;
         currentStep = Math.max(1, Math.min(3, step));
         panels.forEach((panel) => { panel.hidden = Number(panel.dataset.stepPanel) !== currentStep; });
         indicators.forEach((item) => {
@@ -82,10 +100,22 @@
             }
         }
         if (step === 1) {
+            if (areaPending || ipRequest) {
+                locationStatus.textContent = 'Tap the actual observation spot to select a manual pin, or cancel the area lookup before continuing.';
+                return false;
+            }
+            if (liveLocation?.active && !liveLocation.isFresh()) {
+                locationStatus.textContent = 'Wait for a fresh accurate reading, cancel live capture, or choose the observation point manually.';
+                return false;
+            }
             if (!latitude.value || !longitude.value || !['gps', 'manual'].includes(source.value)) {
                 return showFieldError(latitude, 'Capture your GPS location or place a manual map pin.');
             }
             if (source.value === 'gps') {
+                if (gpsNeedsRefresh) {
+                    locationStatus.textContent = 'This reading is no longer live. Capture again or choose the observation point manually.';
+                    return false;
+                }
                 const gpsAccuracy = Number(accuracy.value);
                 if (accuracy.value.trim() === '' || !Number.isFinite(gpsAccuracy) || gpsAccuracy < 0 || gpsAccuracy > maxGpsAccuracy) {
                     return showFieldError(gpsButton, `Wait for GPS accuracy of ±${maxGpsAccuracy} m or better, or place the pin manually.`);
@@ -112,7 +142,15 @@
     const setLocation = (lat, lng, mode, measuredAccuracy = '') => {
         const parsedLat = Number(lat);
         const parsedLng = Number(lng);
-        if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) return;
+        if (String(lat).trim() === '' || String(lng).trim() === ''
+            || !Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)
+            || Math.abs(parsedLat) > 90 || Math.abs(parsedLng) > 180) return;
+        cancelIpLookup();
+        clearAreaPreview();
+        if (mode === 'manual') {
+            stopGpsCapture();
+            gpsNeedsRefresh = false;
+        }
         latitude.value = parsedLat.toFixed(8);
         longitude.value = parsedLng.toFixed(8);
         source.value = mode;
@@ -138,12 +176,28 @@
             }
             marker.setLatLng([parsedLat, parsedLng]);
             if (marker.dragging) manualMode ? marker.dragging.enable() : marker.dragging.disable();
+            if (accuracyCircle) {
+                map.removeLayer(accuracyCircle);
+                accuracyCircle = null;
+            }
+            if (mode === 'gps' && accuracy.value !== '') {
+                accuracyCircle = window.L.circle([parsedLat, parsedLng], {
+                    radius: Number(accuracy.value), color: '#2D5A27', weight: 1, fillOpacity: 0.10, interactive: false
+                }).addTo(map);
+            }
             map.setView([parsedLat, parsedLng], 18);
         }
         locationStatus.textContent = mode === 'gps'
-            ? `GPS captured${accuracy.value ? ` (±${Math.round(Number(accuracy.value))} m)` : ''}.`
+            ? `Location captured${accuracy.value ? ` (estimated ±${Math.ceil(Number(accuracy.value))} m)` : ''}.`
             : 'Manual pin selected. Tap or drag the pin to refine it.';
     };
+
+    // Keep restored form input honest even if map tiles/Leaflet are unavailable.
+    if (source.value === 'gps' && (accuracy.value.trim() === '' || !Number.isFinite(Number(accuracy.value))
+        || Number(accuracy.value) < 0 || Number(accuracy.value) > maxGpsAccuracy)) {
+        latitude.value = longitude.value = source.value = accuracy.value = '';
+        locationStatus.textContent = 'The previous location was too approximate. Capture again or choose the observation point manually.';
+    }
 
     if (window.L) {
         const initialLat = Number(latitude.value) || 10.2833;
@@ -154,17 +208,7 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
         if (latitude.value && longitude.value) {
-            const savedAccuracy = Number(accuracy.value);
-            if (source.value === 'gps' && (accuracy.value.trim() === '' || !Number.isFinite(savedAccuracy) || savedAccuracy > maxGpsAccuracy)) {
-                latitude.value = '';
-                longitude.value = '';
-                source.value = '';
-                accuracy.value = '';
-                manualMode = false;
-                locationStatus.textContent = 'The previous GPS reading was too approximate and was removed. Capture GPS again or place the pin manually.';
-            } else {
-                setLocation(latitude.value, longitude.value, source.value || 'manual', accuracy.value);
-            }
+            setLocation(latitude.value, longitude.value, source.value || 'manual', accuracy.value);
         }
         map.on('click', (event) => {
             if (manualMode) setLocation(event.latlng.lat, event.latlng.lng, 'manual');
@@ -173,88 +217,240 @@
         latitude.readOnly = false;
         longitude.readOnly = false;
         const manualCoordinates = () => {
-            if (latitude.value && longitude.value) {
-                source.value = 'manual';
-                accuracy.value = '';
-                locationStatus.textContent = 'Manual coordinates entered. Verify them carefully before submitting.';
-            }
+            locationChoiceMade = true;
+            stopGpsCapture();
+            cancelIpLookup();
+            clearAreaPreview();
+            source.value = 'manual';
+            accuracy.value = '';
+            gpsNeedsRefresh = false;
+            locationStatus.textContent = 'Manual coordinates entered. Verify them carefully before submitting.';
         };
         latitude.addEventListener('input', manualCoordinates);
         longitude.addEventListener('input', manualCoordinates);
         locationStatus.textContent = 'The map could not load. Enter coordinates manually or use live GPS.';
     }
 
-    const stopGpsCapture = () => {
-        if (gpsWatchId !== null) navigator.geolocation.clearWatch(gpsWatchId);
-        if (gpsTimer) window.clearTimeout(gpsTimer);
-        gpsWatchId = null;
-        gpsTimer = 0;
-        if (gpsButton) gpsButton.disabled = false;
-    };
+    function areaControls() {
+        if (deviceAreaButton) {
+            deviceAreaButton.hidden = !deviceArea;
+            deviceAreaButton.disabled = !map || Boolean(ipRequest);
+        }
+        if (ipAreaButton) ipAreaButton.disabled = !map || !ipConsent?.checked || Boolean(ipRequest);
+        if (cancelAreaButton) cancelAreaButton.hidden = !areaPending && !ipRequest;
+    }
 
-    const rejectGpsCapture = (message) => {
+    function cancelIpLookup() {
+        ipGeneration += 1;
+        ipRequest?.abort();
+        ipRequest = null;
+        if (ipTimeout !== null) window.clearTimeout(ipTimeout);
+        ipTimeout = null;
+        areaControls();
+    }
+
+    function clearAreaPreview() {
+        if (areaCircle && map) map.removeLayer(areaCircle);
+        areaCircle = null;
+        areaPending = false;
+        areaControls();
+    }
+
+    function showApproximateArea(area, label) {
+        if (!map) {
+            if (areaStatus) areaStatus.textContent = 'The map is unavailable. Enter the actual coordinates manually or retry live location.';
+            return;
+        }
         stopGpsCapture();
+        clearAreaPreview();
+        areaPending = true;
+        locationChoiceMade = true;
+        manualMode = true;
+        marker?.dragging?.enable();
+        if (area.accuracy !== null) {
+            areaCircle = window.L.circle([area.latitude, area.longitude], {
+                radius: area.accuracy, color: '#b36b00', weight: 2, dashArray: '6 6', fillOpacity: 0.07, interactive: false
+            }).addTo(map);
+            map.fitBounds(areaCircle.getBounds(), {maxZoom: 16, padding: [24, 24]});
+        } else {
+            map.setView([area.latitude, area.longitude], 10);
+        }
+        const uncertainty = area.accuracy === null ? 'accuracy unknown'
+            : `estimated radius ${area.accuracy >= 1000 ? `${(area.accuracy / 1000).toFixed(1)} km` : `${Math.ceil(area.accuracy)} m`}`;
+        const message = `${label} (${uncertainty}). Map guidance only—not a selected report location. Zoom in and tap the actual observation spot to save a manual pin.`;
+        if (areaStatus) areaStatus.textContent = message;
         locationStatus.textContent = message;
-    };
+        areaControls();
+    }
 
-    const acceptGpsPosition = (position) => {
-        stopGpsCapture();
-        setLocation(position.coords.latitude, position.coords.longitude, 'gps', position.coords.accuracy);
-        locationStatus.textContent = `Live GPS captured (±${Math.round(position.coords.accuracy)} m).`;
-    };
-
-    gpsButton?.addEventListener('click', () => {
-        if (!navigator.geolocation) {
-            locationStatus.textContent = 'GPS is unavailable in this browser. Use a manual pin.';
+    deviceAreaButton?.addEventListener('click', () => {
+        if (!deviceArea || !map) return;
+        if (Date.now() - deviceArea.timestamp > 300000) {
+            deviceArea = null;
+            areaControls();
+            areaStatus.textContent = 'That device estimate is too old. Retry live location or use another option.';
             return;
         }
-        if (!window.isSecureContext) {
-            locationStatus.textContent = 'Live location requires HTTPS. Open the secure site or use the native mobile app/manual pin.';
+        cancelIpLookup();
+        showApproximateArea({latitude: deviceArea.coords.latitude, longitude: deviceArea.coords.longitude, accuracy: deviceArea.coords.accuracy}, 'Approximate device area (source chosen by your browser)');
+    });
+
+    ipConsent?.addEventListener('change', () => {
+        if (!ipConsent.checked) {
+            cancelIpLookup();
+            clearAreaPreview();
+            if (areaStatus) areaStatus.textContent = 'IP area lookup is off. You can select a manual pin without this service.';
+            if (!liveLocation?.active) locationStatus.textContent = latitude.value && longitude.value ? 'Previous observation point kept.' : 'No location selected.';
+        }
+        areaControls();
+    });
+    ipAreaButton?.addEventListener('click', async () => {
+        if (!ipConsent?.checked || !map || ipRequest) return;
+        locationChoiceMade = true;
+        stopGpsCapture();
+        cancelIpLookup();
+        clearAreaPreview();
+        if (!window.ManGroovesLiveLocation?.lookupIpArea || !window.AbortController) {
+            areaStatus.textContent = 'IP lookup is unavailable in this browser. Choose the observation point manually.';
             return;
         }
+        const requestGeneration = ipGeneration;
+        const controller = new window.AbortController();
+        ipRequest = controller;
+        areaControls();
+        areaStatus.textContent = 'Looking up an approximate IP area with GeoJS…';
+        ipTimeout = window.setTimeout(() => controller.abort(), 10000);
+        try {
+            const area = await window.ManGroovesLiveLocation.lookupIpArea({signal: controller.signal});
+            if (requestGeneration !== ipGeneration || controller.signal.aborted || !ipConsent.checked || document.hidden) return;
+            showApproximateArea(area, `Approximate IP area${area.label ? `: ${area.label}` : ''}`);
+        } catch (error) {
+            if (requestGeneration === ipGeneration) {
+                areaStatus.textContent = 'IP area lookup failed or timed out. Retry later, use live location, or place the actual site pin manually.';
+            }
+        } finally {
+            if (requestGeneration === ipGeneration) {
+                ipRequest = null;
+                window.clearTimeout(ipTimeout);
+                ipTimeout = null;
+                areaControls();
+            }
+        }
+    });
+    cancelAreaButton?.addEventListener('click', () => {
+        cancelIpLookup();
+        clearAreaPreview();
+        if (map) map.setView(latitude.value && longitude.value
+            ? [Number(latitude.value), Number(longitude.value)] : [10.2833, 123.8833], latitude.value ? 18 : 15);
+        areaStatus.textContent = 'Area lookup canceled. Your selected report coordinates were not changed.';
+        locationStatus.textContent = latitude.value && longitude.value ? 'Previous observation point kept.' : 'No location selected.';
+    });
+    areaControls();
+    if (!map && areaStatus) areaStatus.textContent = 'Map assistance is unavailable. Enter actual coordinates manually or use live location.';
+
+    function locationControls(active) {
+        if (gpsButton) { gpsButton.hidden = active; gpsButton.disabled = false; }
+        if (saveLocationButton) {
+            saveLocationButton.hidden = !active;
+            saveLocationButton.disabled = !liveLocation?.isFresh();
+        }
+        if (cancelLocationButton) cancelLocationButton.hidden = !active;
+    }
+
+    function stopGpsCapture() {
+        liveLocation?.stop();
+        locationControls(false);
+    }
+
+    function freezeLiveLocation() {
+        if (!liveLocation?.isFresh()) return false;
         stopGpsCapture();
-        bestGpsPosition = null;
-        gpsButton.disabled = true;
-        locationStatus.textContent = `Finding live GPS (must reach ±${maxGpsAccuracy} m or better)…`;
-        gpsWatchId = navigator.geolocation.watchPosition(
-            (position) => {
-                const measured = Number(position.coords.accuracy);
-                if (!Number.isFinite(measured) || measured < 0) return;
-                if (!bestGpsPosition || measured < bestGpsPosition.coords.accuracy) bestGpsPosition = position;
-                if (measured <= maxGpsAccuracy) {
-                    acceptGpsPosition(position);
-                    return;
+        gpsNeedsRefresh = false;
+        previousLocation = null;
+        locationStatus.textContent = `Observation location selected (estimated ±${Math.ceil(Number(accuracy.value))} m). Live updates stopped; continue with this field visit.`;
+        return true;
+    }
+
+    if (window.ManGroovesLiveLocation) {
+        liveLocation = new window.ManGroovesLiveLocation.Tracker({
+            geolocation: navigator.geolocation,
+            secure: window.isSecureContext,
+            maxAccuracy: maxGpsAccuracy,
+            onPosition: (position) => {
+                gpsNeedsRefresh = false;
+                deviceArea = null;
+                setLocation(position.coords.latitude, position.coords.longitude, 'gps', position.coords.accuracy);
+            },
+            onApproximate: (position) => {
+                deviceArea = position;
+                areaControls();
+                if (!liveLocation.isFresh() && locationOptions) locationOptions.open = true;
+            },
+            onState: (state) => {
+                locationControls(state.active);
+                if (state.position && !liveLocation.isFresh()) gpsNeedsRefresh = true;
+                locationStatus.textContent = state.message;
+                if (['denied', 'insecure', 'unsupported', 'unavailable', 'timeout'].includes(state.state) && locationHelp) {
+                    locationHelp.open = true;
+                    if (locationOptions) locationOptions.open = true;
                 }
-                locationStatus.textContent = `Improving GPS… best reading ±${Math.round(bestGpsPosition.coords.accuracy)} m; need ±${maxGpsAccuracy} m or better.`;
-            },
-            (error) => {
-                const messages = {
-                    1: 'Location permission was denied. Allow it in browser settings or use a manual pin.',
-                    2: 'A live GPS position is unavailable. Move outdoors, enable precise location, or use a manual pin.',
-                    3: 'GPS capture timed out. Move outdoors and retry, or use a manual pin.'
-                };
-                rejectGpsCapture(messages[error.code] || 'GPS capture failed. Use a manual pin.');
-            },
-            {enableHighAccuracy: true, timeout: 30000, maximumAge: 0}
-        );
-        gpsTimer = window.setTimeout(() => {
-            const bestAccuracy = bestGpsPosition ? Math.round(bestGpsPosition.coords.accuracy) : null;
-            rejectGpsCapture(bestAccuracy === null
-                ? 'No GPS reading was received. Enable precise location, move outdoors, or place the pin manually.'
-                : `This device only provided an approximate ±${bestAccuracy} m location, so it was not accepted. Use a GPS-equipped phone outdoors or place the pin manually.`);
-        }, 30000);
+            }
+        });
+    }
+
+    const startLiveLocation = () => {
+        locationChoiceMade = true;
+        cancelIpLookup();
+        clearAreaPreview();
+        deviceArea = null;
+        areaControls();
+        if (!liveLocation) {
+            locationStatus.textContent = 'The location controls did not load. Refresh this page or place a manual pin.';
+            return;
+        }
+        previousLocation = {lat: latitude.value, lng: longitude.value, mode: source.value, accuracy: accuracy.value, needsRefresh: gpsNeedsRefresh};
+        // Ignore map taps while live capture is choosing the point.
+        manualMode = false;
+        marker?.dragging?.disable();
+        liveLocation.start();
+    };
+    gpsButton?.addEventListener('click', startLiveLocation);
+    saveLocationButton?.addEventListener('click', freezeLiveLocation);
+    cancelLocationButton?.addEventListener('click', () => {
+        stopGpsCapture();
+        if (previousLocation?.lat && previousLocation?.lng) {
+            setLocation(previousLocation.lat, previousLocation.lng, previousLocation.mode, previousLocation.accuracy);
+            gpsNeedsRefresh = previousLocation.needsRefresh;
+            locationStatus.textContent = 'Live capture canceled. Your previous observation point was kept.';
+        } else {
+            latitude.value = longitude.value = source.value = accuracy.value = '';
+            gpsNeedsRefresh = false;
+            if (marker) { map.removeLayer(marker); marker = null; }
+            if (accuracyCircle) { map.removeLayer(accuracyCircle); accuracyCircle = null; }
+            locationStatus.textContent = 'Live capture canceled. Choose a location when you are ready.';
+        }
+        previousLocation = null;
     });
 
     form.querySelector('[data-use-manual]')?.addEventListener('click', () => {
         stopGpsCapture();
+        cancelIpLookup();
+        clearAreaPreview();
+        locationChoiceMade = true;
         manualMode = true;
-        source.value = 'manual';
-        accuracy.value = '';
         locationStatus.textContent = map
             ? 'Manual mode is active. Tap the exact observation spot on the map.'
             : 'Manual mode is active. Enter latitude and longitude carefully.';
         if (marker?.dragging) marker.dragging.enable();
     });
+
+    // Start automatically only with permission already granted, never over a restored/manual point.
+    if (navigator.permissions && window.isSecureContext && !latitude.value && !longitude.value) {
+        navigator.permissions.query({name: 'geolocation'}).then(permission => {
+            if (permission.state === 'granted' && !locationChoiceMade && currentStep === 1
+                && !document.hidden && !latitude.value && !longitude.value) startLiveLocation();
+        }).catch(() => { /* Browsers without permission queries use the explicit button. */ });
+    }
 
     const loadPreviousReports = async () => {
         const clusterId = clusterSelect?.value || '';
@@ -397,6 +593,19 @@
         submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Submitting securely…';
     });
 
-    window.addEventListener('pagehide', stopGpsCapture, {once: true});
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && ipRequest) {
+            cancelIpLookup();
+            if (areaStatus) areaStatus.textContent = 'IP lookup canceled while the page was hidden. Retry when ready.';
+        }
+        if (document.hidden && liveLocation?.active) {
+            if (!freezeLiveLocation()) {
+                if (source.value === 'gps') gpsNeedsRefresh = true;
+                stopGpsCapture();
+                locationStatus.textContent = 'Live location paused while the page was hidden. Capture again to continue.';
+            }
+        }
+    });
+    window.addEventListener('pagehide', () => { stopGpsCapture(); cancelIpLookup(); });
     setStep(1);
 })();

@@ -78,7 +78,64 @@ through the browser or native operating-system location service. A desktop or
 laptop without a GPS sensor may only return a broad Wi-Fi/network estimate such
 as `±50000 m`. Version 1.1.5 refuses GPS readings worse than `±100 m` instead
 of saving that estimate. It listens for improved high-accuracy updates for up to
-30 seconds.
+30 seconds in the native Flutter app.
+
+The web report form now waits up to 60 seconds for the first acceptable reading,
+recovers from temporary location-service errors, and continues updating while the
+Site step is open. It ignores stale readings (older than 15 seconds), invalid
+coordinates, and callbacks left over from a canceled capture. Choose **Use this
+location** or continue to the Health step to keep a snapshot for the field visit.
+**Cancel live location** restores the previous point. Previously granted browser
+permission starts capture automatically only when no location is already selected.
+
+On Windows, enable **Settings → Privacy & security → Location → Location services**
+and app/desktop location access where available. Allow Location for the site in the
+browser. Turn Wi-Fi on if the PC has a Wi-Fi adapter: nearby access points can help
+the operating system, even if the internet connection uses Ethernet. This does not
+guarantee a sufficiently accurate estimate. The browser cannot force satellite GPS,
+identify which sensor supplied a reading, or improve missing receiver hardware.
+The accuracy circle represents the estimate reported by the device, not a measured
+guarantee of the true location. See **Location help for this computer** in the form.
+
+Check the Wi-Fi **radio**, not only whether Device Manager shows the adapter enabled.
+Use **Win + A → Wi-Fi → On**, or **Settings → Network & internet → Wi-Fi → On**.
+`netsh wlan show interfaces` should show both **Hardware On** and **Software On**.
+If it says **Software Off**, nearby access points are not available for positioning.
+Do not publish network names or BSSIDs when sharing diagnostic output.
+
+For satellite positioning on a PC, a GPS/GNSS receiver must be supported by the
+operating system's location service and have a usable signal. A generic USB receiver
+that only outputs serial NMEA data is not automatically accessible to a browser.
+Alternatively, capture and submit the field report with the Flutter phone app at
+the observation site. Do not use the office computer's location for a remote site.
+
+### Web fallback when a PC cannot get an accurate fix
+
+The web wizard also tries a one-time low-power device request after 15 seconds
+without a fresh accurate fix, or after a temporary device-location error. The
+browser/OS still chooses the source; JavaScript cannot force Wi-Fi positioning.
+**Other ways to find the site** provides two optional map aids:
+
+1. **Show approximate device area** uses a coarse reading already supplied by
+   the browser. It shows the uncertainty area without filling report coordinates.
+2. **Find approximate IP area** uses [GeoJS](https://www.geojs.io/docs/v1/endpoints/geo/)
+   only after the user explicitly checks its permission box and clicks the button.
+   The browser contacts `https://get.geojs.io/v1/ip/geo.json` directly so the lookup
+   describes the user's public connection, not the PHP hosting server. No API key
+   is needed. GeoJS sees the public IP and request metadata, but not account data,
+   cookies, page referrer, photos, or report details. The privacy notice links to
+   the provider's policy. No external lookup occurs automatically after denial.
+
+Both results are navigation aids, not verified positions or exact addresses. Zoom
+in and tap the actual field site; that selection is saved as **manual**, with no
+invented GPS accuracy. Cancel keeps the previously selected point. An IP area may
+instead show an ISP/VPN exit city. The site's real name must be entered by the
+guardian. The 100-meter device-accuracy check and barangay boundary remain in force.
+
+IP lookup aborts after 10 seconds and is canceled by new live/manual selections or
+a hidden page. The manual option works if the service is unavailable. Leaflet/map
+assistance needs internet access; if Leaflet fails, actual coordinates can be typed.
+This fallback update is for the PHP web client; it does not rebuild the Flutter APK.
 
 For the most accurate result, use the native Flutter app on a GPS-equipped phone,
 enable **Precise location**, and stand outdoors with a clear sky view. On the web,
