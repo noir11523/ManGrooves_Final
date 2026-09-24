@@ -7,7 +7,8 @@ if (-not (Test-Path -LiteralPath $PhpBin)) {
     throw "PHP not found at $PhpBin. Pass -PhpBin if it is installed elsewhere."
 }
 
-$AdminName = Read-Host 'Administrator full name'
+$AdminFirstName = Read-Host 'Administrator first name'
+$AdminLastName = Read-Host 'Administrator last name'
 $AdminEmail = Read-Host 'Administrator email'
 $FirstPassword = Read-Host 'Password (12 to 72 characters)' -AsSecureString
 $SecondPassword = Read-Host 'Confirm password' -AsSecureString
@@ -22,7 +23,7 @@ try {
         throw 'The passwords do not match.'
     }
     [Environment]::SetEnvironmentVariable('MANGROOVES_BOOTSTRAP_PASSWORD', $PlainPassword, 'Process')
-    & $PhpBin (Join-Path $PSScriptRoot 'create-admin.php') "--name=$AdminName" "--email=$AdminEmail"
+    & $PhpBin (Join-Path $PSScriptRoot 'create-admin.php') "--first-name=$AdminFirstName" "--last-name=$AdminLastName" "--email=$AdminEmail"
     if ($LASTEXITCODE -ne 0) {
         throw 'The administrator account was not created.'
     }

@@ -9,15 +9,19 @@ if (PHP_SAPI !== 'cli') {
 
 require dirname(__DIR__) . '/app/bootstrap.php';
 
-$options = getopt('', ['name:', 'email:']);
-$name = trim(scalar_string($options['name'] ?? null));
+$options = getopt('', ['first-name:', 'last-name:', 'email:']);
+try {
+    $names = \App\Services\UserName::fromInput([
+        'first_name' => $options['first-name'] ?? null,
+        'last_name' => $options['last-name'] ?? null,
+    ]);
+} catch (InvalidArgumentException $exception) {
+    fwrite(STDERR, $exception->getMessage() . ' Use --first-name and --last-name.' . PHP_EOL);
+    exit(1);
+}
 $email = strtolower(trim(scalar_string($options['email'] ?? null)));
 $password = scalar_string(getenv('MANGROOVES_BOOTSTRAP_PASSWORD') ?: null);
 
-if (mb_strlen($name) < 2 || mb_strlen($name) > 120) {
-    fwrite(STDERR, 'Provide --name with 2 to 120 characters.' . PHP_EOL);
-    exit(1);
-}
 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
     fwrite(STDERR, 'Provide a valid --email address.' . PHP_EOL);
     exit(1);
@@ -35,11 +39,11 @@ try {
         throw new DomainException('An account already uses that email address.');
     }
     $statement = $pdo->prepare(
-        "INSERT INTO users (full_name, email, password_hash, role, status)
-         VALUES (:name, :email, :hash, 'system_admin', 'active')"
+        "INSERT INTO users (first_name, last_name, full_name, email, password_hash, role, status)
+         VALUES (:first_name, :last_name, :full_name, :email, :hash, 'system_admin', 'active')"
     );
     $statement->execute([
-        'name' => $name,
+        ...$names,
         'email' => $email,
         'hash' => password_hash($password, PASSWORD_DEFAULT),
     ]);

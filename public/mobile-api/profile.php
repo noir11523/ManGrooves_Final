@@ -10,15 +10,16 @@ $pdo = Database::connection();
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $input = MobileApi::input();
-    $fullName = trim(scalar_string($input['full_name'] ?? null));
     $email = strtolower(trim(scalar_string($input['email'] ?? null)));
     $phone = trim(scalar_string($input['phone'] ?? null));
     $rawBarangay = trim(scalar_string($input['barangay_id'] ?? null));
     $barangayId = $rawBarangay === '' ? null : filter_var($rawBarangay, FILTER_VALIDATE_INT);
     $errors = [];
 
-    if (mb_strlen($fullName) < 2 || mb_strlen($fullName) > 120) {
-        $errors[] = 'Enter a full name between 2 and 120 characters.';
+    try {
+        $names = \App\Services\UserName::fromInput($input, true, $user);
+    } catch (InvalidArgumentException $exception) {
+        $errors[] = $exception->getMessage();
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
         $errors[] = 'Enter a valid email address.';
@@ -46,7 +47,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     try {
         Database::transaction(static function (PDO $transaction) use (
             $user,
-            $fullName,
+            $names,
             $email,
             $phone,
             $barangayId
@@ -62,10 +63,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 throw new DomainException('Another account already uses that email address.');
             }
             $update = $transaction->prepare(
-                'UPDATE users SET full_name = :full_name, email = :email, phone = :phone, barangay_id = :barangay_id WHERE id = :id'
+                'UPDATE users SET first_name = :first_name, last_name = :last_name, full_name = :full_name, email = :email, phone = :phone, barangay_id = :barangay_id WHERE id = :id'
             );
             $update->execute([
-                'full_name' => $fullName,
+                ...$names,
                 'email' => $email,
                 'phone' => $phone === '' ? null : $phone,
                 'barangay_id' => $barangayId ?: null,

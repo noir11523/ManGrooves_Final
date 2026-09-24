@@ -93,7 +93,8 @@ try {
 
     // Exercise the in-place compatibility path, not only the fresh CREATE TABLE path.
     $server->exec('ALTER TABLE notifications DROP INDEX uq_notifications_dedupe, DROP COLUMN dedupe_key');
-    $server->exec('ALTER TABLE users DROP COLUMN session_version');
+    $legacyNames = $server->query('SELECT id, full_name FROM users ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    $server->exec('ALTER TABLE users DROP INDEX idx_users_last_first, DROP COLUMN first_name, DROP COLUMN last_name, DROP COLUMN session_version');
     $server->exec(
         'ALTER TABLE user_badges
          DROP COLUMN badge_name_snapshot, DROP COLUMN description_snapshot,
@@ -110,6 +111,28 @@ try {
     $server->exec($schema);
 
     $pdo = Database::connection();
+
+    test_case('name migration preserves legacy names and is repeatable', static function () use ($pdo, $legacyNames): void {
+        same($legacyNames, $pdo->query('SELECT id, full_name FROM users ORDER BY id')->fetchAll());
+        same(5, (int) $pdo->query('SELECT COUNT(*) FROM users WHERE first_name IS NULL AND last_name IS NULL')->fetchColumn());
+        $pdo->exec(file_get_contents(APP_ROOT . '/database/migrations/20260918_user_names.sql'));
+        same($legacyNames, $pdo->query('SELECT id, full_name FROM users ORDER BY id')->fetchAll());
+    });
+
+    test_case('name parts validate without guessing compound or legacy names', static function (): void {
+        $names = \App\Services\UserName::fromInput(['first_name' => ' María Elena ', 'last_name' => " Dela Cruz-O'Neil "]);
+        same('María Elena', $names['first_name']);
+        same("Dela Cruz-O'Neil", $names['last_name']);
+        same("María Elena Dela Cruz-O'Neil", $names['full_name']);
+        foreach ([['first_name' => [], 'last_name' => 'Cruz'], ['first_name' => 'Ana'], ['first_name' => 'Ana', 'last_name' => str_repeat('x', 60)]] as $invalid) {
+            throws(static fn () => \App\Services\UserName::fromInput($invalid), InvalidArgumentException::class);
+        }
+        same($names, \App\Services\UserName::fromInput(['full_name' => $names['full_name']], true, $names));
+        $changed = \App\Services\UserName::fromInput(['full_name' => 'Another Compound Name'], true, $names);
+        same(null, $changed['first_name']);
+        same(null, $changed['last_name']);
+        same('Another Compound Name', $changed['full_name']);
+    });
 
     test_case('schema and reference seed counts', static function () use ($pdo): void {
         same(5, (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(), 'user count');

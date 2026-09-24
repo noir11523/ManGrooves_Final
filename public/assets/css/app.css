@@ -485,6 +485,13 @@ textarea {
 .auth-tabs .nav-link.active { color: #fff; background: var(--mg-green); }
 
 /* Forms */
+.privacy-dialog { width: min(44rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); margin: auto; padding: 0; border: 1px solid var(--mg-border); border-radius: var(--mg-radius-lg); color: var(--mg-ink); background: #fff; box-shadow: 0 1rem 4rem rgba(0, 0, 0, .3); }
+.privacy-dialog[open] { display: flex; flex-direction: column; }
+.privacy-dialog::backdrop { background: rgba(0, 0, 0, .55); }
+.privacy-dialog-header, .privacy-dialog-footer { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 1rem 1.25rem; }
+.privacy-dialog-header { gap: 1rem; border-bottom: 1px solid var(--mg-border); }
+.privacy-dialog-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem; }
+.privacy-dialog-footer { justify-content: flex-end; border-top: 1px solid var(--mg-border); }
 .form-label { margin-bottom: .42rem; color: #3c4940; font-size: .84rem; font-weight: 720; }
 .form-control,
 .form-select {

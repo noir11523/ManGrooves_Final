@@ -57,7 +57,7 @@ Python charts are optional. If enabled, install Python 3.10+, pandas, matplotlib
    ```bash
    read -rsp 'Administrator password: ' MANGROOVES_BOOTSTRAP_PASSWORD
    export MANGROOVES_BOOTSTRAP_PASSWORD
-   php scripts/create-admin.php --name='System Administrator' --email='admin@example.org'
+   php scripts/create-admin.php --first-name='System' --last-name='Administrator' --email='admin@example.org'
    unset MANGROOVES_BOOTSTRAP_PASSWORD
    php scripts/healthcheck.php
    ```

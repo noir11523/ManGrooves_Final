@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS barangays (
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     full_name VARCHAR(120) NOT NULL,
+    first_name VARCHAR(60) NULL,
+    last_name VARCHAR(59) NULL,
     email VARCHAR(190) NOT NULL,
     phone VARCHAR(30) NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -30,6 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_users_email (email),
     KEY idx_users_role_status (role, status),
+    KEY idx_users_last_first (last_name, first_name),
     KEY idx_users_barangay (barangay_id),
     CONSTRAINT fk_users_barangay FOREIGN KEY (barangay_id) REFERENCES barangays(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
@@ -433,3 +436,20 @@ SET ub.badge_name_snapshot = COALESCE(ub.badge_name_snapshot, b.badge_name),
     ub.metric_snapshot = COALESCE(ub.metric_snapshot, b.metric),
     ub.target_value_snapshot = COALESCE(ub.target_value_snapshot, b.target_value),
     ub.image_path_snapshot = COALESCE(ub.image_path_snapshot, b.image_path);
+
+-- Additive, repeatable migration. Preserve legacy full names without guessing their parts.
+SET @ddl = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'first_name') = 0,
+    'ALTER TABLE users ADD COLUMN first_name VARCHAR(60) NULL AFTER full_name', 'DO 0'
+);
+PREPARE name_migration FROM @ddl; EXECUTE name_migration; DEALLOCATE PREPARE name_migration;
+SET @ddl = IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'last_name') = 0,
+    'ALTER TABLE users ADD COLUMN last_name VARCHAR(59) NULL AFTER first_name', 'DO 0'
+);
+PREPARE name_migration FROM @ddl; EXECUTE name_migration; DEALLOCATE PREPARE name_migration;
+SET @ddl = IF(
+    (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND INDEX_NAME = 'idx_users_last_first') = 0,
+    'ALTER TABLE users ADD INDEX idx_users_last_first (last_name, first_name)', 'DO 0'
+);
+PREPARE name_migration FROM @ddl; EXECUTE name_migration; DEALLOCATE PREPARE name_migration;

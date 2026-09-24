@@ -13,7 +13,7 @@
                     <li><a href="<?= e(url('index.php#about')) ?>">About the project</a></li>
                     <li><a href="<?= e(url('index.php#how-it-works')) ?>">How reporting works</a></li>
                     <li><a href="<?= e(url('explore.php')) ?>">Species map</a></li>
-                    <li><a href="<?= e(url('privacy.php')) ?>">Privacy notice</a></li>
+                    <li><a href="<?= e(url('privacy.php')) ?>" data-privacy-notice>Privacy notice</a></li>
                 </ul>
             </div>
             <div class="col-6 col-lg-3">

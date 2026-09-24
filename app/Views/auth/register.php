@@ -29,10 +29,15 @@
                 <form method="post" action="<?= e(url('register.php')) ?>" class="needs-validation" novalidate>
                     <?= Csrf::field() ?>
                     <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label" for="full_name">Full name</label>
-                            <input class="form-control" id="full_name" name="full_name" type="text" value="<?= e((string) old('full_name')) ?>" autocomplete="name" minlength="2" maxlength="120" autofocus required>
-                            <div class="invalid-feedback">Enter your full name.</div>
+                        <div class="col-sm-6">
+                            <label class="form-label" for="first_name">First name</label>
+                            <input class="form-control" id="first_name" name="first_name" type="text" value="<?= e((string) old('first_name')) ?>" autocomplete="given-name" maxlength="60" autofocus required>
+                            <div class="invalid-feedback">Enter your first name.</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label" for="last_name">Last name</label>
+                            <input class="form-control" id="last_name" name="last_name" type="text" value="<?= e((string) old('last_name')) ?>" autocomplete="family-name" maxlength="59" required>
+                            <div class="invalid-feedback">Enter your last name.</div>
                         </div>
                         <div class="col-12">
                             <label class="form-label" for="register_email">Email address</label>
@@ -46,12 +51,13 @@
                         </div>
                         <div class="col-sm-6">
                             <label class="form-label" for="barangay_id">Barangay</label>
-                            <select class="form-select" id="barangay_id" name="barangay_id" required>
+                            <select class="form-select" id="barangay_id" name="barangay_id" aria-describedby="barangay-help" required <?= ($barangays ?? []) === [] ? 'disabled' : '' ?>>
                                 <option value="">Choose your barangay…</option>
                                 <?php foreach (($barangays ?? []) as $barangay): ?>
-                                    <option value="<?= e((string) $barangay['id']) ?>" <?= (string) old('barangay_id') === (string) $barangay['id'] ? 'selected' : '' ?>><?= e((string) $barangay['name']) ?>, <?= e((string) $barangay['city_municipality']) ?></option>
+                                    <option value="<?= e((string) $barangay['id']) ?>" <?= (string) old('barangay_id', count($barangays) === 1 ? $barangay['id'] : '') === (string) $barangay['id'] ? 'selected' : '' ?>><?= e((string) $barangay['name']) ?>, <?= e((string) $barangay['city_municipality']) ?></option>
                                 <?php endforeach; ?>
                             </select>
+                            <div class="form-text" id="barangay-help">The current pilot site is Barangay Inayawan, Cebu City.</div>
                             <div class="invalid-feedback">Select your barangay.</div>
                         </div>
                         <div class="col-sm-6">
@@ -65,19 +71,19 @@
                         </div>
                         <div class="col-sm-6">
                             <label class="form-label" for="password_confirmation">Confirm password</label>
-                            <input class="form-control" id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="72" required data-password-confirm="#register_password">
+                            <div class="input-group password-group"><input class="form-control" id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="72" required data-password-confirm="#register_password"><button class="btn password-toggle" type="button" data-password-toggle="#password_confirmation" aria-label="Show confirm password"><i class="bi bi-eye" aria-hidden="true"></i></button></div>
                             <div class="invalid-feedback">Enter the same password again.</div>
                         </div>
                         <div class="col-12">
                             <div class="privacy-consent">
                                 <div class="form-check">
                                     <input class="form-check-input" id="privacy_consent" name="privacy_consent" type="checkbox" value="1" <?= old('privacy_consent') ? 'checked' : '' ?> required>
-                                    <label class="form-check-label" for="privacy_consent">I have read the <a href="<?= e(url('privacy.php')) ?>" target="_blank" rel="noopener">privacy notice</a> and consent to the described collection and use of my account details, location, and field observations.</label>
+                                    <label class="form-check-label" for="privacy_consent">I have read the <a href="<?= e(url('privacy.php')) ?>" data-privacy-notice>privacy notice</a> and consent to the described collection and use of my account details, location, and field observations.</label>
                                     <div class="invalid-feedback">Consent is required to create an account.</div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-12"><button class="btn btn-primary btn-lg w-100" type="submit" data-submit-label="Creating account…">Create guardian account</button></div>
+                        <div class="col-12"><button class="btn btn-primary btn-lg w-100" type="submit" data-submit-label="Creating account…" <?= ($barangays ?? []) === [] ? 'disabled' : '' ?>>Create guardian account</button></div>
                     </div>
                 </form>
                 <p class="auth-switch">Already have an account? <a href="<?= e(url('login.php')) ?>">Sign in</a></p>

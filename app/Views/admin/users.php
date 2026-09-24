@@ -8,12 +8,13 @@
         <div class="mb-3"><h2 class="h5 mb-1" id="create-staff-heading">Create a protected staff account</h2><p class="small text-muted mb-0">Public registration is intentionally limited to guardians. Create expert and administrator access here, then share the temporary password securely.</p></div>
         <form method="post" action="<?= e(url('admin/users.php')) ?>" class="row g-3">
             <?= Csrf::field() ?><input type="hidden" name="action" value="create_staff">
-            <div class="col-md-6"><label class="form-label" for="staff-full-name">Full name</label><input class="form-control" id="staff-full-name" name="full_name" type="text" minlength="2" maxlength="120" autocomplete="name" required></div>
+            <div class="col-md-6"><label class="form-label" for="staff-first-name">First name</label><input class="form-control" id="staff-first-name" name="first_name" type="text" maxlength="60" autocomplete="given-name" required></div>
+            <div class="col-md-6"><label class="form-label" for="staff-last-name">Last name</label><input class="form-control" id="staff-last-name" name="last_name" type="text" maxlength="59" autocomplete="family-name" required></div>
             <div class="col-md-6"><label class="form-label" for="staff-email">Email</label><input class="form-control" id="staff-email" name="email" type="email" maxlength="190" autocomplete="email" required></div>
             <div class="col-md-6"><label class="form-label" for="staff-phone">Phone <span class="text-muted">(optional)</span></label><input class="form-control" id="staff-phone" name="phone" type="tel" maxlength="30" autocomplete="tel"></div>
             <div class="col-md-6"><label class="form-label" for="staff-role">Role</label><select class="form-select" id="staff-role" name="role" required><option value="expert">Scientific Expert</option><option value="system_admin">System Administrator</option></select></div>
-            <div class="col-md-6"><label class="form-label" for="staff-password">Temporary password</label><input class="form-control" id="staff-password" name="password" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></div>
-            <div class="col-md-6"><label class="form-label" for="staff-password-confirmation">Confirm temporary password</label><input class="form-control" id="staff-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></div>
+            <div class="col-md-6"><label class="form-label" for="staff-password">Temporary password</label><div class="input-group password-group"><input class="form-control" id="staff-password" name="password" type="password" minlength="8" maxlength="72" autocomplete="new-password" required><button class="btn password-toggle" type="button" data-password-toggle="#staff-password" aria-label="Show password"><i class="bi bi-eye" aria-hidden="true"></i></button></div></div>
+            <div class="col-md-6"><label class="form-label" for="staff-password-confirmation">Confirm temporary password</label><div class="input-group password-group"><input class="form-control" id="staff-password-confirmation" name="password_confirmation" type="password" minlength="8" maxlength="72" autocomplete="new-password" required><button class="btn password-toggle" type="button" data-password-toggle="#staff-password-confirmation" aria-label="Show confirm password"><i class="bi bi-eye" aria-hidden="true"></i></button></div></div>
             <div class="col-12"><button class="btn btn-success" type="submit">Create staff account</button></div>
         </form>
     </div>
@@ -21,6 +22,8 @@
 
 <form class="card card-body mb-4" method="get" action="<?= e(url('admin/users.php')) ?>">
     <div class="row g-3 align-items-end">
+        <div class="col-md-6"><label class="form-label" for="user-first-name">First name starts with</label><input class="form-control" id="user-first-name" name="first_name" maxlength="60" value="<?= e($firstNameFilter) ?>"></div>
+        <div class="col-md-6"><label class="form-label" for="user-last-name">Last name starts with</label><input class="form-control" id="user-last-name" name="last_name" maxlength="59" value="<?= e($lastNameFilter) ?>"></div>
         <div class="col-md-4"><label class="form-label" for="user-q">Search</label><input class="form-control" id="user-q" name="q" value="<?= e($search) ?>" placeholder="Name, email, or phone"></div>
         <div class="col-sm-4 col-md-2"><label class="form-label" for="user-role">Role</label><select class="form-select" id="user-role" name="role"><option value="">All roles</option><?php foreach ($roles as $role): ?><option value="<?= e($role) ?>" <?= $roleFilter === $role ? 'selected' : '' ?>><?= e(ucwords(str_replace('_', ' ', $role))) ?></option><?php endforeach; ?></select></div>
         <div class="col-sm-4 col-md-2"><label class="form-label" for="user-status">Status</label><select class="form-select" id="user-status" name="status"><option value="">All statuses</option><?php foreach ($statuses as $status): ?><option value="<?= e($status) ?>" <?= $statusFilter === $status ? 'selected' : '' ?>><?= e(ucfirst($status)) ?></option><?php endforeach; ?></select></div>
@@ -30,12 +33,14 @@
 </form>
 
 <div class="card"><div class="card-header"><?= number_format($total) ?> user<?= $total === 1 ? '' : 's' ?></div><div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th>User</th><th>Contact / barangay</th><th>Activity</th><th>Role and status</th><th class="text-end">Actions</th></tr></thead>
+    <thead><tr><th>User</th><th>First name</th><th>Last name</th><th>Contact / barangay</th><th>Activity</th><th>Role and status</th><th class="text-end">Actions</th></tr></thead>
     <tbody>
     <?php foreach ($users as $managedUser): ?>
         <?php $isSelf = (int) $managedUser['id'] === (int) $currentUser['id']; ?>
         <tr>
             <td><strong><?= e($managedUser['full_name']) ?></strong><?php if ($isSelf): ?> <span class="badge text-bg-info">You</span><?php endif; ?><div class="small text-muted">Joined <?= e(format_datetime($managedUser['created_at'], 'M j, Y')) ?></div></td>
+            <td><?= e($managedUser['first_name'] ?? 'Not confirmed') ?></td>
+            <td><?= e($managedUser['last_name'] ?? 'Not confirmed') ?></td>
             <td><?= e($managedUser['email']) ?><div class="small text-muted"><?= e($managedUser['phone'] ?: 'No phone') ?> · <?= e($managedUser['barangay_name'] ?: 'No barangay') ?></div></td>
             <td><?= number_format((int) $managedUser['report_count']) ?> reports<div class="small text-muted">Last login: <?= e(format_datetime($managedUser['last_login_at'])) ?></div></td>
             <td>
@@ -54,7 +59,7 @@
             </td>
         </tr>
     <?php endforeach; ?>
-    <?php if ($users === []): ?><tr><td colspan="5" class="text-center text-muted py-5">No users match these filters.</td></tr><?php endif; ?>
+    <?php if ($users === []): ?><tr><td colspan="7" class="text-center text-muted py-5">No users match these filters.</td></tr><?php endif; ?>
     </tbody>
 </table></div></div>
 

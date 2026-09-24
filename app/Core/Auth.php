@@ -181,7 +181,6 @@ final class Auth
         $registrationAttempt->execute(['ip_address' => $registrationIp]);
         $registrationAttemptId = (int) $pdo->lastInsertId();
 
-        $name = trim(\scalar_string($data['full_name'] ?? null));
         $email = strtolower(trim(\scalar_string($data['email'] ?? null)));
         $phone = trim(\scalar_string($data['phone'] ?? null));
         $barangayId = filter_var($data['barangay_id'] ?? null, FILTER_VALIDATE_INT);
@@ -190,8 +189,10 @@ final class Auth
         $privacyConsent = \scalar_string($data['privacy_consent'] ?? null);
         $errors = [];
 
-        if (mb_strlen($name) < 2 || mb_strlen($name) > 120) {
-            $errors[] = 'Enter a full name between 2 and 120 characters.';
+        try {
+            $names = \App\Services\UserName::fromInput($data, true);
+        } catch (InvalidArgumentException $exception) {
+            $errors[] = $exception->getMessage();
         }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
             $errors[] = 'Enter a valid email address.';
@@ -228,12 +229,12 @@ final class Auth
         }
 
         $statement = $pdo->prepare(
-            "INSERT INTO users (full_name, email, phone, password_hash, role, barangay_id, status, privacy_consent_at)
-             VALUES (:name, :email, :phone, :hash, 'guardian', :barangay_id, 'active', NOW())"
+            "INSERT INTO users (first_name, last_name, full_name, email, phone, password_hash, role, barangay_id, status, privacy_consent_at)
+             VALUES (:first_name, :last_name, :full_name, :email, :phone, :hash, 'guardian', :barangay_id, 'active', NOW())"
         );
         try {
             $statement->execute([
-                'name' => $name,
+                ...$names,
                 'email' => $email,
                 'phone' => $phone === '' ? null : $phone,
                 'hash' => password_hash($password, PASSWORD_DEFAULT),
