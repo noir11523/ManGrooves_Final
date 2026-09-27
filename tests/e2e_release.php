@@ -1295,6 +1295,32 @@ try {
     record_result($mobileGuardian->request('GET', '/mobile-api/verification.php?page=2', null, true, $mobileHeaders)->status === 403, 'guardian cannot access any review queue page');
     $databasePdo->exec("DELETE FROM reports WHERE report_code LIKE 'QUEUE-CHECK-%'");
 
+    foreach ([
+        ['guardian', $guardian, $guardianId, $mobileGuardian, $mobileSession['user']['id'], $mobileSession['token']],
+        ['expert', $expert, 2, $expertMobile, 2, $expertToken],
+        ['system_admin', $admin, 3, $adminMobile, 3, $adminToken],
+    ] as [$analyticsRole, $webViewer, $webId, $appViewer, $appId, $analyticsToken]) {
+        $personal = $analyticsRole === 'guardian';
+        $totalSql = 'SELECT COUNT(*) FROM reports' . ($personal ? ' WHERE user_id = ' . (int) $webId : '');
+        $expectedWebTotal = (int) $databasePdo->query($totalSql)->fetchColumn();
+        $analyticsPage = $webViewer->request('GET', '/analytics.php?date_from=2020-01-01&user_id=4&scope=all_users');
+        record_result($analyticsPage->status === 200
+            && str_contains($analyticsPage->body, 'data-analytics-total>' . $expectedWebTotal . '</div>')
+            && str_contains($analyticsPage->body, $personal ? 'Your reports only.' : 'Reports from all users.'),
+            "$analyticsRole web analytics has the correct account scope and total");
+        preg_match('/class="cluster-submenu">(.*?)<\/div>/s', $analyticsPage->body, $submenu);
+        record_result(isset($submenu[1]) && strpos($submenu[1], '>Analytics</a>') !== false
+            && strpos($submenu[1], '>Analytics</a>') < strpos($submenu[1], '>Health history</a>'),
+            "$analyticsRole menu puts Analytics above Health history");
+        $analyticsResponse = $appViewer->request('GET', '/mobile-api/analytics.php?date_from=2020-01-01&user_id=4&scope=all_users', null, true, ['Authorization: Bearer ' . $analyticsToken]);
+        $analyticsData = json_decode($analyticsResponse->body, true)['analytics'] ?? [];
+        $totalSql = 'SELECT COUNT(*) FROM reports' . ($personal ? ' WHERE user_id = ' . (int) $appId : '');
+        record_result($analyticsResponse->status === 200
+            && ($analyticsData['scope'] ?? '') === ($personal ? 'personal' : 'all_users')
+            && (int) ($analyticsData['verification']['total'] ?? -1) === (int) $databasePdo->query($totalSql)->fetchColumn(),
+            "$analyticsRole mobile analytics ignores forged account scope and returns correct totals");
+    }
+
     // Account settings must behave consistently for every role.
     foreach ([
         ['guardian', $otherGuardian, 'guardian@test.com', $changedPassword],

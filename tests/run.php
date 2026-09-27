@@ -461,6 +461,51 @@ try {
         same(1, (int) $analytics['health']['At Risk']);
     });
 
+    test_case('guardian analytics scope covers totals, charts, shared clusters and attention reports', static function () use ($pdo): void {
+        $pdo->beginTransaction();
+        try {
+            // Another guardian has the newer visit in the same cluster.
+            $pdo->exec("UPDATE reports SET user_id = 4, final_health = 'At Risk', needs_attention = 1 WHERE id = 2");
+            $service = new AnalyticsService($pdo);
+            $data = $service->forUser(['id' => 1, 'role' => 'guardian'], ['user_id' => 4, 'scope' => 'all_users']);
+            same('personal', $data['scope']);
+            same((int) $pdo->query('SELECT COUNT(*) FROM reports WHERE user_id = 1')->fetchColumn(), (int) $data['verification']['total']);
+            $verified = (int) $pdo->query("SELECT COUNT(*) FROM reports WHERE user_id = 1 AND status = 'verified'")->fetchColumn();
+            same($verified, array_sum($data['health']));
+            same($verified, (int) array_sum(array_column($data['growth'], 'verified_reports')));
+            $ownIds = array_map('intval', $pdo->query('SELECT id FROM reports WHERE user_id = 1')->fetchAll(PDO::FETCH_COLUMN));
+            foreach ($data['high_risk'] as $report) check(in_array((int) $report['id'], $ownIds, true));
+            $cluster = array_values(array_filter($data['clusters'], static fn ($row) => $row['id'] === 1))[0];
+            same(1, (int) $cluster['latest_report_id'], 'A different guardian latest visit must not replace the personal observation');
+            same('Healthy', $cluster['latest_health']);
+            $marker = array_values(array_filter($data['map'], static fn ($row) => $row['id'] === 1))[0];
+            same('Healthy', $marker['health']);
+            check(!str_contains(json_encode($data), 'MGR-DEMO-0002'), 'Personal payload exposed another guardian report');
+            check(!isset($data['overall_survival'], $cluster['initial_seedlings'], $marker['survival']));
+            same(false, $data['capabilities']['can_export_pdf']);
+        } finally { $pdo->rollBack(); }
+    });
+
+    test_case('expert and administrator analytics aggregate all users', static function () use ($pdo): void {
+        $service = new AnalyticsService($pdo);
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM reports')->fetchColumn();
+        foreach ([['id' => 2, 'role' => 'expert'], ['id' => 3, 'role' => 'system_admin']] as $user) {
+            $data = $service->forUser($user, ['user_id' => 1, 'scope' => 'personal']);
+            same('all_users', $data['scope']);
+            same($total, (int) $data['verification']['total']);
+            same($user['role'] === 'system_admin', $data['capabilities']['can_export_pdf']);
+        }
+    });
+
+    test_case('a guardian without reports has empty analytics and cannot select another account', static function () use ($pdo): void {
+        $service = new AnalyticsService($pdo);
+        $data = $service->forUser(['id' => 999999, 'role' => 'guardian'], ['user_id' => 1]);
+        same(0, (int) $data['verification']['total']);
+        same(0, array_sum($data['health']));
+        foreach (['growth', 'clusters', 'map', 'high_risk'] as $key) same([], $data[$key]);
+        throws(static fn () => $service->forUser(['id' => 0, 'role' => 'guardian'], []), InvalidArgumentException::class);
+    });
+
     test_case('analytics species scope follows report-level identification', static function () use ($pdo): void {
         $pdo->exec('UPDATE mangrove_clusters SET species_id = 6 WHERE id = 2');
         $analytics = (new AnalyticsService($pdo))->dashboard(['species_id' => 1]);

@@ -13,9 +13,9 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
     </div>
     <div class="topbar-actions ms-auto">
         <div class="dropdown d-lg-none">
-            <button class="icon-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Maps and timelines"><i class="bi bi-map" aria-hidden="true"></i></button>
+            <button class="icon-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Analytics and timelines"><i class="bi bi-bar-chart" aria-hidden="true"></i></button>
             <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                <li><a class="dropdown-item" href="<?= e(url('report-map.php')) ?>">Report map</a></li>
+                <li><a class="dropdown-item" href="<?= e(url('analytics.php')) ?>">Analytics</a></li>
                 <li><a class="dropdown-item" href="<?= e(url('clusters.php?view=health')) ?>">Health history</a></li>
                 <li><a class="dropdown-item" href="<?= e(url('clusters.php?view=growth')) ?>">Growth timeline</a></li>
             </ul>

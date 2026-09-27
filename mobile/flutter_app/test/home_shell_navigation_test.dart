@@ -50,7 +50,8 @@ class _Api extends ApiClient {
     analyticsLoads++;
     return {
       'analytics': {
-        'verification': {},
+        'scope': role == 'guardian' ? 'personal' : 'all_users',
+        'verification': {'total': role == 'guardian' ? 3 : 12},
         'health': {},
         'capabilities': {
           'can_view_survival': role == 'system_admin',
@@ -91,7 +92,44 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        await tester.tap(find.byTooltip('Maps and timelines'));
+        await tester.tap(find.byTooltip('Analytics and timelines'));
+        await tester.pumpAndSettle();
+        expect(find.byType(PopupMenuItem<String>).first, findsOneWidget);
+        expect(
+          tester
+              .widget<PopupMenuItem<String>>(
+                find.byType(PopupMenuItem<String>).first,
+              )
+              .value,
+          'analytics',
+        );
+        await tester.tap(
+          find.widgetWithText(PopupMenuItem<String>, 'Analytics'),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text(
+            role == 'guardian' ? 'My analytics' : 'Conservation analytics',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.text(
+            role == 'guardian'
+                ? 'Your reports only.'
+                : 'Reports from all users.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text(role == 'guardian' ? '3' : '12'), findsOneWidget);
+        expect(
+          find.text('Generate PDF'),
+          role == 'system_admin' ? findsOneWidget : findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.byType(BackButton));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Analytics and timelines'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Growth timeline'));
         await tester.pumpAndSettle();

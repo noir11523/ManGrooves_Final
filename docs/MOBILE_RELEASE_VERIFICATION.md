@@ -5,10 +5,10 @@ Verification date: 2026-09-28 (Asia/Manila)
 ## Verified Android artifact
 
 - File: `mobile/flutter_app/dist/ManGROOVES-Flutter.apk`
-- Version: `1.1.10+12`
+- Version: `1.1.11+13`
 - Application ID: `org.mangrooves.mobile`
 - Size: 57,843,058 bytes (55.16 MiB)
-- SHA-256: `78F9961F3D90A613BE49FB91F5905795972A0B50C406F87B92243C4BC91E6BCA`
+- SHA-256: `81244677B5E72EF3232D15AF5B284CF7493E9DA05BAB80565D4612E35B8017CA`
 - Minimum Android SDK: 24; target Android SDK: 36
 - Native ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`
 - APK Signature Scheme v2: verified after packaging
@@ -25,6 +25,16 @@ queue navigation, and access to every report in a queue exceeding 50 items.
 Web and Flutter share the server's report data, health scoring, validation rules,
 and role permissions. This release includes:
 
+- Analytics appears above Health history in the web Clusters menu and replaces
+  Report map in the app's top menu. Report maps remain available from Reports.
+- Guardians see their own report totals, health distribution, monthly verified
+  reports, and attention reports. Experts and administrators see all users'
+  aggregated data. The authenticated account determines scope on the server;
+  request parameters cannot select another guardian or widen personal access.
+- Personal cluster summaries use the guardian's latest verified visit, including
+  when another user submitted a newer visit to the same cluster. Empty accounts
+  see empty statistics. PDF export and survival figures remain administrator-only.
+
 - Account settings for every role have read-only email and no self-deactivation
   option. Both web and mobile endpoints reject email changes and deactivation.
 - Flutter users can change their password with their current password and a
@@ -37,9 +47,9 @@ and role permissions. This release includes:
   see their own report pins.
 - Cluster health maps below Latest reports. Dashboard report totals open matching
   report filters. The redundant dashboard New report button is removed.
-- Health history and growth timelines, accessible from the app's Maps and timelines
+- Health history and growth timelines, accessible from the app's Analytics and timelines
   menu and the web's Clusters submenu. The web submenu supports hover, click, and
-  keyboard use. Mobile web also has a Maps and timelines menu.
+  keyboard use. Mobile web also has a Analytics and timelines menu.
 - Chronological verified visit counts, changes since the previous count, health,
   species, and authorized evidence. A count change may reflect a different area
   observed; it is not a tree-height measurement. Other guardians' exact coordinates,
@@ -70,10 +80,10 @@ and role permissions. This release includes:
 
 | Check | Result |
 | --- | --- |
-| PHP domain/integration suite | 42 passed, 0 failed |
-| Disposable-database web/mobile HTTP journeys | 196 passed, 0 failed |
-| JavaScript location/report-flow tests | 37 passed, 0 failed |
-| Flutter unit/widget tests | 31 passed, 0 failed; 1 optional live LAN-discovery test skipped |
+| PHP domain/integration suite | 45 passed, 0 failed |
+| Disposable-database web/mobile HTTP journeys | 205 passed, 0 failed |
+| JavaScript location/report-flow tests | Unchanged; 37 passed in the preceding release |
+| Flutter navigation/widget checks | 3 passed, covering guardian, expert, and administrator Analytics menus and back navigation |
 | Flutter analyzer | No issues found |
 | Android release build | Completed |
 | APK metadata, v2 signature, checksum | Verified |

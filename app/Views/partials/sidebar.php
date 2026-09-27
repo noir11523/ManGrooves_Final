@@ -24,7 +24,6 @@ $navigation = $role === 'guardian'
     : [
         ['Dashboard', 'dashboard.php', 'bi-grid-1x2-fill'],
         ['Verification', 'admin/verification.php', 'bi-clipboard2-check-fill'],
-        ['Analytics', 'admin/analytics.php', 'bi-bar-chart-fill'],
         ['Clusters', 'admin/cluster.php', 'bi-pin-map-fill'],
     ];
 
@@ -60,8 +59,9 @@ $isActive = static function (string $href) use ($requestPath): bool {
         <?php foreach ($navigation as [$label, $href, $icon]): ?>
             <?php if ($label === 'Clusters'): ?>
                 <details class="cluster-nav" data-cluster-menu>
-                    <summary class="sidebar-link <?= $isActive($href) ? 'active' : '' ?>"><i class="bi <?= e($icon) ?>" aria-hidden="true"></i><span>Clusters</span><i class="bi bi-chevron-down ms-auto" aria-hidden="true"></i></summary>
+                    <summary class="sidebar-link <?= ($isActive($href) || $isActive('analytics.php') || $isActive('clusters.php')) ? 'active' : '' ?>"><i class="bi <?= e($icon) ?>" aria-hidden="true"></i><span>Clusters</span><i class="bi bi-chevron-down ms-auto" aria-hidden="true"></i></summary>
                     <div class="cluster-submenu">
+                        <a href="<?= e(url('analytics.php')) ?>" <?= $isActive('analytics.php') ? 'aria-current="page"' : '' ?>>Analytics</a>
                         <a href="<?= e(url('clusters.php?view=health')) ?>">Health history</a>
                         <a href="<?= e(url('clusters.php?view=growth')) ?>">Growth timeline</a>
                     </div>

@@ -192,7 +192,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                       'New observation site',
                                 ),
                                 Text(
-                                  '${report['display_health'] ?? 'Unknown'} Â· ${_formatDate(report['submitted_at'])}',
+                                  '${report['display_health'] ?? 'Unknown'} · ${_formatDate(report['submitted_at'])}',
                                 ),
                               ],
                             ),

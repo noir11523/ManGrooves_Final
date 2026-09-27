@@ -92,6 +92,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final capabilities = Map<String, dynamic>.from(
       _analytics!['capabilities'] as Map? ?? const {},
     );
+    final personal = _analytics!['scope'] == 'personal';
     final canViewSurvival = capabilities['can_view_survival'] == true;
     final health = Map<String, dynamic>.from(_analytics!['health'] as Map);
     final growth = (_analytics!['growth'] as List? ?? const [])
@@ -110,7 +111,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     };
     final spots = <FlSpot>[];
     for (var index = 0; index < growth.length; index++) {
-      final value = _number(growth[index]['survival_rate']);
+      final value = _number(
+        growth[index][canViewSurvival ? 'survival_rate' : 'verified_reports'],
+      );
       if (value != null) spots.add(FlSpot(index.toDouble(), value));
     }
 
@@ -120,13 +123,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
           Text(
-            'Conservation analytics',
+            personal ? 'My analytics' : 'Conservation analytics',
             style: Theme.of(context).textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const Text(
-            'Verified evidence, monitoring summaries, and high-risk sites.',
-          ),
+          Text(personal ? 'Your reports only.' : 'Reports from all users.'),
+          if (_analytics!['filters'] case final Map filters)
+            Text(
+              '${filters['date_from']} to ${filters['date_to']}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           const SizedBox(height: 18),
           if (capabilities['can_export_pdf'] == true) ...[
             FilledButton.icon(
@@ -144,6 +150,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             mainAxisSpacing: 10,
             mainAxisExtent: 145,
             children: [
+              _AnalyticsStat('Total reports', '${verification['total'] ?? 0}'),
+              _AnalyticsStat('Rejected', '${verification['rejected'] ?? 0}'),
               if (canViewSurvival)
                 _AnalyticsStat(
                   'Overall survival',
@@ -204,20 +212,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ],
                   ),
           ),
-          if (canViewSurvival) ...[
+          ...[
             const SizedBox(height: 14),
             _ChartCard(
-              title: 'Monthly survival trend',
+              title: canViewSurvival
+                  ? 'Monthly survival trend'
+                  : 'Monthly verified reports',
               child: spots.isEmpty
                   ? const Center(
-                      child: Text('No monthly survival data in this period.'),
+                      child: Text('No verified reports in this period.'),
                     )
                   : SizedBox(
                       height: 240,
                       child: LineChart(
                         LineChartData(
                           minY: 0,
-                          maxY: 100,
+                          maxY: canViewSurvival ? 100 : null,
                           gridData: const FlGridData(show: true),
                           borderData: FlBorderData(show: true),
                           titlesData: FlTitlesData(
@@ -251,18 +261,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                 },
                               ),
                             ),
-                            leftTitles: const AxisTitles(
+                            leftTitles: AxisTitles(
                               sideTitles: SideTitles(
                                 showTitles: true,
                                 reservedSize: 36,
-                                interval: 25,
+                                interval: canViewSurvival ? 25 : null,
                               ),
                             ),
                           ),
                           lineBarsData: [
                             LineChartBarData(
                               spots: spots,
-                              isCurved: true,
+                              isCurved: false,
                               color: Theme.of(context).colorScheme.primary,
                               barWidth: 3,
                               dotData: const FlDotData(show: true),

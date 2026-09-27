@@ -32,10 +32,43 @@ final class AnalyticsService
         ];
     }
 
-    public function dashboard(array $rawFilters): array
+    /** Scope analytics from the authenticated account, never a request-supplied user ID. */
+    public function forUser(array $user, array $rawFilters): array
+    {
+        $role = $user['role'] ?? '';
+        if (!in_array($role, ['guardian', 'expert', 'system_admin'], true) || (int) ($user['id'] ?? 0) < 1) {
+            throw new \InvalidArgumentException('A valid account is required.');
+        }
+        $personal = $role === 'guardian';
+        $analytics = $this->dashboard($rawFilters, $personal ? (int) $user['id'] : null);
+        $canViewSurvival = $role === 'system_admin';
+        $analytics['scope'] = $personal ? 'personal' : 'all_users';
+        $analytics['capabilities'] = [
+            'can_view_survival' => $canViewSurvival,
+            'can_export_pdf' => $canViewSurvival,
+        ];
+        if (!$canViewSurvival) {
+            unset($analytics['overall_survival'], $analytics['survival_eligible_clusters']);
+            foreach ($analytics['growth'] as &$point) {
+                unset($point['survival_rate']);
+            }
+            unset($point);
+            foreach ($analytics['clusters'] as &$cluster) {
+                unset($cluster['initial_seedlings'], $cluster['observed_alive_count'], $cluster['survival_rate']);
+            }
+            unset($cluster);
+            foreach ($analytics['map'] as &$marker) {
+                unset($marker['survival']);
+            }
+            unset($marker);
+        }
+        return $analytics;
+    }
+
+    public function dashboard(array $rawFilters, ?int $guardianId = null): array
     {
         $filters = $this->normalizeFilters($rawFilters);
-        [$reportWhere, $params] = $this->reportWhere($filters, 'r');
+        [$reportWhere, $params] = $this->reportWhere($filters, 'r', $guardianId);
         [$clusterWhere, $clusterParams] = $this->clusterWhere($filters, 'c');
 
         $verification = $this->one(
@@ -88,6 +121,7 @@ final class AnalyticsService
                   " . ($filters['species_id'] !== null
                     ? 'AND r2.final_species_id = :latest_species_id'
                     : '') . "
+                " . ($guardianId !== null ? 'AND r2.user_id = :latest_user_id' : '') . "
                 ORDER BY r2.submitted_at DESC, r2.id DESC LIMIT 1
             )
             LEFT JOIN mangrove_species s ON s.id = lr.final_species_id
@@ -100,11 +134,17 @@ final class AnalyticsService
         if ($filters['species_id'] !== null) {
             $survivalParams['latest_species_id'] = $filters['species_id'];
         }
+        if ($guardianId !== null) {
+            $survivalParams['latest_user_id'] = $guardianId;
+        }
         $clusters = $this->all($survivalSql, $survivalParams);
 
         $eligibleInitial = 0;
         $eligibleAlive = 0;
         foreach ($clusters as &$cluster) {
+            if ($guardianId !== null) {
+                $cluster['latest_health'] = $cluster['final_health'];
+            }
             $cluster['id'] = (int) $cluster['id'];
             $cluster['initial_seedlings'] = (int) $cluster['initial_seedlings'];
             $cluster['observed_alive_count'] = $cluster['observed_alive_count'] === null
@@ -187,10 +227,14 @@ final class AnalyticsService
         ];
     }
 
-    private function reportWhere(array $filters, string $alias): array
+    private function reportWhere(array $filters, string $alias, ?int $guardianId = null): array
     {
         $clauses = ["{$alias}.submitted_at >= :date_from", "{$alias}.submitted_at < DATE_ADD(:date_to, INTERVAL 1 DAY)"];
         $params = ['date_from' => $filters['date_from'], 'date_to' => $filters['date_to']];
+        if ($guardianId !== null) {
+            $clauses[] = "{$alias}.user_id = :guardian_id";
+            $params['guardian_id'] = $guardianId;
+        }
         if ($filters['barangay_id'] !== null) {
             $clauses[] = "{$alias}.barangay_id = :barangay_id";
             $params['barangay_id'] = $filters['barangay_id'];

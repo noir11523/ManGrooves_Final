@@ -9,7 +9,6 @@ import 'reports_screen.dart';
 import 'submit_report_screen.dart';
 import 'verification_screen.dart';
 import 'notifications_screen.dart';
-import 'report_map_screen.dart';
 import 'cluster_timeline_screen.dart';
 
 class HomeShell extends StatefulWidget {
@@ -141,14 +140,21 @@ class _HomeShellState extends State<HomeShell> {
           leading: _index == 0 ? null : BackButton(onPressed: back),
           actions: [
             PopupMenuButton<String>(
-              tooltip: 'Maps and timelines',
-              icon: const Icon(Icons.map_outlined),
+              tooltip: 'Analytics and timelines',
+              icon: const Icon(Icons.insights_outlined),
               onSelected: (choice) {
+                if (choice == 'analytics' && !_guardian) {
+                  setState(() => _index = 3);
+                  return;
+                }
                 Navigator.push(
                   context,
                   MaterialPageRoute<void>(
-                    builder: (_) => choice == 'map'
-                        ? ReportMapScreen(api: widget.api)
+                    builder: (_) => choice == 'analytics'
+                        ? Scaffold(
+                            appBar: AppBar(title: const Text('Analytics')),
+                            body: AnalyticsScreen(api: widget.api),
+                          )
                         : ClustersScreen(
                             api: widget.api,
                             initialTab: choice == 'growth' ? 1 : 0,
@@ -157,7 +163,7 @@ class _HomeShellState extends State<HomeShell> {
                 );
               },
               itemBuilder: (_) => const [
-                PopupMenuItem(value: 'map', child: Text('Report map')),
+                PopupMenuItem(value: 'analytics', child: Text('Analytics')),
                 PopupMenuItem(value: 'health', child: Text('Health history')),
                 PopupMenuItem(value: 'growth', child: Text('Growth timeline')),
               ],

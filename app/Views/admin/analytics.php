@@ -1,5 +1,9 @@
 <?php
 $filters = $analytics['filters'];
+$isPersonal = ($analytics['scope'] ?? '') === 'personal';
+$analyticsPath = 'analytics.php';
+$clusterPath = $isPersonal ? 'cluster.php?id=' : 'admin/cluster.php?id=';
+$reportPath = $isPersonal ? 'report.php?id=' : 'admin/report.php?id=';
 $verification = $analytics['verification'];
 $health = $analytics['health'];
 $canViewSurvival = ($currentUser['role'] ?? '') === 'system_admin';
@@ -34,7 +38,7 @@ $clientData = [
         }
         return $cluster;
     }, $analytics['map']),
-    'clusterUrl' => url('admin/cluster.php?id='),
+    'clusterUrl' => url($clusterPath),
 ];
 ?>
 <style>
@@ -46,7 +50,7 @@ $clientData = [
 }
 </style>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div><h1 class="h3 mb-1">Conservation analytics</h1><p class="text-muted mb-0"><?= $canViewSurvival ? "Current survival uses each cluster's latest verified alive count divided by its initial seedlings." : 'Review verified health, monitoring volume, and high-risk locations.' ?></p></div>
+    <div><h1 class="h3 mb-1"><?= $isPersonal ? 'My analytics' : 'Conservation analytics' ?></h1><p class="text-muted mb-0"><?= $isPersonal ? 'Your reports only.' : 'Reports from all users.' ?></p></div>
     <div class="d-flex flex-wrap gap-2 no-print">
         <?php if (($currentUser['role'] ?? '') === 'system_admin' && is_file(APP_ROOT . '/public/admin/generate-charts.php')): ?>
         <form method="post" action="<?= e(url('admin/generate-charts.php')) ?>">
@@ -61,17 +65,19 @@ $clientData = [
     </div>
 </div>
 
-<form class="card card-body mb-4 no-print" method="get" action="<?= e(url('admin/analytics.php')) ?>">
+<form class="card card-body mb-4 no-print" method="get" action="<?= e(url($analyticsPath)) ?>">
     <div class="row g-3 align-items-end">
         <div class="col-sm-6 col-lg-2"><label class="form-label" for="analytics-from">From</label><input class="form-control" type="date" id="analytics-from" name="date_from" value="<?= e($filters['date_from']) ?>"></div>
         <div class="col-sm-6 col-lg-2"><label class="form-label" for="analytics-to">To</label><input class="form-control" type="date" id="analytics-to" name="date_to" value="<?= e($filters['date_to']) ?>"></div>
         <div class="col-sm-6 col-lg-3"><label class="form-label" for="analytics-barangay">Barangay</label><select class="form-select" id="analytics-barangay" name="barangay_id"><option value="">All barangays</option><?php foreach ($barangays as $barangay): ?><option value="<?= (int) $barangay['id'] ?>" <?= (int) $filters['barangay_id'] === (int) $barangay['id'] ? 'selected' : '' ?>><?= e($barangay['name']) ?></option><?php endforeach; ?></select></div>
         <div class="col-sm-6 col-lg-3"><label class="form-label" for="analytics-species">Species</label><select class="form-select" id="analytics-species" name="species_id"><option value="">All species</option><?php foreach ($species as $item): ?><option value="<?= (int) $item['id'] ?>" <?= (int) $filters['species_id'] === (int) $item['id'] ? 'selected' : '' ?>><?= e($item['common_name']) ?> — <?= e($item['scientific_name']) ?></option><?php endforeach; ?></select></div>
-        <div class="col-lg-2 d-flex gap-2"><button class="btn btn-success" type="submit">Apply</button><a class="btn btn-outline-secondary" href="<?= e(url('admin/analytics.php')) ?>">Reset</a></div>
+        <div class="col-lg-2 d-flex gap-2"><button class="btn btn-success" type="submit">Apply</button><a class="btn btn-outline-secondary" href="<?= e(url($analyticsPath)) ?>">Reset</a></div>
     </div>
 </form>
 
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-4" data-analytics-scope="<?= $isPersonal ? 'personal' : 'all_users' ?>">
+    <div class="col-6 col-xl-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Total reports</div><div class="display-6" data-analytics-total><?= (int) ($verification['total'] ?? 0) ?></div><div class="small text-muted">In this period</div></div></div></div>
+    <div class="col-6 col-xl-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Rejected</div><div class="display-6"><?= (int) ($verification['rejected'] ?? 0) ?></div></div></div></div>
     <?php if ($canViewSurvival): ?><div class="col-6 col-xl-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Overall survival</div><div class="display-6"><?= $overallSurvival === null ? 'N/A' : e(number_format($overallSurvival, 1) . '%') ?></div><div class="small text-muted"><?= (int) $analytics['survival_eligible_clusters'] ?> cluster(s) with complete counts</div></div></div></div><?php endif; ?>
     <div class="col-6 col-xl-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Verified reports</div><div class="display-6 text-success"><?= (int) ($verification['verified'] ?? 0) ?></div><div class="small text-muted"><?= e(number_format((float) $verification['completion_rate'], 1)) ?>% reviewed</div></div></div></div>
     <div class="col-6 col-xl-3"><div class="card h-100"><div class="card-body"><div class="text-muted small">Pending</div><div class="display-6 text-warning"><?= (int) ($verification['pending'] ?? 0) ?></div><div class="small text-muted"><?= e($verification['avg_turnaround_hours'] === null ? 'No turnaround data' : number_format((float) $verification['avg_turnaround_hours'], 1) . ' h average review') ?></div></div></div></div>
@@ -112,7 +118,7 @@ $clientData = [
 <?php if ($canViewSurvival): ?><div class="card mb-4">
     <div class="card-header"><h2 class="h5 mb-0">Cluster survival</h2></div>
     <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Cluster</th><th>Barangay</th><th>Species</th><th>Current health</th><th class="text-end">Initial</th><th class="text-end">Latest alive</th><th class="text-end">Survival</th></tr></thead><tbody>
-    <?php foreach ($analytics['clusters'] as $cluster): ?><tr><td><a href="<?= e(url('admin/cluster.php?id=' . $cluster['id'])) ?>"><?= e($cluster['cluster_code']) ?></a><div class="small text-muted"><?= e($cluster['name']) ?></div></td><td><?= e($cluster['barangay_name']) ?></td><td><?= e($cluster['common_name'] ?: ($cluster['scientific_name'] ?: 'Unassigned')) ?></td><td><span class="badge <?= e(health_class($cluster['final_health'] ?: $cluster['latest_health'])) ?>"><?= e($cluster['final_health'] ?: $cluster['latest_health']) ?></span></td><td class="text-end"><?= number_format((int) $cluster['initial_seedlings']) ?></td><td class="text-end"><?= $cluster['observed_alive_count'] === null ? '—' : number_format((int) $cluster['observed_alive_count']) ?></td><td class="text-end"><strong><?= $cluster['survival_rate'] === null ? 'N/A' : e(number_format((float) $cluster['survival_rate'], 1) . '%') ?></strong></td></tr><?php endforeach; ?>
+    <?php foreach ($analytics['clusters'] as $cluster): ?><tr><td><a href="<?= e(url($clusterPath . $cluster['id'])) ?>"><?= e($cluster['cluster_code']) ?></a><div class="small text-muted"><?= e($cluster['name']) ?></div></td><td><?= e($cluster['barangay_name']) ?></td><td><?= e($cluster['common_name'] ?: ($cluster['scientific_name'] ?: 'Unassigned')) ?></td><td><span class="badge <?= e(health_class($cluster['final_health'] ?: $cluster['latest_health'])) ?>"><?= e($cluster['final_health'] ?: $cluster['latest_health']) ?></span></td><td class="text-end"><?= number_format((int) $cluster['initial_seedlings']) ?></td><td class="text-end"><?= $cluster['observed_alive_count'] === null ? '—' : number_format((int) $cluster['observed_alive_count']) ?></td><td class="text-end"><strong><?= $cluster['survival_rate'] === null ? 'N/A' : e(number_format((float) $cluster['survival_rate'], 1) . '%') ?></strong></td></tr><?php endforeach; ?>
     <?php if ($analytics['clusters'] === []): ?><tr><td colspan="7" class="text-center text-muted py-4">No clusters match these filters.</td></tr><?php endif; ?>
     </tbody></table></div>
 </div><?php endif; ?>
@@ -120,7 +126,7 @@ $clientData = [
 <div class="card mb-4">
     <div class="card-header"><h2 class="h5 mb-0">High-risk and attention-flagged reports</h2></div>
     <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Report</th><th>Cluster</th><th>Barangay</th><th>Species</th><th>Health</th><th>Submitted</th></tr></thead><tbody>
-    <?php foreach ($analytics['high_risk'] as $risk): ?><tr><td><a href="<?= e(url('admin/report.php?id=' . $risk['id'])) ?>"><?= e($risk['report_code']) ?></a><?php if ((int) $risk['needs_attention'] === 1): ?> <span class="badge text-bg-danger">Attention</span><?php endif; ?></td><td><?= $risk['cluster_id'] ? '<a href="' . e(url('admin/cluster.php?id=' . $risk['cluster_id'])) . '">' . e($risk['cluster_name']) . '</a>' : 'Unassigned' ?></td><td><?= e($risk['barangay_name']) ?></td><td><?= e($risk['species_name'] ?: 'Unassigned') ?></td><td><span class="badge <?= e(health_class($risk['final_health'])) ?>"><?= e($risk['final_health']) ?></span></td><td><?= e(format_datetime($risk['submitted_at'])) ?></td></tr><?php endforeach; ?>
+    <?php foreach ($analytics['high_risk'] as $risk): ?><tr><td><a href="<?= e(url($reportPath . $risk['id'])) ?>"><?= e($risk['report_code']) ?></a><?php if ((int) $risk['needs_attention'] === 1): ?> <span class="badge text-bg-danger">Attention</span><?php endif; ?></td><td><?= $risk['cluster_id'] ? '<a href="' . e(url($clusterPath . $risk['cluster_id'])) . '">' . e($risk['cluster_name']) . '</a>' : 'Unassigned' ?></td><td><?= e($risk['barangay_name']) ?></td><td><?= e($risk['species_name'] ?: 'Unassigned') ?></td><td><span class="badge <?= e(health_class($risk['final_health'])) ?>"><?= e($risk['final_health']) ?></span></td><td><?= e(format_datetime($risk['submitted_at'])) ?></td></tr><?php endforeach; ?>
     <?php if ($analytics['high_risk'] === []): ?><tr><td colspan="6" class="text-center text-muted py-4">No high-risk reports in this period.</td></tr><?php endif; ?>
     </tbody></table></div>
 </div>
