@@ -36,8 +36,8 @@
                     <?php endif; ?>
                     <div class="col-md-6">
                         <label class="form-label" for="settings-email">Email address</label>
-                        <input class="form-control" id="settings-email" name="email" type="email" value="<?= e((string) $profileValues['email']) ?>" autocomplete="email" maxlength="190" required>
-                        <div class="invalid-feedback">Enter a valid email address.</div>
+                        <input class="form-control" id="settings-email" name="email" type="email" readonly aria-describedby="email-help" value="<?= e((string) $profileValues['email']) ?>" autocomplete="email" maxlength="190" required>
+                        <div class="form-text" id="email-help">Your email cannot be changed.</div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="settings-phone">Phone <span class="text-secondary">(optional)</span></label>

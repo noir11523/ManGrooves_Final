@@ -62,7 +62,6 @@ $isActive = static function (string $href) use ($requestPath): bool {
                 <details class="cluster-nav" data-cluster-menu>
                     <summary class="sidebar-link <?= $isActive($href) ? 'active' : '' ?>"><i class="bi <?= e($icon) ?>" aria-hidden="true"></i><span>Clusters</span><i class="bi bi-chevron-down ms-auto" aria-hidden="true"></i></summary>
                     <div class="cluster-submenu">
-                        <a href="<?= e(url($href)) ?>">All clusters</a>
                         <a href="<?= e(url('clusters.php?view=health')) ?>">Health history</a>
                         <a href="<?= e(url('clusters.php?view=growth')) ?>">Growth timeline</a>
                     </div>

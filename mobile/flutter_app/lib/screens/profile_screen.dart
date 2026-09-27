@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import 'account_security_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -76,7 +77,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final response = await widget.api.updateProfile({
         'first_name': _firstName.text.trim(),
         'last_name': _lastName.text.trim(),
-        'email': _email.text,
         'phone': _phone.text,
         'barangay_id': _barangayId,
       });
@@ -167,9 +167,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _email,
+                    readOnly: true,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       labelText: 'Email address',
+                      helperText: 'Your email cannot be changed.',
                     ),
                     validator: (value) =>
                         value == null ||
@@ -224,6 +226,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 20),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => AccountSecurityScreen(
+                api: widget.api,
+                onSignedOut: widget.onSignedOut,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.lock_outline),
+          label: const Text('Change password'),
+        ),
         OutlinedButton.icon(
           onPressed: _signingOut
               ? null

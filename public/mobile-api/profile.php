@@ -10,7 +10,10 @@ $pdo = Database::connection();
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $input = MobileApi::input();
-    $email = strtolower(trim(scalar_string($input['email'] ?? null)));
+    $email = (string) $user['email'];
+    if (isset($input['email']) && scalar_string($input['email']) !== $email) {
+        json_response(['ok' => false, 'message' => 'Your email address cannot be changed.'], 422);
+    }
     $phone = trim(scalar_string($input['phone'] ?? null));
     $rawBarangay = trim(scalar_string($input['barangay_id'] ?? null));
     $barangayId = $rawBarangay === '' ? null : filter_var($rawBarangay, FILTER_VALIDATE_INT);
@@ -48,7 +51,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         Database::transaction(static function (PDO $transaction) use (
             $user,
             $names,
-            $email,
             $phone,
             $barangayId
         ): void {
@@ -57,33 +59,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             if (!$lock->fetchColumn()) {
                 throw new DomainException('Your account is no longer active.');
             }
-            $duplicate = $transaction->prepare('SELECT 1 FROM users WHERE email = :email AND id <> :id LIMIT 1');
-            $duplicate->execute(['email' => $email, 'id' => (int) $user['id']]);
-            if ($duplicate->fetchColumn()) {
-                throw new DomainException('Another account already uses that email address.');
-            }
             $update = $transaction->prepare(
-                'UPDATE users SET first_name = :first_name, last_name = :last_name, full_name = :full_name, email = :email, phone = :phone, barangay_id = :barangay_id WHERE id = :id'
+                'UPDATE users SET first_name = :first_name, last_name = :last_name, full_name = :full_name, phone = :phone, barangay_id = :barangay_id WHERE id = :id'
             );
             $update->execute([
                 ...$names,
-                'email' => $email,
                 'phone' => $phone === '' ? null : $phone,
                 'barangay_id' => $barangayId ?: null,
                 'id' => (int) $user['id'],
             ]);
             Audit::logRequired('account.profile_updated', 'user', (int) $user['id'], [
-                'email_changed' => $email !== (string) $user['email'],
+                'email_changed' => false,
                 'source' => 'mobile',
             ], (int) $user['id']);
         });
     } catch (DomainException $exception) {
         json_response(['ok' => false, 'message' => $exception->getMessage()], 422);
-    } catch (PDOException $exception) {
-        if ($exception->getCode() === '23000') {
-            json_response(['ok' => false, 'message' => 'Another account already uses that email address.'], 422);
-        }
-        throw $exception;
     }
 }
 

@@ -150,6 +150,10 @@ class ApiClient {
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> form) =>
       _postJson('profile.php', form);
 
+  Future<Map<String, dynamic>> updateAccountSecurity(
+    Map<String, dynamic> form,
+  ) => _postJson('account-security.php', form);
+
   Future<Map<String, dynamic>> reviewReport(Map<String, dynamic> form) =>
       _postJson('review.php', form);
 

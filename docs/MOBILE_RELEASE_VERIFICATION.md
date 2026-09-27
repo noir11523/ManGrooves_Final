@@ -1,14 +1,14 @@
 ﻿# Mobile release verification
 
-Verification date: 2026-09-27 (Asia/Manila)
+Verification date: 2026-09-28 (Asia/Manila)
 
 ## Verified Android artifact
 
 - File: `mobile/flutter_app/dist/ManGROOVES-Flutter.apk`
-- Version: `1.1.9+11`
+- Version: `1.1.10+12`
 - Application ID: `org.mangrooves.mobile`
-- Size: 57,826,666 bytes (55.15 MiB)
-- SHA-256: `9BFCF4EEE32353B0E5ACC425940741CFB1E602FB25FA9CD55238A2230895074B`
+- Size: 57,843,058 bytes (55.16 MiB)
+- SHA-256: `78F9961F3D90A613BE49FB91F5905795972A0B50C406F87B92243C4BC91E6BCA`
 - Minimum Android SDK: 24; target Android SDK: 36
 - Native ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`
 - APK Signature Scheme v2: verified after packaging
@@ -24,6 +24,13 @@ queue navigation, and access to every report in a queue exceeding 50 items.
 
 Web and Flutter share the server's report data, health scoring, validation rules,
 and role permissions. This release includes:
+
+- Account settings for every role have read-only email and no self-deactivation
+  option. Both web and mobile endpoints reject email changes and deactivation.
+- Flutter users can change their password with their current password and a
+  confirmation. Web and mobile share the 8-25 character policy. Password changes
+  revoke old sessions; the web keeps only its current session signed in.
+- The redundant All clusters submenu entry is removed.
 
 - Submitted-report maps for guardians, experts, and administrators, with health
   and status filters, pagination, and links from pins to report details. Guardians
@@ -64,9 +71,9 @@ and role permissions. This release includes:
 | Check | Result |
 | --- | --- |
 | PHP domain/integration suite | 42 passed, 0 failed |
-| Disposable-database web/mobile HTTP journeys | 151 passed, 0 failed |
+| Disposable-database web/mobile HTTP journeys | 196 passed, 0 failed |
 | JavaScript location/report-flow tests | 37 passed, 0 failed |
-| Flutter unit/widget tests | 28 passed, 0 failed; 1 optional live LAN-discovery test skipped |
+| Flutter unit/widget tests | 31 passed, 0 failed; 1 optional live LAN-discovery test skipped |
 | Flutter analyzer | No issues found |
 | Android release build | Completed |
 | APK metadata, v2 signature, checksum | Verified |

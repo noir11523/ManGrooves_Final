@@ -24,11 +24,14 @@ if (is_post()) {
         $profileValues = [
             'first_name' => trim(scalar_string($_POST['first_name'] ?? null)),
             'last_name' => trim(scalar_string($_POST['last_name'] ?? null)),
-            'email' => strtolower(trim(scalar_string($_POST['email'] ?? null))),
+            'email' => (string) $user['email'],
             'phone' => trim(scalar_string($_POST['phone'] ?? null)),
             'barangay_id' => trim(scalar_string($_POST['barangay_id'] ?? null)),
         ];
 
+        if (isset($_POST['email']) && scalar_string($_POST['email']) !== $user['email']) {
+            $profileErrors[] = 'Your email address cannot be changed.';
+        }
         try {
             $names = \App\Services\UserName::fromInput($profileValues);
         } catch (InvalidArgumentException $exception) {
@@ -53,74 +56,33 @@ if (is_post()) {
             }
         }
 
-        $emailCheck = $pdo->prepare('SELECT 1 FROM users WHERE email = :email AND id <> :id');
-        $emailCheck->execute(['email' => $profileValues['email'], 'id' => (int) $user['id']]);
-        if ($emailCheck->fetchColumn()) {
-            $profileErrors[] = 'Another account already uses that email address.';
-        }
-
         if ($profileErrors === []) {
             $statement = $pdo->prepare(
-                'UPDATE users SET first_name = :first_name, last_name = :last_name, full_name = :full_name, email = :email, phone = :phone, barangay_id = :barangay_id WHERE id = :id'
-            );
-            try {
-                $statement->execute([
-                    ...$names,
-                    'email' => $profileValues['email'],
-                    'phone' => $profileValues['phone'] === '' ? null : $profileValues['phone'],
-                    'barangay_id' => $barangayId,
-                    'id' => (int) $user['id'],
-                ]);
-                Audit::log('account.profile_updated', 'user', (int) $user['id'], ['email_changed' => $profileValues['email'] !== $user['email']]);
-                Auth::forgetUser();
-                flash('success', 'Your profile information has been updated.');
-                redirect('settings.php');
-            } catch (PDOException $exception) {
-                if ($exception->getCode() === '23000') {
-                    $profileErrors[] = 'Another account already uses that email address.';
-                } else {
-                    throw $exception;
-                }
-            }
-        }
-    } elseif ($action === 'password') {
-        $currentPassword = scalar_string($_POST['current_password'] ?? null);
-        $newPassword = scalar_string($_POST['new_password'] ?? null);
-        $confirmation = scalar_string($_POST['new_password_confirmation'] ?? null);
-
-        if (str_contains($currentPassword, "\0") || !password_verify($currentPassword, (string) $user['password_hash'])) {
-            $passwordErrors[] = 'Your current password is incorrect.';
-        }
-        if (\App\Services\PasswordPolicy::isValid($newPassword) === false || str_contains($newPassword, "\0")) {
-            $passwordErrors[] = 'Use a new password between 8 and 25 characters.';
-        }
-        if ($newPassword !== $confirmation) {
-            $passwordErrors[] = 'The new password confirmation does not match.';
-        }
-        if ($currentPassword !== '' && hash_equals($currentPassword, $newPassword)) {
-            $passwordErrors[] = 'Choose a new password that differs from your current password.';
-        }
-
-        if ($passwordErrors === []) {
-            $statement = $pdo->prepare(
-                'UPDATE users
-                 SET password_hash = :password_hash,
-                     session_version = LAST_INSERT_ID(session_version + 1)
-                 WHERE id = :id'
+                'UPDATE users SET first_name = :first_name, last_name = :last_name, full_name = :full_name, phone = :phone, barangay_id = :barangay_id WHERE id = :id'
             );
             $statement->execute([
-                'password_hash' => password_hash($newPassword, PASSWORD_DEFAULT),
+                ...$names,
+                'phone' => $profileValues['phone'] === '' ? null : $profileValues['phone'],
+                'barangay_id' => $barangayId,
                 'id' => (int) $user['id'],
             ]);
-            $newSessionVersion = (int) $pdo->lastInsertId();
-            Audit::log('account.password_changed', 'user', (int) $user['id']);
+            Audit::log('account.profile_updated', 'user', (int) $user['id'], ['email_changed' => false]);
+            Auth::forgetUser();
+            flash('success', 'Your profile information has been updated.');
+            redirect('settings.php');
+        }
+    } elseif ($action === 'password') {
+        try {
+            $version = \App\Services\AccountSecurity::update($user, $_POST);
             if (!headers_sent()) {
                 session_regenerate_id(true);
             }
-            $_SESSION['session_version'] = $newSessionVersion;
+            $_SESSION['session_version'] = $version;
             Auth::forgetUser();
-            flash('success', 'Your password has been changed securely.');
+            flash('success', 'Password changed. Other sessions have been signed out.');
             redirect('settings.php#password-heading');
+        } catch (InvalidArgumentException $error) {
+            $passwordErrors[] = $error->getMessage();
         }
     } else {
         http_response_code(400);

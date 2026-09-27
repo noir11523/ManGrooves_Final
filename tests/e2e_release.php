@@ -1254,7 +1254,7 @@ try {
     $changedHash = (string) $databasePdo->query("SELECT password_hash FROM users WHERE email = 'guardian@test.com'")->fetchColumn();
     record_result(
         $passwordUpdate->status === 200 && password_verify($changedPassword, $changedHash)
-        && str_contains($passwordUpdate->body, 'password has been changed securely'),
+        && str_contains($passwordUpdate->body, 'Password changed. Other sessions have been signed out.'),
         'guardian changes password with a current-password check',
         'HTTP ' . $passwordUpdate->status
     );
@@ -1294,6 +1294,88 @@ try {
     }
     record_result($mobileGuardian->request('GET', '/mobile-api/verification.php?page=2', null, true, $mobileHeaders)->status === 403, 'guardian cannot access any review queue page');
     $databasePdo->exec("DELETE FROM reports WHERE report_code LIKE 'QUEUE-CHECK-%'");
+
+    // Account settings must behave consistently for every role.
+    foreach ([
+        ['guardian', $otherGuardian, 'guardian@test.com', $changedPassword],
+        ['expert', $expert, 'expert@test.com', 'Mangrooves123!'],
+        ['system_admin', $admin, 'admin@test.com', 'Mangrooves123!'],
+    ] as [$role, $webAccount, $accountEmail, $oldPassword]) {
+        $accountPage = $webAccount->request('GET', '/settings.php');
+        record_result($accountPage->status === 200
+            && preg_match('/id="settings-email"[^>]*\breadonly\b/', $accountPage->body) === 1
+            && !str_contains(strtolower($accountPage->body), 'deactivate'),
+            "$role settings have read-only email and no deactivation option");
+        $tamperedProfile = $webAccount->request('POST', '/settings.php', [
+            'csrf_token' => csrf_token($accountPage->body), 'action' => 'profile',
+            'first_name' => 'Unchanged', 'last_name' => 'Account',
+            'barangay_id' => '1', 'email' => 'changed.' . $accountEmail,
+        ]);
+        record_result(str_contains($tamperedProfile->body, 'email address cannot be changed'),
+            "$role cannot change email through a web request");
+        $deactivation = $webAccount->request('POST', '/settings.php', [
+            'csrf_token' => csrf_token($tamperedProfile->body), 'action' => 'deactivate',
+            'current_password' => $oldPassword, 'confirmation' => '1',
+        ]);
+        record_result($deactivation->status === 400, "$role web rejects self-deactivation");
+
+        $mobileAccount = new Browser($baseUrl);
+        $browsers[] = $mobileAccount;
+        $accountLogin = $mobileAccount->request('POST', '/mobile-api/login.php', [
+            'email' => $accountEmail, 'password' => $oldPassword,
+        ]);
+        $accountSession = json_decode($accountLogin->body, true);
+        require_result($accountLogin->status === 200 && !empty($accountSession['token']),
+            "$role signs in to change password in the app");
+        $accountHeaders = ['Authorization: Bearer ' . $accountSession['token']];
+        $emailChange = $mobileAccount->request('POST', '/mobile-api/profile.php', [
+            'first_name' => 'Unchanged', 'last_name' => 'Account',
+            'barangay_id' => '1', 'email' => 'changed.' . $accountEmail,
+        ], true, $accountHeaders);
+        record_result($emailChange->status === 422, "$role mobile rejects email changes");
+        $deactivation = $mobileAccount->request('POST', '/mobile-api/account-security.php', [
+            'action' => 'deactivate', 'current_password' => $oldPassword, 'confirmation' => '1',
+        ], true, $accountHeaders);
+        $accountLookup = $databasePdo->prepare('SELECT * FROM users WHERE email = ?');
+        $accountLookup->execute([$accountEmail]);
+        $beforeChange = $accountLookup->fetch();
+        record_result($deactivation->status === 422 && $beforeChange['status'] === 'active',
+            "$role mobile rejects self-deactivation and keeps account active");
+        foreach ([
+            ['wrong password', 'abcdefgh', 'abcdefgh'],
+            [$oldPassword, 'short', 'short'],
+            [$oldPassword, str_repeat('x', 26), str_repeat('x', 26)],
+            [$oldPassword, 'abcdefgh', 'different'],
+            [$oldPassword, $oldPassword, $oldPassword],
+        ] as [$currentPassword, $newPassword, $confirmation]) {
+            $invalidPassword = $mobileAccount->request('POST', '/mobile-api/account-security.php', [
+                'action' => 'password', 'current_password' => $currentPassword,
+                'new_password' => $newPassword, 'new_password_confirmation' => $confirmation,
+            ], true, $accountHeaders);
+            record_result($invalidPassword->status === 422, "$role rejects invalid password change");
+        }
+        $newPassword = 'simplepass';
+        $changePassword = $mobileAccount->request('POST', '/mobile-api/account-security.php', [
+            'action' => 'password', 'current_password' => $oldPassword,
+            'new_password' => $newPassword, 'new_password_confirmation' => $newPassword,
+        ], true, $accountHeaders);
+        $accountLookup->execute([$accountEmail]);
+        $afterChange = $accountLookup->fetch();
+        record_result($changePassword->status === 200
+            && password_verify($newPassword, $afterChange['password_hash'])
+            && (int) $afterChange['session_version'] === (int) $beforeChange['session_version'] + 1
+            && $afterChange['status'] === 'active', "$role mobile changes password securely");
+        record_result($mobileAccount->request('GET', '/mobile-api/profile.php', null, true, $accountHeaders)->status === 401,
+            "$role old mobile session is revoked after password change");
+        $expiredWeb = $webAccount->request('GET', '/settings.php', null, false);
+        record_result($expiredWeb->status === 302 && str_contains($expiredWeb->location ?? '', 'login.php'),
+            "$role old web session is revoked after mobile password change");
+        $newLogin = $mobileAccount->request('POST', '/mobile-api/login.php', [
+            'email' => $accountEmail, 'password' => $newPassword,
+        ]);
+        record_result($newLogin->status === 200 && !empty(json_decode($newLogin->body, true)['token']),
+            "$role can sign in with the new password and unchanged email");
+    }
 
     $allText = '';
     foreach ($browsers as $browser) {
