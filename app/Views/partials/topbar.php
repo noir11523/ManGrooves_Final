@@ -12,6 +12,14 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
         <h1><?= e($displayTitle) ?></h1>
     </div>
     <div class="topbar-actions ms-auto">
+        <div class="dropdown d-lg-none">
+            <button class="icon-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Maps and timelines"><i class="bi bi-map" aria-hidden="true"></i></button>
+            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                <li><a class="dropdown-item" href="<?= e(url('report-map.php')) ?>">Report map</a></li>
+                <li><a class="dropdown-item" href="<?= e(url('clusters.php?view=health')) ?>">Health history</a></li>
+                <li><a class="dropdown-item" href="<?= e(url('clusters.php?view=growth')) ?>">Growth timeline</a></li>
+            </ul>
+        </div>
         <a class="icon-button position-relative" href="<?= e(url('notifications.php')) ?>" aria-label="Notifications<?= $unreadNotificationCount ? ', ' . $unreadNotificationCount . ' unread' : '' ?>">
             <i class="bi bi-bell" aria-hidden="true"></i>
             <?php if ($unreadNotificationCount > 0): ?><span class="notification-dot" aria-hidden="true"></span><?php endif; ?>

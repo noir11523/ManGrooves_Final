@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import 'validation_history_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
-  const VerificationScreen({super.key, required this.api});
+  const VerificationScreen({super.key, required this.api, this.active = true});
 
   final ApiClient api;
+  final bool active;
 
   @override
   State<VerificationScreen> createState() => _VerificationScreenState();
@@ -14,6 +16,14 @@ class VerificationScreen extends StatefulWidget {
 class _VerificationScreenState extends State<VerificationScreen> {
   Map<String, dynamic>? _data;
   String? _error;
+  bool _loading = false;
+  int _page = 1;
+
+  @override
+  void didUpdateWidget(covariant VerificationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _load();
+  }
 
   @override
   void initState() {
@@ -21,16 +31,21 @@ class _VerificationScreenState extends State<VerificationScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() => _error = null);
+  Future<void> _load({int? page}) async {
+    if (_loading) return;
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
     try {
-      _data = await widget.api.verification();
+      _data = await widget.api.verification(page: page ?? _page);
+      _page = (_data!['page'] as num?)?.toInt() ?? 1;
     } catch (error) {
       _error = error is ApiException
           ? error.message
           : 'Unable to load the verification queue.';
     }
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -44,6 +59,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
       );
     }
     final summary = Map<String, dynamic>.from(_data!['summary'] as Map);
+    final pages = (_data!['pages'] as num?)?.toInt() ?? 1;
     final species = (_data!['species'] as List? ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
@@ -56,12 +72,28 @@ class _VerificationScreenState extends State<VerificationScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
+          if (_loading) const LinearProgressIndicator(),
+          if (_error != null)
+            TextButton(onPressed: _load, child: Text('$_error Retry')),
           Text(
             'Expert verification',
             style: Theme.of(context).textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const Text('Review the oldest and attention-marked evidence first.'),
+          const Text('Check the photo, answers and suggested result.'),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => ValidationHistoryScreen(api: widget.api),
+                ),
+              ),
+              icon: const Icon(Icons.history),
+              label: const Text('Validation history'),
+            ),
+          ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 10,
@@ -97,7 +129,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                           ),
                         ),
                       );
-                      if (reviewed == true) _load();
+                      if (reviewed == true && mounted) _load();
                     },
                     leading: const CircleAvatar(
                       child: Icon(Icons.fact_check_outlined),
@@ -111,6 +143,27 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   ),
                 ),
               ),
+            ),
+          if (pages > 1)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'Previous page',
+                  onPressed: _page > 1 && !_loading
+                      ? () => _load(page: _page - 1)
+                      : null,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                Text('$_page / $pages'),
+                IconButton(
+                  tooltip: 'Next page',
+                  onPressed: _page < pages && !_loading
+                      ? () => _load(page: _page + 1)
+                      : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
             ),
         ],
       ),
@@ -163,13 +216,23 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
     if (mounted) setState(() {});
   }
 
+  bool get _changed =>
+      _health != _report?['suggested_health'] ||
+      _speciesId != _report?['suggested_species_id'] ||
+      _rarity != (_report?['rarity_level'] ?? 'Unassigned');
+
   Future<void> _review(String action) async {
+    if (_busy) return;
+    if (action == 'confirm' && _changed) {
+      setState(() => _error = 'Use Save correction for your changes.');
+      return;
+    }
     if (action == 'reject' && _feedback.text.trim().isEmpty) {
       setState(() => _error = 'Enter actionable feedback before rejecting.');
       return;
     }
     final verb = switch (action) {
-      'confirm' => 'confirm',
+      'confirm' => 'confirm the original suggestions for',
       'correct' => 'save the correction for',
       _ => 'reject',
     };
@@ -178,7 +241,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Complete review?'),
         content: Text(
-          'Are you sure you want to $verb ${_report!['report_code']}?',
+          'Are you sure you want to $verb ${_report!['report_code']}?${action == 'reject' ? '' : '\nHealth: ${action == 'confirm' ? _report!['suggested_health'] : _health}\nSpecies: ${_speciesId == null ? 'Unassigned' : widget.species.where((item) => item['id'] == _speciesId).map((item) => item['scientific_name']).join()}'}',
         ),
         actions: [
           TextButton(
@@ -284,12 +347,21 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                 Text(
                   '${_report!['barangay_name']} · ${_report!['sitio_name'] ?? 'Unspecified sitio'}',
                 ),
-                Text('GPS: ${_report!['latitude']}, ${_report!['longitude']}'),
+                Text(
+                  'Location: ${_report!['latitude']}, ${_report!['longitude']}',
+                ),
                 Text('Living mangroves: ${_report!['observed_alive_count']}'),
                 const Divider(height: 24),
                 Text('Suggested health: ${_report!['suggested_health']}'),
                 Text(
+                  'Score: ${_report!['health_score']} / ${_report!['health_max_score']}',
+                ),
+                const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
+                Text(
                   'Suggested species: ${_report!['suggested_species_name'] ?? 'Needs manual identification'}',
+                ),
+                Text(
+                  'Species trait match: ${_report!['species_confidence'] ?? 0}%. This is a suggestion.',
                 ),
                 Text(
                   'Traits: ${_report!['root_type']} / ${_report!['leaf_shape']} / ${_report!['bark_texture']}',
@@ -305,7 +377,8 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
             children: observations.map((criterion) {
               final options = (criterion['options'] as List? ?? const [])
                   .map(
-                    (item) => Map<String, dynamic>.from(item as Map)['label'],
+                    (item) =>
+                        '${item['label']}${criterion['score_group'] == 'health' ? ' (${item['points']}/2)' : ''}',
                   )
                   .join(', ');
               return ListTile(
@@ -399,8 +472,12 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
           Text(_error!, style: const TextStyle(color: Colors.red)),
         ],
         const SizedBox(height: 14),
+        if (_changed)
+          const Text(
+            'You changed the result. Use Save correction to verify it.',
+          ),
         FilledButton.icon(
-          onPressed: _busy ? null : () => _review('confirm'),
+          onPressed: _busy || _changed ? null : () => _review('confirm'),
           icon: const Icon(Icons.verified_outlined),
           label: const Text('Confirm suggestion'),
         ),

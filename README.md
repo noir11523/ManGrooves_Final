@@ -4,6 +4,16 @@ ManGROOVES is a responsive community mangrove monitoring and environmental decis
 
 It includes guardian field reporting, GPS/manual map location, private photo evidence, illustrated health observations, ranked species suggestions, expert verification and feedback, automatic clusters, follow-up timelines, notifications, badges and printable certificates, interactive maps, analytics, printable official reports, user/species/badge administration, and audit logs.
 
+New Healthy reports are automatically verified on web and Flutter submissions. Stressed and At Risk reports remain pending for expert/admin review. Multi-answer checklist groups support “None of the above” and “All of the above” as exclusive answers. For an existing database, run `C:\xampp\php\php.exe scripts\migrate-report-choices.php` once to add these choices without reloading demo data or modifying existing reports. Fresh installs include them in both reference and seed data.
+
+Staff notifications include pending reports and sites needing attention, with separate read state for each expert/admin. Web and Flutter registration/profile use first and last names; legacy users confirm their name parts without guessing. Newly set passwords accept 8–25 characters without mandatory symbol/case rules (existing passwords still work at sign-in). System administrators can download analytics PDFs on the web or save/share them from Flutter. PDF generation uses the bundled [FPDF 1.9](https://www.fpdf.org/) library; its license is in `app/Libraries/fpdf/license.txt`.
+
+Both report forms use the same barangay/cluster coordinates. Selected clusters must match the report location within their radius plus measured GPS uncertainty. Flutter automatically captures GPS on the report tab when permission was already granted. The location map displays device accuracy circles; approximate readings only guide manual placement and are never silently stored as exact pins.
+
+Web and Flutter reports now use Site, Health, Details, and Review steps. The review shows the latest photo and answers with Edit buttons; the final confirmation sends the report. Follow-up fields appear only when linking a previous report. Dashboard totals open matching report lists, and the cluster health map appears below Latest reports for guardians, experts, and administrators. Flutter includes status filters, report pagination, and Back controls.
+
+The Report map shows submitted report coordinates with health/status filters and pagination. Guardians see their own reports; staff can inspect all reports. The web Clusters menu opens on hover, click, or keyboard, with Health history and Growth timeline links. Flutter offers the same destinations in Maps and timelines and cluster marker menus. Timelines contain verified visits and observed living-mangrove counts; other guardians' photos, coordinates, and feedback stay private. Staff can browse Validation history, including automatic Healthy verification, and inspect before/after health and species decisions. Flutter previews use the server classifier and show each of the three scored answers. Incomplete or tied species trait matches remain unresolved.
+
 ## Quick start on this computer
 
 1. Open XAMPP Control Panel and make sure MySQL is running. Apache is optional when using the included PHP development server.

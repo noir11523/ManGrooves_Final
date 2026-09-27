@@ -22,8 +22,10 @@ if (is_post()) {
         clear_old_input();
         flash(
             'success',
-            'Report ' . $result['report_code'] . ' was submitted for expert verification. '
-            . 'Suggested health: ' . $result['suggested_health'] . '.'
+            $result['status'] === 'verified'
+                ? 'Report ' . $result['report_code'] . ' was automatically verified as Healthy.'
+                : 'Report ' . $result['report_code'] . ' was submitted for expert or admin review. '
+                    . 'Suggested health: ' . $result['suggested_health'] . '.'
         );
         redirect('reports.php?id=' . $result['id']);
     } catch (InvalidArgumentException $exception) {
@@ -65,6 +67,7 @@ render('submit-report', [
     'criteria' => $form['criteria'],
     'clusters' => $form['clusters'],
     'traits' => $form['traits'],
+    'location' => $form['location'],
     'errors' => $errors,
     'prefill' => $prefill,
 ]);

@@ -32,8 +32,8 @@ if (is_post()) {
             if (!in_array($role, $staffRoles, true)) {
                 $errors[] = 'Choose Scientific Expert or System Administrator.';
             }
-            if (strlen($password) < 8 || strlen($password) > 72 || str_contains($password, "\0")) {
-                $errors[] = 'Use a temporary password between 8 and 72 characters.';
+            if (\App\Services\PasswordPolicy::isValid($password) === false || str_contains($password, "\0")) {
+                $errors[] = 'Use a temporary password between 8 and 25 characters.';
             }
             if ($password !== $confirmation) {
                 $errors[] = 'The password confirmation does not match.';

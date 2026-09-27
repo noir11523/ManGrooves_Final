@@ -9,6 +9,8 @@ use App\Services\ReportService;
 $user = Auth::requireLogin();
 $service = new ReportService(Database::connection());
 $filters = [
+    'needs_attention' => scalar_string($_GET['needs_attention'] ?? null),
+    'cluster_id' => scalar_string($_GET['cluster_id'] ?? null),
     'status' => is_string($_GET['status'] ?? null) ? (string) $_GET['status'] : '',
     'health' => is_string($_GET['health'] ?? null) ? (string) $_GET['health'] : '',
     'q' => mb_substr(trim(is_string($_GET['q'] ?? null) ? (string) $_GET['q'] : ''), 0, 100),

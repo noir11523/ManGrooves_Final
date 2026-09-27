@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -121,8 +122,27 @@ class ApiClient {
   Future<Map<String, dynamic>> reportForm() => _get('report-form.php');
   Future<Map<String, dynamic>> badges() => _get('badges.php');
   Future<Map<String, dynamic>> profile() => _get('profile.php');
-  Future<Map<String, dynamic>> verification() => _get('verification.php');
+  Future<Map<String, dynamic>> verification({int page = 1}) =>
+      _get('verification.php', query: {'page': '$page'});
   Future<Map<String, dynamic>> analytics() => _get('analytics.php');
+  Future<Uint8List> analyticsPdf() => _withConnectionRecovery(() async {
+    final response = await http
+        .get(_uri('export-analytics.php'), headers: _headers())
+        .timeout(const Duration(seconds: 60));
+    if (response.statusCode != 200) _decode(response);
+    if (!(response.headers['content-type'] ?? '').startsWith(
+      'application/pdf',
+    )) {
+      throw const ApiException('The PDF could not be generated.');
+    }
+    return response.bodyBytes;
+  });
+  Future<Map<String, dynamic>> notifications({int page = 1}) =>
+      _get('notifications.php', query: {'page': '$page'});
+  Future<Map<String, dynamic>> markNotificationRead(int id) =>
+      _postJson('notifications.php', {'action': 'mark_read', 'id': id});
+  Future<Map<String, dynamic>> markAllNotificationsRead() =>
+      _postJson('notifications.php', {'action': 'mark_all'});
 
   Future<Map<String, dynamic>> previousReports(int clusterId) =>
       _get('previous-reports.php', query: {'cluster_id': '$clusterId'});
@@ -136,8 +156,43 @@ class ApiClient {
   Future<Map<String, dynamic>> reports({int page = 1}) =>
       _get('reports.php', query: {'page': '$page'});
 
+  Future<Map<String, dynamic>> filteredReports({
+    int page = 1,
+    String status = '',
+    bool needsAttention = false,
+    int? clusterId,
+  }) => _get(
+    'reports.php',
+    query: {
+      'page': '$page',
+      if (status.isNotEmpty) 'status': status,
+      if (needsAttention) 'needs_attention': '1',
+      if (clusterId != null) 'cluster_id': '$clusterId',
+    },
+  );
+
   Future<Map<String, dynamic>> report(int id) =>
       _get('report.php', query: {'id': '$id'});
+
+  Future<Map<String, dynamic>> reportMap({
+    int page = 1,
+    String status = '',
+    String health = '',
+    String query = '',
+  }) => _get(
+    'reports.php',
+    query: {'page': '$page', 'status': status, 'health': health, 'q': query},
+  );
+  Future<Map<String, dynamic>> clusters({
+    String query = '',
+    String health = '',
+  }) => _get('clusters.php', query: {'q': query, 'health': health});
+  Future<Map<String, dynamic>> cluster(int id) =>
+      _get('cluster.php', query: {'id': '$id'});
+  Future<Map<String, dynamic>> validationHistory({int page = 1}) =>
+      _get('validation-history.php', query: {'page': '$page'});
+  Future<Map<String, dynamic>> reportPreview(Map<String, dynamic> input) =>
+      _postJson('report-preview.php', input);
 
   Future<Map<String, dynamic>> submitReport({
     required Map<String, String> fields,

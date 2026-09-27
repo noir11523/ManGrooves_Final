@@ -17,6 +17,7 @@ $jsVersion = (string) (filemtime(APP_ROOT . '/public/assets/js/app.js') ?: 1);
 
 if ($authUser) {
     try {
+        (new \App\Services\NotificationService(Database::connection()))->syncForUser($authUser);
         $unreadStatement = Database::connection()->prepare(
             'SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND read_at IS NULL'
         );

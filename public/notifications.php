@@ -6,6 +6,7 @@ require_once dirname(__DIR__) . '/app/bootstrap.php';
 
 $user = Auth::requireLogin();
 $pdo = Database::connection();
+(new \App\Services\NotificationService($pdo))->syncForUser($user);
 
 $safeNotificationLink = static function (?string $link): ?string {
     $link = trim((string) $link);

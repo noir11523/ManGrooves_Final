@@ -13,6 +13,8 @@ class LocationPickerScreen extends StatefulWidget {
     this.barangayCenter,
     this.maxDistanceMeters,
     this.tileProvider,
+    this.approximateCenter,
+    this.approximateAccuracy,
   });
 
   final LatLng initialCenter;
@@ -20,6 +22,8 @@ class LocationPickerScreen extends StatefulWidget {
   final LatLng? barangayCenter;
   final double? maxDistanceMeters;
   final TileProvider? tileProvider;
+  final LatLng? approximateCenter;
+  final double? approximateAccuracy;
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();
@@ -28,6 +32,7 @@ class LocationPickerScreen extends StatefulWidget {
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
   final _map = MapController();
   LatLng? _selected;
+  bool _edited = false;
 
   @override
   void initState() {
@@ -59,7 +64,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   void _moveTo(LatLng point) {
-    setState(() => _selected = point);
+    setState(() {
+      _selected = point;
+      _edited = true;
+    });
     _map.move(point, _map.camera.zoom);
   }
 
@@ -108,7 +116,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   mapController: _map,
                   options: MapOptions(
                     initialCenter: _selected ?? widget.initialCenter,
-                    initialZoom: 16,
+                    initialZoom:
+                        widget.initialLocation == null &&
+                            widget.approximateCenter != null
+                        ? ((widget.approximateAccuracy ?? 0) > 5000 ? 10 : 14)
+                        : 16,
                     minZoom: 3,
                     maxZoom: 19,
                     interactionOptions: const InteractionOptions(
@@ -116,7 +128,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     ),
                     onTap: (_, point) => _moveTo(point),
                     onPositionChanged: (camera, hasGesture) {
-                      if (hasGesture) setState(() => _selected = camera.center);
+                      if (hasGesture) {
+                        setState(() {
+                          _selected = camera.center;
+                          _edited = true;
+                        });
+                      }
                     },
                   ),
                   children: [
@@ -127,6 +144,25 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       maxNativeZoom: 19,
                       tileProvider: widget.tileProvider,
                     ),
+                    if (widget.initialLocation?.accuracy != null ||
+                        widget.approximateCenter != null)
+                      CircleLayer(
+                        circles: [
+                          CircleMarker(
+                            point: widget.initialLocation?.accuracy != null
+                                ? widget.initialLocation!.point
+                                : widget.approximateCenter!,
+                            radius:
+                                widget.initialLocation?.accuracy ??
+                                widget.approximateAccuracy ??
+                                0,
+                            useRadiusInMeter: true,
+                            color: Colors.blue.withValues(alpha: 0.12),
+                            borderColor: Colors.blue,
+                            borderStrokeWidth: 1,
+                          ),
+                        ],
+                      ),
                     Align(
                       alignment: Alignment.bottomRight,
                       child: ColoredBox(
@@ -170,6 +206,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         : '${_selected!.latitude.toStringAsFixed(6)}, ${_selected!.longitude.toStringAsFixed(6)}',
                     key: const ValueKey('selected-coordinates'),
                   ),
+                  if (widget.initialLocation?.accuracy != null ||
+                      widget.approximateAccuracy != null)
+                    Text(
+                      'Device accuracy circle: +/-${(widget.initialLocation?.accuracy ?? widget.approximateAccuracy!).round()} m. Moving the pin selects a manual location.',
+                    ),
                   if (error != null)
                     Text(
                       error,
@@ -192,10 +233,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     onPressed: _selected == null || error != null
                         ? null
                         : () => Navigator.of(context).pop(
-                            ReportLocation.manual(
-                              latitude: _selected!.latitude,
-                              longitude: _selected!.longitude,
-                            ),
+                            !_edited && widget.initialLocation != null
+                                ? widget.initialLocation!
+                                : ReportLocation.manual(
+                                    latitude: _selected!.latitude,
+                                    longitude: _selected!.longitude,
+                                  ),
                           ),
                     child: const Text('Use this location'),
                   ),

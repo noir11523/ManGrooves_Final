@@ -26,14 +26,18 @@ class Element {
     click() { if (!this.disabled) return this.listeners.click?.(); }
 }
 
-async function wizard({permission = 'prompt', saved = {}, withMap = false, fetchImpl} = {}) {
+async function wizard({permission = 'prompt', saved = {}, withMap = false, fetchImpl, checklist = [], confirm = () => true} = {}) {
     const elements = {};
     const element = name => elements[name] ||= new Element();
     const form = new Element();
-    const panels = [1, 2, 3].map(step => Object.assign(new Element(), {dataset: {stepPanel: step}}));
+    const panels = [1, 2, 3, 4].map(step => Object.assign(new Element(), {dataset: {stepPanel: step}}));
     form.dataset = {maxGpsAccuracy: 100};
     form.querySelector = selector => element(selector);
-    form.querySelectorAll = selector => selector === '[data-step-panel]' ? panels : [];
+    const group = new Element();
+    group.dataset.criteriaCode = 'leaf_color';
+    group.querySelectorAll = () => checklist;
+    form.querySelectorAll = selector => selector === '[data-step-panel]' ? panels
+        : selector === '[data-criteria-code]' ? [group] : [];
     for (const [key, value] of Object.entries(saved)) element(`[data-${key}]`).value = value;
     element('[data-photo-input]').files = [{type: 'image/jpeg', size: 100}];
     const document = new Element();
@@ -62,7 +66,7 @@ async function wizard({permission = 'prompt', saved = {}, withMap = false, fetch
         clearInterval(id) { intervals.delete(id); },
         setTimeout(fn, delay) { timeouts.set(++timerId, {fn, delay}); return timerId; },
         clearTimeout(id) { timeouts.delete(id); },
-        scrollTo() {}, addEventListener() {}, URL, console, AbortController,
+        scrollTo() {}, addEventListener() {}, URL, console, AbortController, confirm,
         fetch: async (...args) => {
             requests.push(args);
             return fetchImpl ? fetchImpl(...args) : {ok: true, json: async () => ({latitude: '10.28', longitude: '123.88', accuracy: 50, city: 'Cebu'})};
@@ -89,7 +93,7 @@ async function wizard({permission = 'prompt', saved = {}, withMap = false, fetch
     }
     await Promise.resolve();
     return {
-        element, calls, panels, document, requests, alternatives, map,
+        element, calls, panels, document, requests, alternatives, map, form,
         tapMap(latitude = 10.286, longitude = 123.886) { mapEvents.click?.({latlng: {lat: latitude, lng: longitude}}); },
         consent(checked = true) {
             element('[data-ip-area-consent]').checked = checked;
@@ -102,6 +106,67 @@ async function wizard({permission = 'prompt', saved = {}, withMap = false, fetch
         }
     };
 }
+
+test('aggregate checklist answers are exclusive and ordinary choices replace them', async () => {
+    const choices = ['crabs', 'birds', 'none_of_the_above', 'all_of_the_above'].map(optionCode =>
+        Object.assign(new Element(), {dataset: {optionCode}, checked: false}));
+    await wizard({checklist: choices});
+    const select = index => { choices[index].checked = true; choices[index].listeners.change(); };
+    select(0);
+    select(1);
+    assert.deepEqual(choices.map(choice => choice.checked), [true, true, false, false]);
+    select(3);
+    assert.deepEqual(choices.map(choice => choice.checked), [false, false, false, true]);
+    select(2);
+    assert.deepEqual(choices.map(choice => choice.checked), [false, false, true, false]);
+    select(0);
+    assert.deepEqual(choices.map(choice => choice.checked), [true, false, false, false]);
+});
+
+test('review shows current edits, confirmation can cancel, and duplicate submission is blocked', async () => {
+    let accepted = false;
+    let confirmations = 0;
+    const f = await wizard({saved: {latitude: '10.28', longitude: '123.88', 'location-source': 'manual'}, confirm: () => { confirmations++; return accepted; }});
+    f.element('[name="sitio_name"]').value = 'First site';
+    const submit = () => {
+        let prevented = false;
+        f.form.listeners.submit({preventDefault() { prevented = true; }});
+        return prevented;
+    };
+    // Enter in an earlier step opens review, never sends the form.
+    assert.equal(submit(), true);
+    assert.equal(f.panels[3].hidden, false);
+    assert.equal(confirmations, 0);
+    assert.match(f.element('[data-report-summary]').innerHTML, /First site/);
+    f.element('[data-report-summary]').listeners.click({target: {closest: () => ({dataset: {editStep: '1'}})}});
+    assert.equal(f.panels[0].hidden, false);
+    f.element('[name="sitio_name"]').value = 'Updated <site>';
+    for (let step = 0; step < 3; step++) f.element('[data-step-next]').click();
+    assert.match(f.element('[data-report-summary]').innerHTML, /Updated &lt;site&gt;/);
+    assert.doesNotMatch(f.element('[data-report-summary]').innerHTML, /First site/);
+    assert.equal(submit(), true);
+    assert.equal(Boolean(f.element('[data-submit-report]').disabled), false);
+    accepted = true;
+    assert.equal(submit(), false);
+    assert.equal(f.element('[data-submit-report]').disabled, true);
+    assert.equal(submit(), true);
+    assert.equal(confirmations, 2);
+});
+
+test('turning off follow-up hides, clears and disables the parent field', async () => {
+    const f = await wizard();
+    const toggle = f.element('[data-followup-toggle]');
+    toggle.checked = true;
+    toggle.listeners.change();
+    assert.equal(f.element('[data-followup-fields]').hidden, false);
+    assert.equal(f.element('[data-parent-report]').required, true);
+    f.element('[data-parent-report]').value = '7';
+    toggle.checked = false;
+    toggle.listeners.change();
+    assert.equal(f.element('[data-followup-fields]').hidden, true);
+    assert.equal(f.element('[data-parent-report]').disabled, true);
+    assert.equal(f.element('[data-parent-report]').value, '');
+});
 
 test('automatic capture starts only with previously granted permission and empty coordinates', async () => {
     assert.equal((await wizard({permission: 'granted'})).calls.length, 1);
@@ -285,7 +350,7 @@ test('IP timeouts and malformed results fail safely and allow retry', async () =
     assert.equal(f.element('[data-show-ip-area]').disabled, true);
     f.expireIp();
     await pending;
-    assert.match(f.element('[data-area-status]').textContent, /failed or timed out/);
+    assert.match(f.element('[data-area-status]').textContent, /Area not found/);
     assert.equal(f.element('[data-show-ip-area]').disabled, false);
     assert.equal(f.element('[data-latitude]').value, '');
     const invalid = await wizard({withMap: true, fetchImpl: async () => ({ok: true, json: async () => ({latitude: 'bad'})})});
@@ -320,7 +385,7 @@ test('old coarse device estimates cannot be reused after five minutes', async ()
     f.advance(300001);
     f.element('[data-show-device-area]').click();
     assert.equal(f.map.bounds.length, 0);
-    assert.match(f.element('[data-area-status]').textContent, /too old/);
+    assert.match(f.element('[data-area-status]').textContent, /expired/);
 });
 
 test('unknown IP accuracy stays unknown and its label cannot become HTML or the site name', async () => {

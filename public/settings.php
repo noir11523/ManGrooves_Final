@@ -91,8 +91,8 @@ if (is_post()) {
         if (str_contains($currentPassword, "\0") || !password_verify($currentPassword, (string) $user['password_hash'])) {
             $passwordErrors[] = 'Your current password is incorrect.';
         }
-        if (strlen($newPassword) < 8 || strlen($newPassword) > 72 || str_contains($newPassword, "\0")) {
-            $passwordErrors[] = 'Use a new password between 8 and 72 characters.';
+        if (\App\Services\PasswordPolicy::isValid($newPassword) === false || str_contains($newPassword, "\0")) {
+            $passwordErrors[] = 'Use a new password between 8 and 25 characters.';
         }
         if ($newPassword !== $confirmation) {
             $passwordErrors[] = 'The new password confirmation does not match.';

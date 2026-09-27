@@ -212,6 +212,8 @@ final class VerificationService
                 ? (new BadgeEngine($pdo))->evaluateForUser((int) $report['user_id'])
                 : [];
 
+            (new NotificationService($pdo))->syncStaff();
+
             \Audit::logRequired('report.' . $action, 'report', $reportId, [
                 'new_status' => $newStatus,
                 'cluster_id' => $clusterId,
@@ -230,6 +232,57 @@ final class VerificationService
         return $result;
     }
 
+    /**
+     * Complete automatic verification inside the report submission transaction.
+     * No human verifier is attributed to a system decision.
+     */
+    public function autoVerifyHealthy(int $reportId): void
+    {
+        $pdo = $this->pdo;
+        if (!$pdo->inTransaction()) {
+            throw new DomainException('Automatic verification requires a report transaction.');
+        }
+        $statement = $pdo->prepare('SELECT * FROM reports WHERE id = :id FOR UPDATE');
+        $statement->execute(['id' => $reportId]);
+        $report = $statement->fetch();
+        if (!$report || $report['status'] !== 'pending' || $report['suggested_health'] !== 'Healthy') {
+            throw new DomainException('Only a pending Healthy report can be automatically verified.');
+        }
+
+        $speciesId = $report['suggested_species_id'] === null ? null : (int) $report['suggested_species_id'];
+        $clusterId = $this->assignCluster($pdo, $report, $speciesId, (string) $report['rarity_level']);
+        $update = $pdo->prepare(
+            "UPDATE reports SET cluster_id = :cluster_id, final_species_id = :species_id,
+                    final_health = 'Healthy', status = 'verified', needs_attention = 0,
+                    expert_id = NULL, expert_feedback = NULL, verified_at = NOW(),
+                    next_followup_date = DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+             WHERE id = :id AND status = 'pending'"
+        );
+        $update->execute(['cluster_id' => $clusterId, 'species_id' => $speciesId, 'id' => $reportId]);
+        if ($update->rowCount() !== 1) {
+            throw new DomainException('The report changed during automatic verification.');
+        }
+        $this->refreshCluster($pdo, $clusterId);
+        $notification = $pdo->prepare(
+            'INSERT INTO notifications (user_id, type, title, message, link)
+             VALUES (:user_id, :type, :title, :message, :link)'
+        );
+        $notification->execute([
+            'user_id' => $report['user_id'],
+            'type' => 'report_verified',
+            'title' => 'Report automatically verified',
+            'message' => 'Your report ' . $report['report_code'] . ' was automatically verified as Healthy. A follow-up is due in 30 days.',
+            'link' => 'reports.php?id=' . $reportId,
+        ]);
+        (new BadgeEngine($pdo))->evaluateForUser((int) $report['user_id']);
+        \Audit::logRequired('report.auto_verified', 'report', $reportId, [
+            'verification_method' => 'automatic',
+            'new_status' => 'verified',
+            'health' => 'Healthy',
+            'cluster_id' => $clusterId,
+        ], (int) $report['user_id']);
+    }
+
     /** @return int The assigned cluster ID. */
     private function assignCluster(PDO $pdo, array $report, ?int $speciesId, string $rarity): int
     {
@@ -243,7 +296,6 @@ final class VerificationService
         $nearestId = null;
         $nearestDistance = INF;
         $existingClusterId = $report['cluster_id'] === null ? null : (int) $report['cluster_id'];
-        $existingClusterFound = false;
         $existingClusterWithinRange = false;
         foreach ($candidateStatement->fetchAll() as $candidate) {
             $distance = self::distanceMeters(
@@ -254,8 +306,7 @@ final class VerificationService
             );
             $threshold = max(10, (int) $candidate['radius_meters']);
             if ($existingClusterId !== null && (int) $candidate['id'] === $existingClusterId) {
-                $existingClusterFound = true;
-                $existingClusterWithinRange = $distance <= $threshold;
+                $existingClusterWithinRange = $distance <= $threshold + (float) ($report['location_accuracy'] ?? 0);
             }
             if ($distance <= $threshold && $distance < $nearestDistance) {
                 $nearestId = (int) $candidate['id'];
@@ -263,15 +314,12 @@ final class VerificationService
             }
         }
 
-        // A parent-linked follow-up belongs to its established timeline even if its GPS accuracy
-        // puts the new point just beyond the automatic radius.
-        if ($report['parent_report_id'] !== null && $existingClusterFound) {
-            return $existingClusterId;
-        }
-
         // Honor a guardian's explicit map selection when it is geographically plausible.
         if ($existingClusterWithinRange) {
             return $existingClusterId;
+        }
+        if ($existingClusterId !== null) {
+            throw new InvalidArgumentException('The report location does not match its selected cluster. Ask the guardian to correct the site and location.');
         }
 
         if ($nearestId !== null) {

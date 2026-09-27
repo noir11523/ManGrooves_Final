@@ -57,7 +57,7 @@ $clientData = [
             <button class="btn btn-outline-success" type="submit">Regenerate chart PNGs</button>
         </form>
         <?php endif; ?>
-        <?php if ($canViewSurvival): ?><button class="btn btn-success js-print-analytics" type="button">Print / Save PDF</button><?php endif; ?>
+        <?php if ($canViewSurvival): ?><a class="btn btn-success" href="<?= e(url('admin/export-analytics.php?' . http_build_query($filters))) ?>"><i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>Generate PDF</a><?php endif; ?>
     </div>
 </div>
 

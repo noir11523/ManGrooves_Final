@@ -7,20 +7,16 @@ $isGuardian = $role === 'guardian';
 $extraHead = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">';
 $pageScripts = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>'
     . '<script src="' . e(asset('js/maps.js')) . '"></script>';
-$statCards = $isGuardian
-    ? [
-        ['label' => 'Verified', 'value' => $stats['verified_reports'] ?? 0, 'icon' => 'bi-patch-check', 'tone' => 'success'],
-        ['label' => 'Pending', 'value' => $stats['pending_reports'] ?? 0, 'icon' => 'bi-hourglass-split', 'tone' => 'warning'],
-        ['label' => 'Clusters covered', 'value' => $stats['clusters_covered'] ?? 0, 'icon' => 'bi-geo-alt', 'tone' => 'primary'],
-        ['label' => 'Species identified', 'value' => $stats['species_identified'] ?? 0, 'icon' => 'bi-tree', 'tone' => 'info'],
-    ]
-    : [
-        ['label' => 'Pending review', 'value' => $stats['pending_reports'] ?? 0, 'icon' => 'bi-inbox', 'tone' => 'warning'],
-        ['label' => 'Verified', 'value' => $stats['verified_reports'] ?? 0, 'icon' => 'bi-patch-check', 'tone' => 'success'],
-        ['label' => 'Needs attention', 'value' => $stats['needs_attention'] ?? 0, 'icon' => 'bi-exclamation-triangle', 'tone' => 'danger'],
-        ['label' => 'Active guardians', 'value' => $stats['active_guardians'] ?? 0, 'icon' => 'bi-people', 'tone' => 'primary'],
-    ];
+$statCards = [
+    ['label' => 'Total reports', 'value' => $stats['total_reports'] ?? 0, 'icon' => 'bi-files', 'tone' => 'primary', 'href' => url('reports.php')],
+    ['label' => 'Verified', 'value' => $stats['verified_reports'] ?? 0, 'icon' => 'bi-patch-check', 'tone' => 'success', 'href' => url('reports.php?status=verified')],
+    ['label' => 'Pending', 'value' => $stats['pending_reports'] ?? 0, 'icon' => 'bi-hourglass-split', 'tone' => 'warning', 'href' => url('reports.php?status=pending')],
+    ['label' => 'Rejected', 'value' => $stats['rejected_reports'] ?? 0, 'icon' => 'bi-x-circle', 'tone' => 'danger', 'href' => url('reports.php?status=rejected')],
+    ['label' => 'Needs attention', 'value' => $stats['needs_attention'] ?? 0, 'icon' => 'bi-exclamation-triangle', 'tone' => 'danger', 'href' => url('reports.php?needs_attention=1')],
+    ['label' => 'Clusters', 'value' => $stats['map_clusters'] ?? 0, 'icon' => 'bi-geo-alt', 'tone' => 'primary', 'href' => '#cluster-map'],
+];
 ?>
+<a class="btn btn-outline-success mb-3" href="<?= e(url('report-map.php')) ?>"><i class="bi bi-map me-1" aria-hidden="true"></i>Report map</a>
 
 <section class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
     <div>
@@ -30,26 +26,20 @@ $statCards = $isGuardian
             <?= $isGuardian ? 'Monitor your community’s mangroves and keep follow-ups on schedule.' : 'Review community evidence and track the condition of monitored clusters.' ?>
         </p>
     </div>
-    <?php if ($isGuardian): ?>
-        <a class="btn btn-success btn-lg" href="<?= e(url('submit-report.php')) ?>"><i class="bi bi-camera me-2" aria-hidden="true"></i>New report</a>
-    <?php elseif ($role === 'expert'): ?>
-        <a class="btn btn-success" href="<?= e(url('admin/verification.php')) ?>"><i class="bi bi-clipboard-check me-2" aria-hidden="true"></i>Open verification queue</a>
-    <?php else: ?>
-        <a class="btn btn-success" href="<?= e(url('admin/analytics.php')) ?>"><i class="bi bi-bar-chart me-2" aria-hidden="true"></i>View analytics</a>
-    <?php endif; ?>
+
 </section>
 
 <section class="row g-3 mb-4" aria-label="Report summary">
     <?php foreach ($statCards as $card): ?>
-        <div class="col-6 col-xl-3">
-            <article class="card h-100 border-0 shadow-sm">
+        <div class="col-6 col-lg-4">
+            <a class="card h-100 border-0 shadow-sm text-decoration-none text-body" href="<?= e($card['href']) ?>">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-<?= e($card['tone']) ?>-subtle text-<?= e($card['tone']) ?> fs-4" style="width:3rem;height:3rem">
                         <i class="bi <?= e($card['icon']) ?>" aria-hidden="true"></i>
                     </span>
                     <div><div class="h3 mb-0"><?= number_format((int) $card['value']) ?></div><div class="small text-body-secondary"><?= e($card['label']) ?></div></div>
                 </div>
-            </article>
+            </a>
         </div>
     <?php endforeach; ?>
 </section>
@@ -84,23 +74,11 @@ $statCards = $isGuardian
 <?php endif; ?>
 
 <div class="row g-4">
-    <section class="col-xl-7" aria-labelledby="map-heading">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h2 class="h5 mb-0" id="map-heading">Cluster health map</h2>
-                <a class="small" href="<?= e(url('explore.php')) ?>">Explore all</a>
-            </div>
-            <div class="card-body p-0">
-                <div class="rounded-bottom" style="min-height:390px" data-cluster-map data-clusters-url="<?= e(url('api/clusters.php')) ?>" aria-label="Map of monitored mangrove clusters"></div>
-            </div>
-        </div>
-    </section>
-
-    <section class="col-xl-5" aria-labelledby="latest-heading">
+    <section class="col-12" aria-labelledby="latest-heading">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <h2 class="h5 mb-0" id="latest-heading">Latest reports</h2>
-                <a class="small" href="<?= e(url('reports.php')) ?>">View history</a>
+                <a class="small" href="<?= e(url('reports.php')) ?>">View all</a>
             </div>
             <div class="list-group list-group-flush">
                 <?php if (!$latestReports): ?>
@@ -119,4 +97,16 @@ $statCards = $isGuardian
             </div>
         </div>
     </section>
+    <section class="col-12" id="cluster-map" aria-labelledby="map-heading">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0" id="map-heading">Cluster health map</h2>
+                <a class="small" href="<?= e(url('explore.php')) ?>">Explore all</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="rounded-bottom" style="min-height:390px" data-cluster-map data-clusters-url="<?= e(url('api/clusters.php')) ?>" aria-label="Map of monitored mangrove clusters"></div>
+            </div>
+        </div>
+    </section>
+
 </div>

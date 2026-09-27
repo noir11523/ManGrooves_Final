@@ -13,7 +13,8 @@ if (!in_array($user['role'] ?? '', ['expert', 'system_admin'], true)) {
 }
 
 $pdo = Database::connection();
-$queue = (new ReportService($pdo))->reportsForUser($user, ['status' => 'pending'], 1, 50);
+$page = max(1, (int) ($_GET['page'] ?? 1));
+$queue = (new ReportService($pdo))->reportsForUser($user, ['status' => 'pending'], $page, 20);
 $summary = $pdo->query(
     "SELECT SUM(status = 'pending') AS pending,
             SUM(status = 'verified') AS verified,
@@ -37,6 +38,8 @@ json_response([
     'ok' => true,
     'items' => $queue['items'],
     'total' => $queue['total'],
+    'page' => $queue['page'],
+    'pages' => $queue['pages'],
     'summary' => $summary,
     'species' => $species,
 ]);

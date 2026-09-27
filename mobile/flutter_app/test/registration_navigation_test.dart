@@ -10,6 +10,7 @@ import 'package:mangrooves_mobile/screens/register_screen.dart';
 class _RegistrationApi extends ApiClient {
   final registration = Completer<Map<String, dynamic>>();
   int registrationCalls = 0;
+  Map<String, dynamic>? submitted;
   static const user = {
     'id': 42,
     'full_name': 'Test Guardian',
@@ -29,6 +30,7 @@ class _RegistrationApi extends ApiClient {
   @override
   Future<Map<String, dynamic>> register(Map<String, dynamic> form) {
     registrationCalls++;
+    submitted = form;
     return registration.future;
   }
 
@@ -73,7 +75,8 @@ Future<void> _fillRegistration(
   await tester.pumpAndSettle();
   await tester.tap(find.text('Create guardian account'));
   await tester.pumpAndSettle();
-  await tester.enterText(_field('Full name'), 'Test Guardian');
+  await tester.enterText(_field('First name'), 'Test');
+  await tester.enterText(_field('Last name'), 'Guardian');
   await tester.enterText(_field('Email address'), email);
   await tester.tap(find.byType(DropdownButtonFormField<int>));
   await tester.pumpAndSettle();
@@ -96,6 +99,9 @@ void main() {
     await tester.tap(find.byType(FilledButton));
     await tester.pump();
     expect(api.registrationCalls, 1);
+    expect(api.submitted?['first_name'], 'Test');
+    expect(api.submitted?['last_name'], 'Guardian');
+    expect(api.submitted?.containsKey('full_name'), isFalse);
     expect(
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,

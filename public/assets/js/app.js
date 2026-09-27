@@ -65,7 +65,7 @@
         const scope = panel?.parentElement ?? input.parentElement;
         const meter = scope?.querySelector('[data-password-meter]');
         const hint = scope?.querySelector('[data-password-hint]');
-        const labels = ['Use at least 8 characters.', 'Weak', 'Fair', 'Good', 'Strong'];
+        const labels = ['Use 8 to 25 characters.', 'Password length accepted', 'Password length accepted', 'Password length accepted', 'Password length accepted'];
 
         input.addEventListener('input', () => {
             const score = calculatePasswordStrength(input.value);
@@ -73,7 +73,8 @@
                 meter.style.width = input.value ? `${Math.max(score, 1) * 25}%` : '0%';
                 meter.dataset.strength = String(score);
             }
-            if (hint && input.value) hint.textContent = `${labels[score]}. A longer passphrase is safer.`;
+            if (hint) hint.textContent = input.value.length >= 8 && input.value.length <= 25
+                ? `${labels[score]}. No special symbols required.` : 'Use 8 to 25 characters.';
         });
     });
 
@@ -184,3 +185,11 @@
         });
     }
 })();
+
+// Native details provides click/keyboard support; pointer hover is an added shortcut.
+document.querySelectorAll('[data-cluster-menu]').forEach(menu => {
+    menu.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') menu.open = true; });
+    menu.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse' && !menu.contains(document.activeElement)) menu.open = false; });
+    menu.addEventListener('keydown', event => { if (event.key === 'Escape') { menu.open = false; menu.querySelector('summary').focus(); } });
+    menu.addEventListener('focusout', event => { if (!menu.contains(event.relatedTarget)) menu.open = false; });
+});

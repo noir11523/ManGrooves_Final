@@ -1,3 +1,4 @@
+<a class="btn btn-outline-success mb-3" href="<?= e(url('admin/validation-history.php')) ?>">Validation history</a>
 <?php
 $pending = (int) ($summary['pending'] ?? 0);
 $verified = (int) ($summary['verified'] ?? 0);
@@ -9,7 +10,7 @@ $verifiedAttention = (int) ($summary['verified_attention'] ?? 0);
         <h1 class="h3 mb-1"><?= e($pageTitle) ?></h1>
         <p class="text-muted mb-0">Review field evidence, coach guardians, and maintain a reliable conservation record.</p>
     </div>
-    <a class="btn btn-outline-success" href="<?= e(url('admin/analytics.php')) ?>">View analytics</a>
+
 </div>
 
 <div class="row g-3 mb-4">

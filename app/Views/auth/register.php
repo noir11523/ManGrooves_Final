@@ -63,15 +63,15 @@
                         <div class="col-sm-6">
                             <label class="form-label" for="register_password">Password</label>
                             <div class="input-group password-group">
-                                <input class="form-control" id="register_password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required data-password-strength>
+                                <input class="form-control" id="register_password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="25" required data-password-strength>
                                 <button class="btn password-toggle" type="button" data-password-toggle="#register_password" aria-label="Show password"><i class="bi bi-eye" aria-hidden="true"></i></button>
                             </div>
                             <div class="password-meter mt-2" aria-hidden="true"><span data-password-meter></span></div>
-                            <div class="form-text" data-password-hint>Use 8 to 72 characters; a few words are easier to remember.</div>
+                            <div class="form-text" data-password-hint>Use 8 to 25 characters; a few words are easier to remember.</div>
                         </div>
                         <div class="col-sm-6">
                             <label class="form-label" for="password_confirmation">Confirm password</label>
-                            <div class="input-group password-group"><input class="form-control" id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="72" required data-password-confirm="#register_password"><button class="btn password-toggle" type="button" data-password-toggle="#password_confirmation" aria-label="Show confirm password"><i class="bi bi-eye" aria-hidden="true"></i></button></div>
+                            <div class="input-group password-group"><input class="form-control" id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" maxlength="25" required data-password-confirm="#register_password"><button class="btn password-toggle" type="button" data-password-toggle="#password_confirmation" aria-label="Show confirm password"><i class="bi bi-eye" aria-hidden="true"></i></button></div>
                             <div class="invalid-feedback">Enter the same password again.</div>
                         </div>
                         <div class="col-12">

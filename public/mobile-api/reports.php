@@ -9,6 +9,8 @@ use App\Services\ReportService;
 MobileApi::requireMethod('GET');
 $user = MobileApi::requireUser();
 $filters = [
+    'needs_attention' => scalar_string($_GET['needs_attention'] ?? null),
+    'cluster_id' => scalar_string($_GET['cluster_id'] ?? null),
     'status' => scalar_string($_GET['status'] ?? null),
     'health' => scalar_string($_GET['health'] ?? null),
     'q' => mb_substr(trim(scalar_string($_GET['q'] ?? null)), 0, 100),

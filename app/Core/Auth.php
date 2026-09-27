@@ -197,8 +197,8 @@ final class Auth
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
             $errors[] = 'Enter a valid email address.';
         }
-        if (strlen($password) < 8 || strlen($password) > 72 || str_contains($password, "\0")) {
-            $errors[] = 'Use a password between 8 and 72 characters.';
+        if (\App\Services\PasswordPolicy::isValid($password) === false || str_contains($password, "\0")) {
+            $errors[] = 'Use a password between 8 and 25 characters.';
         }
         if ($password !== $confirmation) {
             $errors[] = 'The password confirmation does not match.';

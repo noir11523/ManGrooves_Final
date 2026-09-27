@@ -534,6 +534,22 @@ try {
     $reportForm = $guardian->request('GET', '/submit-report.php');
     $reportToken = csrf_token($reportForm->body);
     record_result(
+        str_contains($reportForm->body, 'data-followup-fields hidden')
+        && str_contains($reportForm->body, 'data-parent-report disabled')
+        && str_contains($reportForm->body, 'data-step-panel="4"')
+        && str_contains($reportForm->body, 'data-report-summary')
+        && str_contains($reportForm->body, 'data-exit-report'),
+        'new web reports hide follow-up fields and include review and exit controls'
+    );
+    $dashboardPage = $guardian->request('GET', '/dashboard.php');
+    record_result(
+        !str_contains($dashboardPage->body, '>New report</a>')
+        && strpos($dashboardPage->body, 'id="latest-heading"') < strpos($dashboardPage->body, 'id="map-heading"')
+        && str_contains($dashboardPage->body, 'reports.php?status=verified')
+        && str_contains($dashboardPage->body, 'reports.php?needs_attention=1'),
+        'web dashboard has report filters and a map below latest reports without a new-report button'
+    );
+    record_result(
         $reportForm->status === 200
         && preg_match('/name="observed_alive_count"[^>]*required/i', $reportForm->body) === 1,
         'report wizard requires the living-count baseline', 'HTTP ' . $reportForm->status
@@ -589,10 +605,11 @@ try {
     $fixture = $root . '/public/assets/img/guides/leaf-color.png';
     require_result(is_file($fixture), 'real PNG upload fixture is available');
     $firstPayload = report_payload($reportToken, 12);
+    $firstPayload['observations[leaf_color]'] = '2'; // Stressed reports still require review.
     $firstPayload['photo'] = new CURLFile($fixture, 'image/png', 'field-evidence.png');
     $firstSubmission = $guardian->request('POST', '/submit-report.php', $firstPayload);
     require_result(
-        $firstSubmission->status === 200 && str_contains($firstSubmission->body, 'submitted for expert verification'),
+        $firstSubmission->status === 200 && str_contains($firstSubmission->body, 'submitted for expert or admin review'),
         'guardian submits an actual-photo report', 'HTTP ' . $firstSubmission->status
     );
     $firstStatement = $databasePdo->prepare('SELECT * FROM reports WHERE user_id = :user_id ORDER BY id DESC LIMIT 1');
@@ -687,7 +704,7 @@ try {
         && str_contains($expertAnalytics->body, 'Health distribution')
         && str_contains($expertAnalytics->body, 'High-risk and attention-flagged reports')
         && !str_contains($expertAnalytics->body, 'Overall survival')
-        && !str_contains($expertAnalytics->body, 'Print / Save PDF')
+        && !str_contains($expertAnalytics->body, 'Generate PDF')
         && !str_contains($expertAnalytics->body, 'Cluster survival'),
         'expert analytics follows Appendix H without survival or PDF export',
         'HTTP ' . $expertAnalytics->status
@@ -785,7 +802,7 @@ try {
     $followupPayload['photo'] = new CURLFile($followupFixture, 'image/png', 'followup-evidence.png');
     $followupSubmission = $guardian->request('POST', '/submit-report.php', $followupPayload);
     require_result(
-        $followupSubmission->status === 200 && str_contains($followupSubmission->body, 'submitted for expert verification'),
+        $followupSubmission->status === 200 && str_contains($followupSubmission->body, 'submitted for expert or admin review'),
         'guardian submits actual-photo follow-up', 'HTTP ' . $followupSubmission->status
     );
     $followupStatement = $databasePdo->prepare(
@@ -829,12 +846,15 @@ try {
 
     $rejectedReportPage = $guardian->request('GET', '/submit-report.php');
     $rejectedPayload = report_payload(csrf_token($rejectedReportPage->body), 9, $clusterId);
+    $rejectedPayload['observations[leaf_color]'] = '3';
+    $rejectedPayload['observations[pests]'] = '10';
+    $rejectedPayload['observations[roots]'] = '13';
     $rejectedFixture = $root . '/public/assets/img/guides/bark.png';
     require_result(is_file($rejectedFixture), 'distinct rejection-path PNG fixture is available');
     $rejectedPayload['photo'] = new CURLFile($rejectedFixture, 'image/png', 'rejected-evidence.png');
     $rejectedSubmission = $guardian->request('POST', '/submit-report.php', $rejectedPayload);
     require_result(
-        $rejectedSubmission->status === 200 && str_contains($rejectedSubmission->body, 'submitted for expert verification'),
+        $rejectedSubmission->status === 200 && str_contains($rejectedSubmission->body, 'submitted for expert or admin review'),
         'guardian submits a report for rejection-path testing',
         'HTTP ' . $rejectedSubmission->status
     );
@@ -891,10 +911,15 @@ try {
         $adminAnalytics->status === 200
         && str_contains($adminAnalytics->body, 'Overall survival')
         && str_contains($adminAnalytics->body, 'Cluster survival')
-        && str_contains($adminAnalytics->body, 'Print / Save PDF'),
+        && str_contains($adminAnalytics->body, 'Generate PDF'),
         'administrator receives survival analytics and PDF export',
         'HTTP ' . $adminAnalytics->status
     );
+    $pdfDownload = $admin->request('GET', '/admin/export-analytics.php?date_from=2020-01-01');
+    record_result($pdfDownload->status === 200 && str_starts_with($pdfDownload->contentType, 'application/pdf') && str_starts_with($pdfDownload->body, '%PDF-'), 'administrator downloads a real PDF');
+    record_result($expert->request('GET', '/admin/export-analytics.php', null, false)->status === 403, 'expert cannot download administrator PDF');
+    $staffNotifications = $expert->request('GET', '/notifications.php');
+    record_result($staffNotifications->status === 200 && str_contains($staffNotifications->body, 'Report awaiting review'), 'expert receives pending report notifications');
     $adminMobile = new Browser($baseUrl);
     $browsers[] = $adminMobile;
     $adminMobileLogin = $adminMobile->request('POST', '/mobile-api/login.php', [
@@ -921,6 +946,14 @@ try {
         'HTTP ' . $adminMobileAnalytics->status
     );
     $adminUsers = $admin->request('GET', '/admin/users.php');
+    $mobilePdf = $adminMobile->request('GET', '/mobile-api/export-analytics.php', null, true, ['Authorization: Bearer ' . $adminToken]);
+    record_result($mobilePdf->status === 200 && str_starts_with($mobilePdf->body, '%PDF-')
+        && ($adminMobileData['capabilities']['can_export_pdf'] ?? false), 'mobile administrator can export PDF');
+    $mobileAlerts = $adminMobile->request('GET', '/mobile-api/notifications.php', null, true, ['Authorization: Bearer ' . $adminToken]);
+    $mobileAlertsJson = json_decode($mobileAlerts->body, true);
+    record_result($mobileAlerts->status === 200 && count($mobileAlertsJson['notifications'] ?? []) > 0, 'mobile administrator receives staff notifications');
+    $markStaffAlerts = $adminMobile->request('POST', '/mobile-api/notifications.php', ['action' => 'mark_all'], true, ['Authorization: Bearer ' . $adminToken]);
+    record_result((json_decode($markStaffAlerts->body, true)['unread'] ?? -1) === 0, 'mobile notifications can be marked read');
     record_result(
         str_contains($adminUsers->body, 'certificate.php?user=' . $guardianId),
         'administrator user list links to an earned guardian certificate'
@@ -1070,6 +1103,11 @@ try {
     $mobileDashboard = $mobileGuardian->request('GET', '/mobile-api/dashboard.php', null, true, $mobileHeaders);
     $mobileDashboardJson = json_decode($mobileDashboard->body, true);
     record_result(
+        isset($mobileDashboardJson['clusters'], $mobileDashboardJson['stats']['map_clusters'])
+        && count($mobileDashboardJson['clusters']) === $mobileDashboardJson['stats']['map_clusters'],
+        'mobile dashboard includes the same scoped clusters and map count as the web'
+    );
+    record_result(
         $mobileDashboard->status === 200
         && ($mobileDashboardJson['user']['id'] ?? null) === $mobileSession['user']['id'],
         'new mobile account can immediately open its dashboard'
@@ -1083,6 +1121,45 @@ try {
         && (float) ($mobileFormJson['location']['max_distance_meters'] ?? 0) > 0,
         'mobile report form supplies the manual map center and monitoring boundary'
     );
+    $previewInput = report_payload('', 10);
+    $mobilePreview = $mobileGuardian->request('POST', '/mobile-api/report-preview.php', $previewInput, true, $mobileHeaders);
+    $previewJson = json_decode($mobilePreview->body, true);
+    record_result($mobilePreview->status === 200 && count($previewJson['classification']['breakdown'] ?? []) === 3,
+        'mobile health preview uses the canonical server score and three-part breakdown');
+    record_result($mobileGuardian->request('GET', '/mobile-api/validation-history.php', null, true, $mobileHeaders)->status === 403,
+        'guardian cannot open staff validation history');
+    foreach ([[$expertMobile, $expertToken], [$adminMobile, $adminToken]] as [$staffBrowser, $staffToken]) {
+        $headers = ['Authorization: Bearer ' . $staffToken];
+        $history = $staffBrowser->request('GET', '/mobile-api/validation-history.php', null, true, $headers);
+        $historyJson = json_decode($history->body, true);
+        record_result($history->status === 200 && count($historyJson['items'] ?? []) > 0, 'staff mobile validation history contains recorded decisions');
+        $mapReports = $staffBrowser->request('GET', '/mobile-api/reports.php?status=verified&health=Stressed', null, true, $headers);
+        $mapJson = json_decode($mapReports->body, true);
+        record_result($mapReports->status === 200 && !empty($mapJson['items'])
+            && count(array_filter($mapJson['items'], static fn(array $item): bool => $item['status'] !== 'verified' || $item['display_health'] !== 'Stressed' || !is_numeric($item['latitude']))) === 0,
+            'staff map filters return verified stressed reports with submitted coordinates');
+        $mobileTimeline = $staffBrowser->request('GET', '/mobile-api/cluster.php?id=' . $clusterId, null, true, $headers);
+        $timelineJson = json_decode($mobileTimeline->body, true);
+        record_result($mobileTimeline->status === 200 && count($timelineJson['timeline'] ?? []) >= 2
+            && !array_key_exists('photo_path', $timelineJson['timeline'][0]), 'staff mobile cluster timeline includes verified visits without storage paths');
+    }
+    $guardianTimeline = $mobileGuardian->request('GET', '/mobile-api/cluster.php?id=' . $clusterId, null, true, $mobileHeaders);
+    $guardianTimelineJson = json_decode($guardianTimeline->body, true);
+    record_result($guardianTimeline->status === 200 && !empty($guardianTimelineJson['timeline'])
+        && count(array_filter($guardianTimelineJson['timeline'], static fn(array $item): bool => $item['photo_url'] !== null || $item['latitude'] !== null || $item['can_view_details'])) === 0,
+        'guardian timeline hides other guardians private evidence and exact coordinates');
+    foreach ([$guardian, $expert, $admin] as $viewer) {
+        foreach (['/report-map.php', '/clusters.php?view=growth', '/cluster.php?id=' . $clusterId] as $route) {
+            $pageResult = $viewer->request('GET', $route);
+            record_result($pageResult->status === 200, 'web map and history access ' . $route);
+            if ($route === '/clusters.php?view=growth') {
+                record_result(str_contains($pageResult->body, 'Growth timelines') && str_contains($pageResult->body, '#growth-timeline'),
+                    'growth menu preserves its selected view and opens the growth section');
+            }
+        }
+    }
+    record_result($expert->request('GET', '/admin/validation-history.php')->status === 200 && $admin->request('GET', '/admin/validation-history.php')->status === 200,
+        'expert and administrator can browse validation history on web');
     $manualPayload = report_payload('', 10);
     unset($manualPayload['csrf_token'], $manualPayload['location_accuracy']);
     $manualPayload['photo'] = new CURLFile($fixture, 'image/png', 'mobile-field.png');
@@ -1102,9 +1179,34 @@ try {
         $mobileReport['location_accuracy'] === null
         && abs((float) $mobileReport['latitude'] - (float) $manualPayload['latitude']) < 0.00000001
         && abs((float) $mobileReport['longitude'] - (float) $manualPayload['longitude']) < 0.00000001
-        && $mobileReport['status'] === 'pending',
-        'manual pin coordinates are saved without GPS accuracy in the pending report'
+        && $mobileReport['status'] === 'verified' && $mobileReport['final_health'] === 'Healthy'
+        && $mobileReport['expert_id'] === null && $mobileReport['verified_at'] !== null
+        && ($mobileSubmissionJson['report']['status'] ?? '') === 'verified',
+        'mobile Healthy report saves manual coordinates and automatically verifies without an expert'
     );
+
+    $healthyPage = $guardian->request('GET', '/submit-report.php');
+    $healthyPayload = report_payload(csrf_token($healthyPage->body), 10);
+    $healthyPayload['photo'] = new CURLFile($root . '/public/assets/img/guides/bio-indicators.png', 'image/png', 'healthy-web.png');
+    $aggregateOptions = $databasePdo->query("SELECT c.code AS criterion, o.code, o.id FROM health_options o JOIN health_criteria c ON c.id = o.criteria_id WHERE o.code IN ('all_of_the_above', 'none_of_the_above')")->fetchAll();
+    foreach ($aggregateOptions as $option) {
+        if ($option['criterion'] === 'bio_indicators' && $option['code'] === 'all_of_the_above') {
+            $healthyPayload['observations[bio_indicators][0]'] = (string) $option['id'];
+            unset($healthyPayload['observations[bio_indicators][1]']);
+        }
+        if ($option['criterion'] === 'negative_signs' && $option['code'] === 'none_of_the_above') {
+            $healthyPayload['observations[negative_signs][0]'] = (string) $option['id'];
+        }
+    }
+    $healthySubmission = $guardian->request('POST', '/submit-report.php', $healthyPayload);
+    $firstStatement->execute(['user_id' => $guardianId]);
+    $healthyReport = $firstStatement->fetch();
+    record_result($healthySubmission->status === 200
+        && str_contains($healthySubmission->body, 'automatically verified as Healthy')
+        && $healthyReport['status'] === 'verified' && $healthyReport['expert_id'] === null
+        && (int) $healthyReport['environmental_score'] === 5,
+        'web submission stores aggregate choices and automatically verifies Healthy reports');
+    $uploadedPaths[] = (string) $healthyReport['photo_path'];
 
     $notificationPage = $guardian->request('GET', '/notifications.php?filter=unread');
     $markAll = $guardian->request('POST', '/notifications.php', [
@@ -1173,6 +1275,25 @@ try {
         (int) $databasePdo->query('SELECT COUNT(*) FROM user_badges ub LEFT JOIN badges b ON b.id = ub.badge_id WHERE b.id IS NULL')->fetchColumn(),
     ];
     record_result($integrity === [0, 0, 0], 'final relational integrity has no tested orphan rows');
+
+    // Queue regression: older pending reports must remain reachable beyond the first 50.
+    $fixtureInsert = $databasePdo->prepare("INSERT INTO reports (report_code, user_id, barangay_id, latitude, longitude, photo_path, photo_mime, root_type, leaf_shape, bark_texture, suggested_health) VALUES (?, 1, 1, 10.2833, 123.8833, 'queue-test-only.png', 'image/png', 'Prop', 'Oval', 'Smooth', 'Stressed')");
+    for ($fixtureIndex = 1; $fixtureIndex <= 51; $fixtureIndex++) $fixtureInsert->execute(['QUEUE-CHECK-' . $fixtureIndex]);
+    $pendingTotal = (int) $databasePdo->query("SELECT COUNT(*) FROM reports WHERE status = 'pending'")->fetchColumn();
+    foreach ([[$expertMobile, $expertToken], [$adminMobile, $adminToken]] as [$staffBrowser, $staffToken]) {
+        $seen = [];
+        $lastPage = (int) ceil($pendingTotal / 20);
+        for ($queuePage = 1; $queuePage <= $lastPage; $queuePage++) {
+            $queueResponse = $staffBrowser->request('GET', '/mobile-api/verification.php?page=' . $queuePage, null, true, ['Authorization: Bearer ' . $staffToken]);
+            $queueData = json_decode($queueResponse->body, true);
+            require_result($queueResponse->status === 200 && ($queueData['page'] ?? null) === $queuePage && ($queueData['pages'] ?? null) === $lastPage,
+                'staff queue page metadata matches the requested page ' . $queuePage);
+            foreach ($queueData['items'] as $item) $seen[] = (int) $item['id'];
+        }
+        record_result(count($seen) === $pendingTotal && count(array_unique($seen)) === $pendingTotal, 'staff queue exposes every pending report once across pages');
+    }
+    record_result($mobileGuardian->request('GET', '/mobile-api/verification.php?page=2', null, true, $mobileHeaders)->status === 403, 'guardian cannot access any review queue page');
+    $databasePdo->exec("DELETE FROM reports WHERE report_code LIKE 'QUEUE-CHECK-%'");
 
     $allText = '';
     foreach ($browsers as $browser) {

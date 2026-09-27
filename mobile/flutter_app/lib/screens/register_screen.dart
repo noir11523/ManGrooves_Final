@@ -13,7 +13,8 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
+  final _firstName = TextEditingController();
+  final _lastName = TextEditingController();
   final _email = TextEditingController();
   final _phone = TextEditingController();
   final _password = TextEditingController();
@@ -71,7 +72,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _name.dispose();
+    _firstName.dispose();
+    _lastName.dispose();
     _email.dispose();
     _phone.dispose();
     _password.dispose();
@@ -94,7 +96,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
     try {
       final result = await widget.api.register({
-        'full_name': _name.text,
+        'first_name': _firstName.text.trim(),
+        'last_name': _lastName.text.trim(),
         'email': _email.text,
         'phone': _phone.text,
         'barangay_id': _barangayId,
@@ -178,7 +181,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 12),
                         ],
-                        _field(_name, 'Full name', Icons.person_outline),
+                        _field(
+                          _firstName,
+                          'First name',
+                          Icons.person_outline,
+                          maxLength: 60,
+                        ),
+                        _field(
+                          _lastName,
+                          'Last name',
+                          Icons.person_outline,
+                          maxLength: 59,
+                        ),
                         _field(
                           _email,
                           'Email address',
@@ -224,9 +238,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: 14),
                         TextFormField(
                           controller: _password,
+                          maxLength: 25,
                           obscureText: _hidePassword,
                           decoration: InputDecoration(
                             labelText: 'Password',
+                            helperText: 'Use 8 to 25 characters.',
                             prefixIcon: const Icon(Icons.lock_outline),
                             suffixIcon: IconButton(
                               onPressed: () => setState(
@@ -239,13 +255,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                           ),
-                          validator: (value) => (value?.length ?? 0) < 8
-                              ? 'Use at least 8 characters.'
+                          validator: (value) =>
+                              (value?.runes.length ?? 0) < 8 ||
+                                  (value?.runes.length ?? 0) > 25
+                              ? 'Use 8 to 25 characters.'
                               : null,
                         ),
                         const SizedBox(height: 14),
                         TextFormField(
                           controller: _confirmation,
+                          maxLength: 25,
                           obscureText: _hidePassword,
                           decoration: const InputDecoration(
                             labelText: 'Confirm password',
@@ -295,10 +314,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     IconData icon, {
     TextInputType? type,
     bool optional = false,
+    int? maxLength,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: 14),
     child: TextFormField(
       controller: controller,
+      maxLength: maxLength,
       keyboardType: type,
       decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
       validator: optional

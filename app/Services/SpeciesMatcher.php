@@ -52,14 +52,19 @@ final class SpeciesMatcher
                 ? $byConfidence
                 : strcasecmp((string) $left['scientific_name'], (string) $right['scientific_name']);
         });
-        $ranked = array_slice($ranked, 0, $limit);
-
         // A low-confidence suggestion is still useful in the ranked preview but
         // is not persisted as an automated identification.
         $best = $ranked[0] ?? null;
         if ($best !== null && (float) $best['confidence'] < 45.0) {
             $best = null;
         }
+        // Do not choose alphabetically when two species fit equally well, or
+        // present a partial trait set as a complete identification.
+        if (array_filter(self::TRAITS, static fn (string $trait): bool => trim((string) ($traits[$trait] ?? '')) === '')
+            || (isset($ranked[1]) && $ranked[0]['confidence'] === $ranked[1]['confidence'])) {
+            $best = null;
+        }
+        $ranked = array_slice($ranked, 0, $limit);
 
         return ['best' => $best, 'ranked' => $ranked];
     }

@@ -21,9 +21,6 @@ $currentScript = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'index.php'));
                             Open dashboard
                         </a>
                     </li>
-                <?php else: ?>
-                    <li class="nav-item ms-lg-2"><a class="nav-link" href="<?= e(url('login.php')) ?>">Sign in</a></li>
-                    <li class="nav-item"><a class="btn btn-primary rounded-pill px-4" href="<?= e(url('register.php')) ?>">Join as guardian</a></li>
                 <?php endif; ?>
                 <li class="nav-item ms-lg-2">
                     <button class="btn btn-outline-secondary btn-sm d-none" type="button" data-install-app>

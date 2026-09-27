@@ -71,6 +71,17 @@ VALUES
     (26, 7, 'no_animals', 'No Animals at All', -1, 3)
 ON DUPLICATE KEY UPDATE label = VALUES(label), points = VALUES(points), display_order = VALUES(display_order), active = 1;
 
+-- Aggregate checklist answers (also available as an additive migration).
+INSERT INTO health_options (criteria_id, code, label, points, display_order)
+SELECT id, 'none_of_the_above', 'None of the above', 0, 1000
+FROM health_criteria WHERE selection_mode = 'multiple'
+ON DUPLICATE KEY UPDATE label = VALUES(label), points = VALUES(points), display_order = VALUES(display_order), active = 1;
+
+INSERT INTO health_options (criteria_id, code, label, points, display_order)
+SELECT id, 'all_of_the_above', 'All of the above', 0, 1001
+FROM health_criteria WHERE selection_mode = 'multiple'
+ON DUPLICATE KEY UPDATE label = VALUES(label), points = VALUES(points), display_order = VALUES(display_order), active = 1;
+
 INSERT INTO badges (id, code, badge_name, metric, target_value, description, image_path)
 VALUES
     (1, 'first_report', 'First Report', 'verified_reports', 1, 'Submitted your first verified report!', 'img/badges/first-report.svg'),

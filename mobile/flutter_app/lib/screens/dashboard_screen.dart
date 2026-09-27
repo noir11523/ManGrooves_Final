@@ -2,11 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import 'report_detail_screen.dart';
+import 'reports_screen.dart';
+import 'cluster_health_map.dart';
+import 'cluster_timeline_screen.dart';
+import 'report_map_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, required this.api, this.onStartFollowUp});
+  const DashboardScreen({
+    super.key,
+    required this.api,
+    this.onStartFollowUp,
+    this.active = true,
+  });
 
   final ApiClient api;
+  final bool active;
   final ValueChanged<Map<String, dynamic>>? onStartFollowUp;
 
   @override
@@ -16,6 +26,36 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _data;
   String? _error;
+  final _mapKey = GlobalKey();
+
+  @override
+  void didUpdateWidget(covariant DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _load();
+  }
+
+  void _openReports({
+    String status = '',
+    bool attention = false,
+    int? clusterId,
+  }) {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Reports')),
+          body: ReportsScreen(
+            api: widget.api,
+            initialStatus: status,
+            needsAttention: attention,
+            clusterId: clusterId,
+          ),
+        ),
+      ),
+    ).then((_) {
+      if (mounted) _load();
+    });
+  }
 
   @override
   void initState() {
@@ -48,169 +88,225 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final latest = (_data!['latest_reports'] as List? ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
+    final clusters = (_data!['clusters'] as List? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
     final reminders = (_data!['reminders'] as List? ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-        children: [
-          Text(
-            'Hello, ${user['full_name']?.toString().split(' ').first ?? 'Guardian'}',
-            style: Theme.of(context).textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const Text('Here is the latest from your mangrove monitoring work.'),
-          const SizedBox(height: 20),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.45,
-            children: [
-              _StatCard(
-                'Total reports',
-                stats['total_reports'],
-                Icons.assignment_outlined,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Hello, ${user['full_name']?.toString().split(' ').first ?? 'Guardian'}',
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const Text('Your latest mangrove updates.'),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => ReportMapScreen(api: widget.api),
+                  ),
+                ),
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Report map'),
               ),
-              _StatCard(
-                'Verified',
-                stats['verified_reports'],
-                Icons.verified_outlined,
+            ),
+            const SizedBox(height: 20),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              mainAxisExtent: 155,
+              children: [
+                _StatCard(
+                  'Total reports',
+                  stats['total_reports'],
+                  Icons.assignment_outlined,
+                  () => _openReports(),
+                ),
+                _StatCard(
+                  'Verified',
+                  stats['verified_reports'],
+                  Icons.verified_outlined,
+                  () => _openReports(status: 'verified'),
+                ),
+                _StatCard(
+                  'Pending',
+                  stats['pending_reports'],
+                  Icons.hourglass_top,
+                  () => _openReports(status: 'pending'),
+                ),
+                _StatCard(
+                  'Rejected',
+                  stats['rejected_reports'],
+                  Icons.cancel_outlined,
+                  () => _openReports(status: 'rejected'),
+                ),
+                _StatCard(
+                  'Needs attention',
+                  stats['needs_attention'],
+                  Icons.warning_amber_outlined,
+                  () => _openReports(attention: true),
+                ),
+                _StatCard(
+                  'Clusters',
+                  stats['map_clusters'] ?? clusters.length,
+                  Icons.hub_outlined,
+                  () {
+                    final target = _mapKey.currentContext;
+                    if (target != null) {
+                      Scrollable.ensureVisible(
+                        target,
+                        duration: const Duration(milliseconds: 300),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+            if (reminders.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Text(
+                'Follow-up reminders',
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
-              _StatCard(
-                'Pending',
-                stats['pending_reports'],
-                Icons.hourglass_top,
-              ),
-              _StatCard(
-                'Clusters',
-                stats['clusters_covered'],
-                Icons.hub_outlined,
-              ),
-              _StatCard(
-                'Species',
-                stats['species_identified'],
-                Icons.eco_outlined,
-              ),
-              _StatCard(
-                'Needs attention',
-                stats['needs_attention'],
-                Icons.warning_amber_outlined,
+              const SizedBox(height: 10),
+              ...reminders.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Card(
+                    child: ListTile(
+                      leading: Icon(
+                        item['due_state'] == 'overdue'
+                            ? Icons.warning_amber
+                            : Icons.event_outlined,
+                        color: item['due_state'] == 'overdue'
+                            ? Colors.red
+                            : Colors.orange.shade800,
+                      ),
+                      title: Text(
+                        item['cluster_name']?.toString() ??
+                            item['report_code'].toString(),
+                      ),
+                      subtitle: Text('Due ${item['next_followup_date']}'),
+                      trailing: widget.onStartFollowUp == null
+                          ? null
+                          : FilledButton.tonal(
+                              onPressed: () => widget.onStartFollowUp!(item),
+                              child: const Text('Follow up'),
+                            ),
+                    ),
+                  ),
+                ),
               ),
             ],
-          ),
-          if (reminders.isNotEmpty) ...[
             const SizedBox(height: 24),
             Text(
-              'Follow-up reminders',
+              'Latest reports',
               style: Theme.of(context).textTheme.titleLarge
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
-            ...reminders.map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Card(
-                  child: ListTile(
-                    leading: Icon(
-                      item['due_state'] == 'overdue'
-                          ? Icons.warning_amber
-                          : Icons.event_outlined,
-                      color: item['due_state'] == 'overdue'
-                          ? Colors.red
-                          : Colors.orange.shade800,
-                    ),
-                    title: Text(
-                      item['cluster_name']?.toString() ??
-                          item['report_code'].toString(),
-                    ),
-                    subtitle: Text('Due ${item['next_followup_date']}'),
-                    trailing: widget.onStartFollowUp == null
-                        ? null
-                        : FilledButton.tonal(
-                            onPressed: () => widget.onStartFollowUp!(item),
-                            child: const Text('Follow up'),
-                          ),
-                  ),
+            if (latest.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Text('No reports yet.'),
                 ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 24),
-          Text(
-            'Latest reports',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 10),
-          if (latest.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('No reports yet. Start with a field observation.'),
-              ),
-            )
-          else
-            ...latest.map(
-              (report) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Card(
-                  child: ListTile(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReportDetailScreen(
-                          api: widget.api,
-                          reportId: report['id'] as int,
+              )
+            else
+              ...latest.map(
+                (report) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Card(
+                    child: ListTile(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ReportDetailScreen(
+                            api: widget.api,
+                            reportId: report['id'] as int,
+                          ),
                         ),
                       ),
+                      leading: _HealthDot(
+                        report['display_health']?.toString() ?? '',
+                      ),
+                      title: Text(report['report_code']?.toString() ?? ''),
+                      subtitle: Text(
+                        report['cluster_name']?.toString() ??
+                            'New observation site',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
                     ),
-                    leading: _HealthDot(
-                      report['display_health']?.toString() ?? '',
-                    ),
-                    title: Text(report['report_code']?.toString() ?? ''),
-                    subtitle: Text(
-                      report['cluster_name']?.toString() ??
-                          'New observation site',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
                   ),
                 ),
               ),
+            const SizedBox(height: 24),
+            ClusterHealthMap(
+              key: _mapKey,
+              clusters: clusters,
+              onOpenTimeline: (id, tab) => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => ClusterTimelineScreen(
+                    api: widget.api,
+                    clusterId: id,
+                    initialTab: tab,
+                  ),
+                ),
+              ),
+              onOpenReports: (id) =>
+                  _openReports(clusterId: id, status: 'verified'),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard(this.label, this.value, this.icon);
+  const _StatCard(this.label, this.value, this.icon, this.onTap);
+  final VoidCallback onTap;
   final String label;
   final dynamic value;
   final IconData icon;
 
   @override
   Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Icon(icon, color: Theme.of(context).colorScheme.primary),
-          Text(
-            '${value ?? 0}',
-            style: Theme.of(context).textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ],
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(icon, color: Theme.of(context).colorScheme.primary),
+            Text(
+              '${value ?? 0}',
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ],
+        ),
       ),
     ),
   );

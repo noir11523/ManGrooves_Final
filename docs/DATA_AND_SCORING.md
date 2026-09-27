@@ -46,11 +46,23 @@ For that reason, the automatic health suggestion uses only the three criteria wh
 - Score 3–5: `Stressed`
 - Score 0–2: `At Risk`
 
+Web and Flutter previews and final submission use this same server classifier.
+The result includes a three-part score breakdown. Tests cover all 27 combinations
+of leaf color, visible pests, and root stability. If a scored criterion is missing
+or its points fall outside 0–2, classification fails rather than guessing a result.
+These checks establish consistency with the project rules, not scientific accuracy
+against field measurements. Healthy submissions are automatically verified as
+requested; the other health states remain pending for staff review.
+
 Leaf surface and bark/trunk answers are stored as context for expert review and never automatically penalize a species for its normal morphology. Bio-indicators and negative signs form a separate environmental score. Experts see every answer and may correct the system suggestion while preserving the original score and a verification audit trail.
 
 ## Species suggestion
 
 Trait strings are not compared with brittle exact equality. The matcher normalizes punctuation, parenthetical wording, and common variants, then ranks every active species against root type, leaf shape, and bark texture. The result is a suggestion with a confidence value; the expert remains responsible for the final species and rarity assignment.
+
+The displayed percentage measures trait similarity, not a calibrated probability.
+Missing traits, scores below the existing 45% threshold, and ties at the highest
+score produce no automatic species assignment. Ranked alternatives remain available.
 
 ## Location plausibility
 

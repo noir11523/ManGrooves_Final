@@ -138,7 +138,7 @@ try {
         same(5, (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(), 'user count');
         same(7, (int) $pdo->query('SELECT COUNT(*) FROM mangrove_species')->fetchColumn(), 'species count');
         same(7, (int) $pdo->query('SELECT COUNT(*) FROM health_criteria')->fetchColumn(), 'criteria count');
-        same(26, (int) $pdo->query('SELECT COUNT(*) FROM health_options')->fetchColumn(), 'option count');
+        same(30, (int) $pdo->query('SELECT COUNT(*) FROM health_options')->fetchColumn(), 'option count');
         same(3, (int) $pdo->query('SELECT COUNT(*) FROM mangrove_clusters')->fetchColumn(), 'cluster count');
         same(1, (int) $pdo->query(
             "SELECT COUNT(*) FROM information_schema.TABLES
@@ -323,6 +323,26 @@ try {
         same('At Risk', $risk['status']);
     });
 
+    test_case('all 27 scored health combinations match their breakdown and thresholds', static function () use ($pdo): void {
+        $classifier = new HealthClassifier($pdo);
+        foreach ([1 => 2, 2 => 1, 3 => 0] as $leaf => $leafPoints) {
+            foreach ([8 => 2, 9 => 1, 10 => 0] as $pest => $pestPoints) {
+                foreach ([11 => 2, 12 => 1, 13 => 0] as $root => $rootPoints) {
+                    $result = $classifier->classify(['leaf_color' => $leaf, 'pests' => $pest, 'roots' => $root, 'leaf_condition' => 4, 'bark_trunk' => 15]);
+                    $score = $leafPoints + $pestPoints + $rootPoints;
+                    same($score, $result['health_score']);
+                    same($score, array_sum(array_column($result['breakdown'], 'points')));
+                    same($score === 6 ? 'Healthy' : ($score >= 3 ? 'Stressed' : 'At Risk'), $result['status']);
+                }
+            }
+        }
+        $pdo->beginTransaction();
+        try {
+            $pdo->exec("UPDATE health_criteria SET active = 0 WHERE code = 'roots'");
+            throws(static fn () => $classifier->classify(['leaf_color' => 1, 'pests' => 8, 'leaf_condition' => 4, 'bark_trunk' => 15]), InvalidArgumentException::class);
+        } finally { $pdo->rollBack(); }
+    });
+
     test_case('health answers reject invalid and contradictory selections', static function () use ($pdo): void {
         $classifier = new HealthClassifier($pdo);
         throws(static fn () => $classifier->classify([
@@ -332,6 +352,76 @@ try {
             'leaf_color' => 1, 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15,
             'bio_indicators' => [19], 'negative_signs' => [26],
         ]), InvalidArgumentException::class);
+    });
+
+    test_case('aggregate checklist options score correctly and reject contradictions', static function () use ($pdo): void {
+        $classifier = new HealthClassifier($pdo);
+        $ids = [];
+        foreach ($classifier->criteriaWithOptions() as $criterion) {
+            foreach ($criterion['options'] as $option) {
+                $ids[$criterion['code']][$option['code']] = $option['id'];
+            }
+        }
+        $base = ['leaf_color' => 1, 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15];
+        $bioNone = $ids['bio_indicators']['none_of_the_above'];
+        $bioAll = $ids['bio_indicators']['all_of_the_above'];
+        $negativeNone = $ids['negative_signs']['none_of_the_above'];
+        $negativeAll = $ids['negative_signs']['all_of_the_above'];
+        same(false, isset($ids['leaf_color']['all_of_the_above']));
+        $none = $classifier->classify($base + ['bio_indicators' => [$bioNone], 'negative_signs' => [$negativeNone]]);
+        same(0, $none['environmental_score']);
+        same('Healthy', $none['status']);
+        $all = $classifier->classify($base + ['bio_indicators' => [$bioAll], 'negative_signs' => [$negativeNone]]);
+        same(5, $all['environmental_score']);
+        same(6, $all['health_score']);
+        same('All of the above', $all['observations'][5]['option_label']);
+        same(5, $all['observations'][5]['points']);
+        same(-3, $classifier->classify($base + ['bio_indicators' => [$bioNone], 'negative_signs' => [$negativeAll]])['environmental_score']);
+        foreach ([[$bioNone, 19], [$bioAll, 19], [$bioNone, $bioAll]] as $invalid) {
+            throws(static fn () => $classifier->classify($base + ['bio_indicators' => $invalid]), InvalidArgumentException::class);
+        }
+        throws(static fn () => $classifier->classify($base + ['bio_indicators' => [$bioAll], 'negative_signs' => [$negativeAll]]), InvalidArgumentException::class);
+        throws(static fn () => $classifier->classify($base + ['bio_indicators' => [19], 'negative_signs' => [$negativeAll]]), InvalidArgumentException::class);
+        $before = $pdo->query('SELECT * FROM health_options ORDER BY id')->fetchAll();
+        $pdo->exec(file_get_contents(APP_ROOT . '/database/migrations/20260927_report_choices.sql'));
+        $pdo->exec(file_get_contents(APP_ROOT . '/database/migrations/20260927_report_choices.sql'));
+        same($before, $pdo->query('SELECT * FROM health_options ORDER BY id')->fetchAll());
+    });
+
+    test_case('healthy submissions automatically verify with cluster, notification, badge and follow-up', static function () use ($pdo): void {
+        $temporary = tempnam(sys_get_temp_dir(), 'mgr-auto-');
+        copy(APP_ROOT . '/public/assets/img/guides/leaf-color.png', $temporary);
+        $storedPath = null;
+        $pdo->beginTransaction();
+        try {
+            $result = (new ReportService($pdo))->submitGuardianReport(1, [
+                'field_confirmation' => '1', 'latitude' => '10.279', 'longitude' => '123.879',
+                'location_source' => 'manual', 'sitio_name' => 'Automatic verification test',
+                'observed_alive_count' => '50', 'root_type' => 'Prop roots',
+                'leaf_shape' => 'Elliptic', 'bark_texture' => 'Rough, grayish to brown',
+                'observations' => ['leaf_color' => 1, 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15],
+            ], ['error' => UPLOAD_ERR_OK, 'tmp_name' => $temporary, 'size' => filesize($temporary), 'name' => 'healthy.png']);
+            same('verified', $result['status']);
+            $id = (int) $result['id'];
+            $row = $pdo->query('SELECT * FROM reports WHERE id = ' . $id)->fetch();
+            $storedPath = APP_ROOT . '/' . $row['photo_path'];
+            same('Healthy', $row['final_health']);
+            same(null, $row['expert_id']);
+            check($row['verified_at'] !== null);
+            same($pdo->query('SELECT DATE_ADD(CURDATE(), INTERVAL 30 DAY)')->fetchColumn(), $row['next_followup_date']);
+            $cluster = $pdo->query('SELECT * FROM mangrove_clusters WHERE id = ' . (int) $row['cluster_id'])->fetch();
+            same('Healthy', $cluster['latest_health']);
+            same(1, (int) $cluster['verified_count']);
+            same(50, (int) $cluster['initial_seedlings']);
+            same(1, (int) $pdo->query("SELECT COUNT(*) FROM notifications WHERE type = 'report_verified' AND link = 'reports.php?id={$id}'")->fetchColumn());
+            same(1, (int) $pdo->query("SELECT COUNT(*) FROM audit_logs WHERE action = 'report.auto_verified' AND entity_id = '{$id}'")->fetchColumn());
+            check((int) $pdo->query('SELECT COUNT(*) FROM user_badges WHERE user_id = 1')->fetchColumn() > 0);
+            throws(static fn () => (new VerificationService($pdo))->review($id, 2, ['action' => 'confirm']), DomainException::class);
+        } finally {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            if ($storedPath && is_file($storedPath)) unlink($storedPath);
+            if (is_file($temporary)) unlink($temporary);
+        }
     });
 
     test_case('species matcher returns exact supplied species', static function () use ($pdo): void {
@@ -637,6 +727,129 @@ try {
         check(!str_contains($stored['path'], '..'), 'Stored path contains traversal');
         $service->removeStoredPhoto($stored['absolute_path']);
         check(!is_file($stored['absolute_path']), 'Stored fixture was not removed');
+    });
+
+    test_case('new passwords accept simple 8-25 character values and reject out-of-range lengths', static function (): void {
+        foreach (['abcdefgh', 'a simple passphrase', str_repeat('x', 25)] as $password) {
+            check(\App\Services\PasswordPolicy::isValid($password));
+        }
+        foreach (['short', str_repeat('x', 26), "valid123\0"] as $password) {
+            check(!\App\Services\PasswordPolicy::isValid($password));
+        }
+    });
+
+    test_case('staff notifications backfill pending work once and preserve read state', static function () use ($pdo): void {
+        $pdo->beginTransaction();
+        try {
+            $pdo->exec("UPDATE reports SET status = 'pending' WHERE id = 6");
+            $service = new \App\Services\NotificationService($pdo);
+            foreach ([['id' => 2, 'role' => 'expert'], ['id' => 3, 'role' => 'system_admin']] as $user) {
+                $service->syncForUser($user);
+                $service->syncForUser($user);
+                $id = (int) $user['id'];
+                same(1, (int) $pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = {$id} AND dedupe_key = 'report_pending:{$id}:6'")->fetchColumn());
+                $pdo->exec("UPDATE notifications SET read_at = NOW() WHERE user_id = {$id} AND dedupe_key = 'report_pending:{$id}:6'");
+                $service->syncForUser($user);
+                same(0, (int) $pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = {$id} AND dedupe_key = 'report_pending:{$id}:6' AND read_at IS NULL")->fetchColumn());
+            }
+        } finally { $pdo->rollBack(); }
+    });
+
+    test_case('report pin cannot silently select a distant cluster', static function () use ($pdo): void {
+        try {
+            (new ReportService($pdo))->submitGuardianReport(1, [
+                'field_confirmation' => '1', 'cluster_id' => '1',
+                'latitude' => '10.279', 'longitude' => '123.879', 'location_source' => 'manual',
+            ], []);
+            throw new RuntimeException('Mismatched site was not rejected');
+        } catch (InvalidArgumentException $exception) {
+            check(str_contains($exception->getMessage(), 'does not match the selected cluster'));
+        }
+    });
+
+    test_case('analytics generates an actual paginated PDF', static function () use ($pdo): void {
+        $data = (new AnalyticsService($pdo))->dashboard([]);
+        $pdf = (new \App\Services\AnalyticsPdf())->generate($data);
+        check(str_starts_with($pdf, '%PDF-'));
+        check(str_contains($pdf, '%%EOF'));
+        check(strlen($pdf) > 2000);
+        $directory = APP_ROOT . '/tmp/pdfs';
+        if (!is_dir($directory)) mkdir($directory, 0775, true);
+        file_put_contents($directory . '/analytics-sample.pdf', $pdf);
+    });
+
+    test_case('dashboard totals and report filters agree for guardians and staff', static function () use ($pdo): void {
+        $service = new ReportService($pdo);
+        foreach ([1, 2, 3] as $id) {
+            $user = $pdo->query('SELECT * FROM users WHERE id = ' . $id)->fetch();
+            $dashboard = $service->dashboard($user);
+            same((int) $dashboard['stats']['total_reports'], $service->reportsForUser($user)['total']);
+            foreach (['verified', 'pending', 'rejected'] as $status) {
+                same((int) $dashboard['stats'][$status . '_reports'], $service->reportsForUser($user, ['status' => $status])['total']);
+            }
+            $attention = $service->reportsForUser($user, ['needs_attention' => '1']);
+            same((int) $dashboard['stats']['needs_attention'], $attention['total']);
+            foreach ($attention['items'] as $report) {
+                same('verified', $report['status']);
+                same(1, (int) $report['needs_attention']);
+            }
+            same(count($dashboard['clusters']), $dashboard['stats']['map_clusters']);
+            foreach ($dashboard['clusters'] as $cluster) {
+                $filtered = $service->reportsForUser($user, ['cluster_id' => (string) $cluster['id']]);
+                foreach ($filtered['items'] as $report) {
+                    same((int) $cluster['id'], (int) $pdo->query('SELECT cluster_id FROM reports WHERE id = ' . (int) $report['id'])->fetchColumn());
+                }
+            }
+        }
+    });
+
+    test_case('maps, timelines and validation history respect viewer access', static function () use ($pdo): void {
+        $service = new ReportService($pdo);
+        $guardian = $pdo->query('SELECT * FROM users WHERE id = 1')->fetch();
+        $expert = $pdo->query('SELECT * FROM users WHERE id = 2')->fetch();
+        foreach ($service->reportsForUser($guardian, [], 1, 50)['items'] as $report) {
+            same(1, (int) $pdo->query('SELECT user_id FROM reports WHERE id = ' . (int) $report['id'])->fetchColumn());
+            check(is_numeric($report['latitude']) && is_numeric($report['longitude']));
+        }
+        foreach ($service->clustersForMap($guardian) as $cluster) {
+            $timeline = $service->clusterTimeline((int) $cluster['id'], $guardian)['timeline'];
+            $last = '';
+            foreach ($timeline as $entry) {
+                check($entry['submitted_at'] >= $last);
+                $last = $entry['submitted_at'];
+                if (!$entry['can_view_details']) {
+                    same(null, $entry['photo_path']); same(null, $entry['latitude']); same(null, $entry['expert_feedback']);
+                }
+            }
+        }
+        $history = new \App\Services\ValidationHistory($pdo);
+        check($history->forStaff($expert)['total'] > 0);
+        throws(static fn () => $history->forStaff($guardian), DomainException::class);
+        $outside = $guardian; $outside['barangay_id'] = 999;
+        same(null, $service->clusterTimeline(1, $outside));
+    });
+
+    test_case('species identification stays unresolved for incomplete or tied traits', static function () use ($pdo): void {
+        $matcher = new SpeciesMatcher($pdo);
+        same(null, $matcher->match(['root_type' => 'Prop roots'])['best']);
+        $pdo->beginTransaction();
+        try {
+            $original = $pdo->query('SELECT root_type, leaf_shape, bark_texture FROM mangrove_species WHERE id = 1')->fetch();
+            $update = $pdo->prepare('UPDATE mangrove_species SET root_type = ?, leaf_shape = ?, bark_texture = ? WHERE id = 2');
+            $update->execute(array_values($original));
+            same(null, $matcher->match($original)['best']);
+        } finally { $pdo->rollBack(); }
+    });
+
+    test_case('history panels render empty visits and zero living counts', static function (): void {
+        foreach ([[], [['observed_alive_count' => 0, 'submitted_at' => '2026-09-27 12:00:00', 'health' => 'At Risk']]] as $healthGrowthEntries) {
+            ob_start();
+            try {
+                require APP_ROOT . '/app/Views/partials/health-growth.php';
+                $html = ob_get_contents();
+            } finally { ob_end_clean(); }
+            check(str_contains($html, $healthGrowthEntries ? 'width:0%' : 'No verified counts yet.'));
+        }
     });
 
     test_case('foreign-key integrity has no orphan records', static function () use ($pdo): void {

@@ -26,6 +26,8 @@ Finder _field(String label) => find.byWidgetPredicate(
 Future<void> _openPicker(
   WidgetTester tester, {
   ReportLocation? initial,
+  LatLng? approximateCenter,
+  double? approximateAccuracy,
   required void Function(ReportLocation?) onResult,
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -46,6 +48,8 @@ Future<void> _openPicker(
                       barangayCenter: const LatLng(10.2833, 123.8833),
                       maxDistanceMeters: 5000,
                       initialLocation: initial,
+                      approximateCenter: approximateCenter,
+                      approximateAccuracy: approximateAccuracy,
                       tileProvider: _MemoryTiles(),
                     ),
                   ),
@@ -63,6 +67,66 @@ Future<void> _openPicker(
 }
 
 void main() {
+  testWidgets(
+    'accurate GPS shows its uncertainty circle and keeps GPS when unchanged',
+    (tester) async {
+      ReportLocation? result;
+      const fix = ReportLocation.gps(
+        latitude: 10.2833,
+        longitude: 123.8833,
+        accuracy: 12,
+      );
+      await _openPicker(
+        tester,
+        initial: fix,
+        onResult: (value) => result = value,
+      );
+      expect(find.byType(CircleLayer), findsOneWidget);
+      expect(
+        tester
+            .widget<CircleLayer>(find.byType(CircleLayer))
+            .circles
+            .single
+            .radius,
+        12,
+      );
+      await tester.tap(find.byKey(const ValueKey('confirm-location')));
+      await tester.pumpAndSettle();
+      expect(result?.source, 'gps');
+      expect(result?.accuracy, 12);
+      expect(result?.latitude, fix.latitude);
+    },
+  );
+
+  testWidgets(
+    'approximate area shows a circle without accepting an automatic report pin',
+    (tester) async {
+      await _openPicker(
+        tester,
+        approximateCenter: const LatLng(10.2833, 123.8833),
+        approximateAccuracy: 500,
+        onResult: (_) {},
+      );
+      expect(find.byType(CircleLayer), findsOneWidget);
+      expect(
+        tester
+            .widget<CircleLayer>(find.byType(CircleLayer))
+            .circles
+            .single
+            .radius,
+        500,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('confirm-location')),
+            )
+            .onPressed,
+        isNull,
+      );
+    },
+  );
+
   testWidgets(
     'no default pin is silently accepted; tap saves a manual location',
     (tester) async {

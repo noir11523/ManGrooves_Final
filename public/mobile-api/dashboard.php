@@ -15,4 +15,7 @@ json_response([
     'stats' => $dashboard['stats'],
     'latest_reports' => $dashboard['latest_reports'],
     'reminders' => $dashboard['reminders'],
+    'clusters' => array_map(static fn (array $cluster): array => array_intersect_key($cluster, array_flip([
+        'id', 'name', 'cluster_code', 'latitude', 'longitude', 'latest_health', 'barangay_name', 'verified_count',
+    ])), $dashboard['clusters']),
 ]);

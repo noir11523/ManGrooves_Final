@@ -37,10 +37,13 @@
             <div class="col-lg-7">
                 <section class="card mb-3"><div class="card-body"><h4 class="h5">Classification</h4>
                     <dl class="row mb-0">
-                        <dt class="col-sm-5">Canonical health score</dt><dd class="col-sm-7"><?= (int) $report['health_score'] ?>/<?= (int) $report['health_max_score'] ?> — <?= e($report['suggested_health']) ?></dd>
+                        <dt class="col-sm-5">System health score</dt><dd class="col-sm-7"><?= (int) $report['health_score'] ?>/<?= (int) $report['health_max_score'] ?> — <?= e($report['suggested_health']) ?></dd>
                         <dt class="col-sm-5">Final health</dt><dd class="col-sm-7"><?= e($report['final_health'] ?: 'Awaiting expert verification') ?></dd>
-                        <dt class="col-sm-5">Suggested species</dt><dd class="col-sm-7"><em><?= e($report['suggested_species_name'] ?: 'Needs manual identification') ?></em><?= $report['species_confidence'] !== null ? ' (' . e($report['species_confidence']) . '%)' : '' ?></dd>
-                        <dt class="col-sm-5">Final species</dt><dd class="col-sm-7"><em><?= e($report['final_species_name'] ?: 'Awaiting expert verification') ?></em></dd>
+                        <dt class="col-sm-5">Suggested species</dt><dd class="col-sm-7"><em><?= e($report['suggested_species_name'] ?: 'Not identified') ?></em><?= $report['species_confidence'] !== null ? ' (' . e($report['species_confidence']) . '% trait match)' : '' ?></dd>
+                        <dt class="col-sm-5">Final species</dt><dd class="col-sm-7"><em><?= e($report['final_species_name'] ?: ($report['status'] === 'verified' ? 'Unidentified' : 'Awaiting expert verification')) ?></em></dd>
+                        <?php if ($report['status'] === 'verified' && !$report['expert_id']): ?>
+                            <dt class="col-sm-5">Verification</dt><dd class="col-sm-7">Automatically verified as Healthy</dd>
+                        <?php endif; ?>
                         <dt class="col-sm-5">Context score</dt><dd class="col-sm-7"><?= $contextScore ?> <span class="text-body-secondary">(separate from health)</span></dd>
                         <dt class="col-sm-5">Environmental score</dt><dd class="col-sm-7"><?= (int) $report['environmental_score'] ?> <span class="text-body-secondary">(separate from health)</span></dd>
                         <dt class="col-sm-5">Observed alive</dt><dd class="col-sm-7"><?= $report['observed_alive_count'] !== null ? number_format((int) $report['observed_alive_count']) : 'Not counted' ?></dd>

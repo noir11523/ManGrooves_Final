@@ -5,10 +5,11 @@ declare(strict_types=1);
 $pageScripts = '<script src="' . e(asset('js/maps.js')) . '"></script>';
 $isGuardian = $user['role'] === 'guardian';
 ?>
+<a class="btn btn-outline-success mb-3" href="<?= e(url('report-map.php')) ?>"><i class="bi bi-map me-1" aria-hidden="true"></i>Report map</a>
 
 <section class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
     <div>
-        <h1 class="h2 mb-1"><?= $isGuardian ? 'My report history' : 'Community reports' ?></h1>
+        <a class="small" href="<?= e(url('dashboard.php')) ?>">Back to dashboard</a><h1 class="h2 mb-1"><?= $isGuardian ? 'My report history' : 'Community reports' ?></h1>
         <p class="text-body-secondary mb-0"><?= number_format($results['total']) ?> report<?= $results['total'] === 1 ? '' : 's' ?> found.</p>
     </div>
     <?php if ($isGuardian): ?><a class="btn btn-success" href="<?= e(url('submit-report.php')) ?>"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>New report</a><?php endif; ?>
@@ -16,6 +17,8 @@ $isGuardian = $user['role'] === 'guardian';
 
 <form class="card border-0 shadow-sm mb-4" method="get" role="search">
     <div class="card-body row g-3 align-items-end">
+        <?php if ($filters['cluster_id']): ?><input type="hidden" name="cluster_id" value="<?= e($filters['cluster_id']) ?>"><?php endif; ?>
+        <div class="col-12 form-check ms-2"><input class="form-check-input" type="checkbox" name="needs_attention" value="1" id="attention" <?= $filters['needs_attention'] === '1' ? 'checked' : '' ?>><label class="form-check-label" for="attention">Needs attention only</label></div>
         <div class="col-lg-5">
             <label class="form-label" for="q">Search</label>
             <input class="form-control" type="search" id="q" name="q" value="<?= e($filters['q']) ?>" placeholder="Report code, cluster, species, or place">

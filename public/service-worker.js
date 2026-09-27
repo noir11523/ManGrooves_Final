@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'mangrooves-v3';
+const CACHE_VERSION = 'mangrooves-v2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PRECACHE = [
     './offline.html',

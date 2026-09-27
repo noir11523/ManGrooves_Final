@@ -27,7 +27,8 @@ $pageScripts = $cluster
         <div class="col-lg-7"><div class="card border-0 shadow-sm"><div class="card-body p-0"><div style="min-height:390px" data-single-cluster-map data-lat="<?= e($cluster['center_lat']) ?>" data-lng="<?= e($cluster['center_lng']) ?>" data-name="<?= e($cluster['name']) ?>" data-health="<?= e($cluster['latest_health']) ?>"></div></div></div></div>
         <div class="col-lg-5"><div class="card border-0 shadow-sm h-100"><div class="card-body"><h2 class="h5">Cluster profile</h2><dl class="row mb-0"><dt class="col-6">Primary species</dt><dd class="col-6"><em><?= e($cluster['scientific_name'] ?: 'Unassigned') ?></em></dd><dt class="col-6">Rarity</dt><dd class="col-6"><?= e($cluster['rarity_level']) ?></dd><dt class="col-6">Initial seedlings</dt><dd class="col-6"><?= number_format((int) $cluster['initial_seedlings']) ?></dd><dt class="col-6">Verified reports</dt><dd class="col-6"><?= number_format((int) $cluster['verified_count']) ?></dd><dt class="col-6">Last verified</dt><dd class="col-6"><?= e(format_datetime($cluster['latest_report_at'], 'M j, Y')) ?></dd></dl></div></div></div>
     </div>
-    <section aria-labelledby="timeline-title">
+    <?php $healthGrowthEntries = $timeline; require APP_ROOT . '/app/Views/partials/health-growth.php'; ?>
+    <section id="observation-timeline" aria-labelledby="timeline-title">
         <h2 class="h4 mb-3" id="timeline-title">Verified monitoring timeline</h2>
         <?php if (!$timeline): ?><div class="card border-0 shadow-sm"><div class="card-body text-center text-body-secondary py-5">No verified reports for this cluster yet.</div></div><?php endif; ?>
         <div class="vstack gap-3">

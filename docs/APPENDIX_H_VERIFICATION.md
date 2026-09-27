@@ -2,10 +2,11 @@
 
 Verified on September 5, 2026 against the source project, a disposable fresh database, and the XAMPP browser installation.
 
-September 12 update: the latest APK is `1.1.5+7`, with accurate GPS, manual map-pin, and
-registration-navigation fixes. See [Mobile release verification](MOBILE_RELEASE_VERIFICATION.md)
-for the new test results and the current XAMPP InnoDB startup failure. The
-historical database-health result below does not describe the current live server.
+September 27 update: web and Flutter now include submitted-report maps, validation
+history, health/growth timelines, server-scored checklist previews, and simpler
+report review and confirmation. Healthy submissions verify automatically. See
+[Mobile release verification](MOBILE_RELEASE_VERIFICATION.md) for release `1.1.9+11`
+and current results. The local database health check now passes.
 
 ## Role key and safe interpretation
 
@@ -53,7 +54,7 @@ Do not describe public expert or administrator self-registration as a feature.
 | Analytics — computed survival rates | * |  |  | Pass | Administrator-only overall, cluster, trend, map popup, and mobile fields |
 | Analytics — health charts / summaries | * | * |  | Pass | Filtered verified-health distribution and verification trend |
 | Analytics — identify high-risk clusters | * | * |  | Pass | At Risk / needs-attention query, table, map, and mobile list |
-| Analytics — export PDF report | * |  |  | Pass | Administrator-only **Print / Save PDF** action and print stylesheet |
+| Analytics — export PDF report | * |  |  | Pass | Administrator-only downloadable PDF on web and Flutter via `AnalyticsPdf` |
 | Gamification — milestone progress |  |  | * | Pass | `BadgeEngine::progressForUser()` and guardian badge progress UI |
 | Gamification — award badges |  |  | * | Pass | Idempotent award after verification with immutable earned snapshots |
 | Gamification — digital certificates | * |  | * | Pass | Guardian self-service and administrator certificate link for eligible guardians |
@@ -64,11 +65,12 @@ Do not describe public expert or administrator self-registration as a feature.
 
 ## Wording corrections for the manuscript
 
-Use **Complete Initial Mangrove Health Checklist** instead of **Input Initial Mangrove Health Status**. The guardian records observable facts; the system calculates a suggestion and the scientific expert validates it.
+Use **Complete Initial Mangrove Health Checklist** instead of **Input Initial Mangrove Health Status**. The guardian records observable facts; the system calculates the result. Healthy submissions verify automatically; other reports await review.
 
 Use **Chronological Photo Evidence (subject to privacy controls)** instead of implying that every guardian can see every private field photo. Scientific experts and administrators may inspect all evidence for official review. A guardian sees their own evidence; another guardian sees a redacted shared cluster event.
 
-Use **Print / Save as PDF** if the implementation must be described precisely. It uses the browser's print-to-PDF facility, as allowed by the project plan; it is not a server-created PDF file.
+Use **Export PDF report**. The server now creates a downloadable PDF; the web and
+Flutter administrator interfaces use the same role-protected export service.
 
 ## Verification commands and results
 

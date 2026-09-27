@@ -58,11 +58,11 @@
             this.bestAccuracy = null;
             this.lastTimestamp = -Infinity;
             if (!this.secure) {
-                this.emit('insecure', 'Live location needs HTTPS or localhost. Open the secure site, or choose your observation point manually.');
+                this.emit('insecure', 'Open the secure site for location access, or place a pin manually.');
                 return;
             }
             if (!this.geolocation) {
-                this.emit('unsupported', 'This browser does not offer device location. Choose your observation point manually.');
+                this.emit('unsupported', 'Location is unavailable. Place a pin manually.');
                 return;
             }
             this.active = true;
@@ -81,14 +81,14 @@
                 if (coords.accuracy > this.maxAccuracy) {
                     this.approximatePosition = position;
                     this.onApproximate(position);
-                    this.emit('approximate', `Approximate reading: ±${Math.ceil(coords.accuracy)} m. Still checking for a better fix. You can show the approximate device area and place the actual observation pin manually.`);
+                    this.emit('approximate', `Approximate: ±${Math.ceil(coords.accuracy)} m. Finding a clearer location...`);
                     return;
                 }
                 // Use the latest accurate position, not an older "best" one: the user may move.
                 this.position = position;
                 this.deadline = this.now() + this.waitMs;
                 this.onPosition(position);
-                this.emit('tracking', `Location updating (estimated ±${Math.ceil(coords.accuracy)} m). Choose “Use this location” at your observation site.`);
+                this.emit('tracking', `Accuracy: ±${Math.ceil(coords.accuracy)} m. Tap Use this location when ready.`);
             };
             const requestAlternative = () => {
                 if (alternativeRequested || !this.active || generation !== this.generation
@@ -99,45 +99,45 @@
                     // It cannot force Wi-Fi/IP or tell us which sensor the browser used.
                     this.geolocation.getCurrentPosition(receive, error => {
                         if (this.active && generation === this.generation && error.code === 1) {
-                            this.finish('denied', 'Location access was denied. Allow location for this site and in Windows Settings, then retry.');
+                            this.finish('denied', 'Allow location in your browser and device settings, then retry.');
                         }
                     }, {enableHighAccuracy: false, maximumAge: 0, timeout: 15000});
                 } catch (error) { /* Keep the primary watch running if the optional request fails. */ }
             };
-            this.emit('searching', 'Allow location access if prompted. Finding a fresh, accurate location…');
+            this.emit('searching', 'Finding your location. Allow access if asked.');
             this.timerId = this.setInterval(() => {
                 if (!this.active || generation !== this.generation) return;
                 if (this.now() >= this.deadline) {
                     const message = this.position
-                        ? 'Live updates stopped: no recent accurate reading. Capture again before choosing this location.'
+                        ? 'Location expired. Try again or place a pin.'
                         : this.bestAccuracy !== null
-                            ? `This device returned only an approximate ±${Math.ceil(this.bestAccuracy)} m location. Check Location help, retry, or select the actual observation point manually.`
-                            : 'No fresh location was received. Check Location help, then retry or select the actual observation point manually.';
+                            ? `Approximate: ±${Math.ceil(this.bestAccuracy)} m. Try again or place a pin manually.`
+                            : 'Location not found. Try again or place a pin manually.';
                     this.finish('timeout', message);
                 } else if (!this.isFresh()) {
                     if (this.now() >= alternativeAt) requestAlternative();
                     if (!this.active || this.isFresh()) return;
                     const seconds = Math.max(1, Math.ceil((this.deadline - this.now()) / 1000));
                     this.emit(this.position ? 'stale' : 'searching', this.position
-                        ? `The last reading is no longer live. Waiting for a fresh reading (${seconds}s remaining)…`
-                        : `Waiting for accuracy of ±${this.maxAccuracy} m or better${this.bestAccuracy !== null ? `; best estimate ±${Math.ceil(this.bestAccuracy)} m` : ''} (${seconds}s remaining)…`);
+                        ? `Refreshing location (${seconds}s)...`
+                        : `Finding location (${seconds}s)${this.bestAccuracy !== null ? ` - accuracy ±${Math.ceil(this.bestAccuracy)} m` : ''}...`);
                 }
             }, 1000);
             try {
                 const watchId = this.geolocation.watchPosition(receive, error => {
                     if (!this.active || generation !== this.generation) return;
                     if (error.code === 1) {
-                        this.finish('denied', 'Location access was denied. Allow location for this site and in Windows Settings, then retry.');
+                        this.finish('denied', 'Allow location in your browser and device settings, then retry.');
                     } else {
                         // A watch continues after transient unavailable/timeout errors; allow it to recover.
-                        this.emit('retrying', 'The device has not provided a fresh position yet. Still trying; check Location help if this continues.');
+                        this.emit('retrying', 'Still finding your location. You can place a pin instead.');
                         requestAlternative();
                     }
                 }, {enableHighAccuracy: true, maximumAge: 0, timeout: 15000});
                 if (this.active && generation === this.generation) this.watchId = watchId;
                 else this.geolocation.clearWatch(watchId);
             } catch (error) {
-                this.finish('unavailable', 'Location could not start. Check browser and Windows location permissions, then retry.');
+                this.finish('unavailable', 'Check location access in your browser and device settings.');
             }
         }
     }

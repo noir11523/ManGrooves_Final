@@ -36,11 +36,16 @@ final class HealthClassifier
     public function classify(array $selections): array
     {
         $criteria = $this->criteriaWithOptions();
+        $healthCriteria = array_filter($criteria, static fn (array $item): bool => in_array($item['code'], self::HEALTH_CODES, true));
+        if (count($healthCriteria) !== count(self::HEALTH_CODES)) {
+            throw new InvalidArgumentException('The health checklist is incomplete. Please contact an administrator.');
+        }
         $observations = [];
         $healthScore = 0;
         $contextScore = 0;
         $environmentalScore = 0;
         $selectedCodes = [];
+        $breakdown = [];
 
         foreach ($criteria as $criterion) {
             $code = (string) $criterion['code'];
@@ -66,7 +71,23 @@ final class HealthClassifier
                 }
                 $option = $allowed[$id];
                 $points = (int) $option['points'];
-                $selectedCodes[$code][] = (string) $option['code'];
+                $optionCode = (string) $option['code'];
+                if (in_array($optionCode, ['none_of_the_above', 'all_of_the_above'], true)) {
+                    if ($criterion['selection_mode'] !== 'multiple' || count($ids) !== 1) {
+                        throw new InvalidArgumentException('Choose ' . $option['label'] . ' on its own for ' . $criterion['name'] . '.');
+                    }
+                    $points = 0;
+                    if ($optionCode === 'all_of_the_above') {
+                        foreach ($allowed as $included) {
+                            if (!in_array($included['code'], ['none_of_the_above', 'all_of_the_above'], true)) {
+                                $points += (int) $included['points'];
+                                $selectedCodes[$code][] = (string) $included['code'];
+                            }
+                        }
+                    }
+                } else {
+                    $selectedCodes[$code][] = $optionCode;
+                }
                 $observation = [
                     'criteria_id' => (int) $criterion['id'],
                     'criteria_code' => $code,
@@ -83,7 +104,11 @@ final class HealthClassifier
                 $observations[] = $observation;
 
                 if (in_array($code, self::HEALTH_CODES, true)) {
+                    if ($criterion['selection_mode'] !== 'single' || $points < 0 || $points > 2) {
+                        throw new InvalidArgumentException('The health scoring settings need an administrator check.');
+                    }
                     $healthScore += $points;
+                    $breakdown[] = ['name' => $criterion['name'], 'answer' => $option['label'], 'points' => $points, 'max_points' => 2];
                 } elseif ($criterion['score_group'] === 'environment') {
                     $environmentalScore += $points;
                 } else {
@@ -108,6 +133,8 @@ final class HealthClassifier
             'health_max_score' => 6,
             'context_score' => $contextScore,
             'environmental_score' => $environmentalScore,
+            'breakdown' => $breakdown,
+            'guide' => '6 Healthy · 3–5 Stressed · 0–2 At Risk',
             'observations' => $observations,
         ];
     }

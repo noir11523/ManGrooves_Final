@@ -1,7 +1,8 @@
 <?php
 $photoUrl = report_photo_url((int) $report['id']);
 $displayHealth = $report['final_health'] ?: $report['suggested_health'];
-$displaySpecies = $report['final_common_name'] ?: ($report['suggested_common_name'] ?: 'Manual identification needed');
+$displaySpecies = $report['status'] === 'verified' ? ($report['final_common_name'] ?: 'Not identified') : ($report['suggested_common_name'] ?: 'Not identified');
+$displayScientific = $report['status'] === 'verified' ? $report['final_scientific_name'] : $report['suggested_scientific_name'];
 $oldAction = (string) old('action', 'confirm');
 $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $oldAction : 'confirm';
 ?>
@@ -55,12 +56,13 @@ $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $old
 
     <div class="col-xl-5">
         <div class="card mb-4">
-            <div class="card-header"><h2 class="h5 mb-0">Automated assessment</h2></div>
+            <div class="card-header"><h2 class="h5 mb-0">Assessment</h2></div>
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-6"><div class="text-muted small">Health</div><span class="badge <?= e(health_class($displayHealth)) ?>"><?= e($displayHealth) ?></span></div>
-                    <div class="col-6"><div class="text-muted small">Score</div><strong><?= (int) $report['health_score'] ?> / <?= (int) $report['health_max_score'] ?></strong></div>
-                    <div class="col-12"><div class="text-muted small">Species</div><strong><?= e($displaySpecies) ?></strong><?php if ($report['suggested_scientific_name']): ?><div class="small fst-italic"><?= e($report['suggested_scientific_name']) ?></div><?php endif; ?></div>
+                    <div class="col-6"><div class="text-muted small">System score</div><strong><?= (int) $report['health_score'] ?> / <?= (int) $report['health_max_score'] ?></strong></div>
+                    <p class="small mb-0">6 Healthy · 3–5 Stressed · 0–2 At Risk</p>
+                    <div class="col-12"><div class="text-muted small">Species</div><strong><?= e($displaySpecies) ?></strong><?php if ($displayScientific): ?><div class="small fst-italic"><?= e($displayScientific) ?></div><?php endif; ?></div>
                     <div class="col-12"><div class="text-muted small">Traits</div><ul class="mb-0"><li>Roots: <?= e($report['root_type']) ?></li><li>Leaf: <?= e($report['leaf_shape']) ?></li><li>Bark: <?= e($report['bark_texture']) ?></li></ul></div>
                 </div>
             </div>
@@ -119,14 +121,15 @@ $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $old
         <div class="card mb-4">
             <div class="card-header"><h2 class="h5 mb-0">Expert decision</h2></div>
             <div class="card-body">
-                <dl class="row mb-0"><dt class="col-5">Reviewed by</dt><dd class="col-7"><?= e($report['expert_name'] ?: 'Unknown') ?></dd><dt class="col-5">Reviewed at</dt><dd class="col-7"><?= e(format_datetime($report['verified_at'])) ?></dd><dt class="col-5">Feedback</dt><dd class="col-7"><?= nl2br(e($report['expert_feedback'] ?: 'No feedback.')) ?></dd><?php if ($report['cluster_name']): ?><dt class="col-5">Cluster</dt><dd class="col-7"><?= e($report['cluster_code']) ?> — <?= e($report['cluster_name']) ?></dd><?php endif; ?></dl>
+                <dl class="row mb-0"><dt class="col-5">Reviewed by</dt><dd class="col-7"><?= e($report['expert_name'] ?: ($report['status'] === 'verified' ? 'System (automatic)' : 'Unknown')) ?></dd><dt class="col-5">Reviewed at</dt><dd class="col-7"><?= e(format_datetime($report['verified_at'])) ?></dd><dt class="col-5">Feedback</dt><dd class="col-7"><?= nl2br(e($report['expert_feedback'] ?: 'No feedback.')) ?></dd><?php if ($report['cluster_name']): ?><dt class="col-5">Cluster</dt><dd class="col-7"><?= e($report['cluster_code']) ?> — <?= e($report['cluster_name']) ?></dd><?php endif; ?></dl>
             </div>
         </div>
         <?php endif; ?>
 
+        <?php if ($report['status'] === 'verified' && !$report['expert_id'] && !$logs): ?><div class="card card-body"><h2 class="h5">Validation history</h2><p class="mb-0">Automatically verified as Healthy &middot; <?= e(format_datetime($report['verified_at'])) ?></p></div><?php endif; ?>
         <?php if ($logs !== []): ?>
-        <div class="card"><div class="card-header"><h2 class="h5 mb-0">Verification log</h2></div><div class="list-group list-group-flush">
-            <?php foreach ($logs as $log): ?><div class="list-group-item"><div class="d-flex justify-content-between gap-2"><strong><?= e(ucfirst($log['action'])) ?> by <?= e($log['verifier_name']) ?></strong><span class="small text-muted"><?= e(format_datetime($log['created_at'])) ?></span></div><div class="small"><?= e($log['previous_status']) ?> &rarr; <?= e($log['new_status']) ?>; <?= e($log['previous_health'] ?: '—') ?> &rarr; <?= e($log['new_health'] ?: '—') ?></div><?php if ($log['comment']): ?><div class="mt-2"><?= nl2br(e($log['comment'])) ?></div><?php endif; ?></div><?php endforeach; ?>
+        <div class="card"><div class="card-header"><h2 class="h5 mb-0">Validation history</h2></div><div class="list-group list-group-flush">
+            <?php foreach ($logs as $log): ?><div class="list-group-item"><div class="d-flex justify-content-between gap-2"><strong><?= e(ucfirst($log['action'])) ?> by <?= e($log['verifier_name']) ?></strong><span class="small text-muted"><?= e(format_datetime($log['created_at'])) ?></span></div><div class="small"><?= e($log['previous_status']) ?> &rarr; <?= e($log['new_status']) ?>; <?= e($log['previous_health'] ?: '—') ?> &rarr; <?= e($log['new_health'] ?: '—') ?></div><div class="small">Species: <?= e($log['previous_species_name'] ?: 'Unassigned') ?> &rarr; <?= e($log['new_species_name'] ?: 'Unassigned') ?></div><?php if ($log['comment']): ?><div class="mt-2"><?= nl2br(e($log['comment'])) ?></div><?php endif; ?></div><?php endforeach; ?>
         </div></div>
         <?php endif; ?>
     </div>

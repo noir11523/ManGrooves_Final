@@ -1,12 +1,14 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../core/api_client.dart';
 
 class AnalyticsScreen extends StatefulWidget {
-  const AnalyticsScreen({super.key, required this.api});
+  const AnalyticsScreen({super.key, required this.api, this.active = true});
 
   final ApiClient api;
+  final bool active;
 
   @override
   State<AnalyticsScreen> createState() => _AnalyticsScreenState();
@@ -15,6 +17,39 @@ class AnalyticsScreen extends StatefulWidget {
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Map<String, dynamic>? _analytics;
   String? _error;
+  bool _exporting = false;
+
+  @override
+  void didUpdateWidget(covariant AnalyticsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _load();
+  }
+
+  Future<void> _exportPdf() async {
+    setState(() => _exporting = true);
+    try {
+      final bytes = await widget.api.analyticsPdf();
+      if (!mounted) return;
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'mangrooves-analytics.pdf',
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is ApiException
+                  ? error.message
+                  : 'Unable to export the PDF. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
 
   @override
   void initState() {
@@ -93,13 +128,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             'Verified evidence, monitoring summaries, and high-risk sites.',
           ),
           const SizedBox(height: 18),
+          if (capabilities['can_export_pdf'] == true) ...[
+            FilledButton.icon(
+              onPressed: _exporting ? null : _exportPdf,
+              icon: const Icon(Icons.picture_as_pdf),
+              label: Text(_exporting ? 'Generating PDF...' : 'Generate PDF'),
+            ),
+            const SizedBox(height: 18),
+          ],
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 1.45,
+            mainAxisExtent: 145,
             children: [
               if (canViewSurvival)
                 _AnalyticsStat(

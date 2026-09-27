@@ -18,6 +18,7 @@ $navigation = $role === 'guardian'
         ['Submit report', 'submit-report.php', 'bi-camera-fill'],
         ['My reports', 'reports.php', 'bi-journal-text'],
         ['Explore species', 'explore.php', 'bi-map-fill'],
+        ['Clusters', 'clusters.php', 'bi-pin-map-fill'],
         ['My badges', 'badges.php', 'bi-award-fill'],
     ]
     : [
@@ -57,10 +58,18 @@ $isActive = static function (string $href) use ($requestPath): bool {
     <nav class="sidebar-nav" aria-label="Workspace navigation">
         <span class="sidebar-section-label">Workspace</span>
         <?php foreach ($navigation as [$label, $href, $icon]): ?>
-            <a class="sidebar-link <?= $isActive($href) ? 'active' : '' ?>" href="<?= e(url($href)) ?>" <?= $isActive($href) ? 'aria-current="page"' : '' ?>>
-                <i class="bi <?= e($icon) ?>" aria-hidden="true"></i>
-                <span><?= e($label) ?></span>
-            </a>
+            <?php if ($label === 'Clusters'): ?>
+                <details class="cluster-nav" data-cluster-menu>
+                    <summary class="sidebar-link <?= $isActive($href) ? 'active' : '' ?>"><i class="bi <?= e($icon) ?>" aria-hidden="true"></i><span>Clusters</span><i class="bi bi-chevron-down ms-auto" aria-hidden="true"></i></summary>
+                    <div class="cluster-submenu">
+                        <a href="<?= e(url($href)) ?>">All clusters</a>
+                        <a href="<?= e(url('clusters.php?view=health')) ?>">Health history</a>
+                        <a href="<?= e(url('clusters.php?view=growth')) ?>">Growth timeline</a>
+                    </div>
+                </details>
+            <?php else: ?>
+                <a class="sidebar-link <?= $isActive($href) ? 'active' : '' ?>" href="<?= e(url($href)) ?>" <?= $isActive($href) ? 'aria-current="page"' : '' ?>><i class="bi <?= e($icon) ?>" aria-hidden="true"></i><span><?= e($label) ?></span></a>
+            <?php endif; ?>
         <?php endforeach; ?>
 
         <span class="sidebar-section-label mt-3">Account</span>

@@ -3,15 +3,22 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 
 class BadgesScreen extends StatefulWidget {
-  const BadgesScreen({super.key, required this.api});
+  const BadgesScreen({super.key, required this.api, this.active = true});
 
   final ApiClient api;
+  final bool active;
 
   @override
   State<BadgesScreen> createState() => _BadgesScreenState();
 }
 
 class _BadgesScreenState extends State<BadgesScreen> {
+  @override
+  void didUpdateWidget(covariant BadgesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _load();
+  }
+
   Map<String, dynamic>? _data;
   String? _error;
 

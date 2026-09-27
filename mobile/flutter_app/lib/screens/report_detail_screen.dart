@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import 'validation_history_screen.dart';
+import 'cluster_timeline_screen.dart';
 
 class ReportDetailScreen extends StatefulWidget {
   const ReportDetailScreen({
@@ -99,6 +101,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             'Sitio': _report!['sitio_name'],
             'Coordinates': '${_report!['latitude']}, ${_report!['longitude']}',
             'Living mangroves': _report!['observed_alive_count'],
+            if (_report!['status'] == 'verified' &&
+                _report!['expert_id'] == null)
+              'Verification': 'Automatically verified as Healthy',
           },
         ),
         const SizedBox(height: 12),
@@ -106,8 +111,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           title: 'Identification',
           rows: {
             'Species':
-                _report!['final_species_name'] ??
-                _report!['suggested_species_name'] ??
+                (_report!['status'] == 'verified'
+                    ? _report!['final_species_name']
+                    : (_report!['status'] == 'pending'
+                          ? _report!['suggested_species_name']
+                          : null)) ??
                 'Unidentified',
             'Root type': _report!['root_type'],
             'Leaf shape': _report!['leaf_shape'],
@@ -115,6 +123,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           },
         ),
         const SizedBox(height: 18),
+        Text(
+          'System health score: ${_report!['health_score']} / ${_report!['health_max_score']}',
+        ),
+        const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
+        const SizedBox(height: 8),
         Text(
           'Health checklist',
           style: Theme.of(context).textTheme.titleLarge
@@ -124,7 +137,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ...observations.map((criterion) {
           final options = (criterion['options'] as List? ?? const [])
               .map((item) => Map<String, dynamic>.from(item as Map))
-              .map((item) => item['label']?.toString() ?? '')
+              .map(
+                (item) =>
+                    '${item['label']}${criterion['score_group'] == 'health' ? ' (${item['points']}/2)' : ''}',
+              )
               .join(', ');
           return ListTile(
             contentPadding: EdgeInsets.zero,
@@ -133,6 +149,21 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             subtitle: Text(options),
           );
         }),
+        if (_report!['cluster_id'] != null)
+          TextButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => ClusterTimelineScreen(
+                  api: widget.api,
+                  clusterId: int.parse('${_report!['cluster_id']}'),
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.timeline),
+            label: const Text('Cluster timeline'),
+          ),
+        ValidationHistoryCard(report: _report!),
         if ((_report!['expert_feedback']?.toString().trim().isNotEmpty ??
             false)) ...[
           const SizedBox(height: 12),

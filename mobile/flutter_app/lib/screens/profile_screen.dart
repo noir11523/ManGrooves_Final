@@ -22,7 +22,8 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
+  final _firstName = TextEditingController();
+  final _lastName = TextEditingController();
   final _email = TextEditingController();
   final _phone = TextEditingController();
   Map<String, dynamic>? _user;
@@ -42,7 +43,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _applyUser(Map<String, dynamic> user) {
     _user = Map<String, dynamic>.from(user);
-    _name.text = user['full_name']?.toString() ?? '';
+    _firstName.text = user['first_name']?.toString() ?? '';
+    _lastName.text = user['last_name']?.toString() ?? '';
     _email.text = user['email']?.toString() ?? '';
     _phone.text = user['phone']?.toString() ?? '';
     _barangayId = user['barangay_id'] as int?;
@@ -72,7 +74,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
     try {
       final response = await widget.api.updateProfile({
-        'full_name': _name.text,
+        'first_name': _firstName.text.trim(),
+        'last_name': _lastName.text.trim(),
         'email': _email.text,
         'phone': _phone.text,
         'barangay_id': _barangayId,
@@ -94,7 +97,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
-    _name.dispose();
+    _firstName.dispose();
+    _lastName.dispose();
     _email.dispose();
     _phone.dispose();
     super.dispose();
@@ -111,7 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           radius: 38,
           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
           child: Text(
-            (_name.text.trim().isEmpty ? 'M' : _name.text.trim()[0])
+            (_firstName.text.trim().isEmpty ? 'M' : _firstName.text.trim()[0])
                 .toUpperCase(),
             style: Theme.of(context).textTheme.headlineLarge,
           ),
@@ -127,6 +131,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(_error!, style: const TextStyle(color: Colors.red)),
           const SizedBox(height: 12),
         ],
+        if (user['first_name'] == null || user['last_name'] == null)
+          Text(
+            'Current name: ${user['full_name']}. Please confirm your first and last names.',
+          ),
         Form(
           key: _formKey,
           child: Card(
@@ -135,14 +143,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 children: [
                   TextFormField(
-                    controller: _name,
-                    decoration: const InputDecoration(labelText: 'Full name'),
+                    controller: _firstName,
+                    maxLength: 60,
+                    autofillHints: const [AutofillHints.givenName],
+                    decoration: const InputDecoration(labelText: 'First name'),
                     validator: (value) {
                       final length = value?.trim().length ?? 0;
-                      return length < 2 || length > 120
-                          ? 'Use 2 to 120 characters.'
+                      return length < 1 || length > 60
+                          ? 'Enter 1 to 60 characters.'
                           : null;
                     },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _lastName,
+                    maxLength: 59,
+                    autofillHints: const [AutofillHints.familyName],
+                    decoration: const InputDecoration(labelText: 'Last name'),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter your last name.'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(

@@ -25,7 +25,7 @@ if ($clusterId) {
     }
     $timelineStatement = $pdo->prepare(
         "SELECT r.id, r.report_code, r.status, r.suggested_health, r.final_health, r.rarity_level,
-                r.observed_alive_count, r.needs_attention, r.submitted_at, r.verified_at,
+                r.observed_alive_count, r.needs_attention, r.submitted_at, r.verified_at, r.parent_report_id,
                 r.expert_feedback, r.photo_path, u.full_name AS guardian_name, e.full_name AS expert_name,
                 s.common_name AS species_name
          FROM reports r

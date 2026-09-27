@@ -78,7 +78,7 @@ final class ReportService
 
     /**
      * Validates and stores a complete report and every selected observation.
-     * The report and observation rows are committed together as pending.
+     * Healthy reports are verified before the report and observations commit.
      *
      * @param array<string,mixed> $payload
      * @param array<string,mixed> $photo
@@ -134,7 +134,7 @@ final class ReportService
         $rarity = 'Unassigned';
         if ($clusterId !== null) {
             $clusterStatement = $this->pdo->prepare(
-                'SELECT id, rarity_level FROM mangrove_clusters
+                'SELECT id, rarity_level, center_lat, center_lng, radius_meters FROM mangrove_clusters
                  WHERE id = :id AND barangay_id = :barangay_id LIMIT 1'
             );
             $clusterStatement->execute(['id' => $clusterId, 'barangay_id' => $barangayId]);
@@ -183,6 +183,11 @@ final class ReportService
         }
         if ($locationSource === 'manual') {
             $accuracy = null;
+        }
+        if ($clusterId !== null && self::distanceMeters($latitude, $longitude,
+            (float) $cluster['center_lat'], (float) $cluster['center_lng'])
+            > max(10, (int) $cluster['radius_meters']) + ($accuracy ?? 0)) {
+            throw new InvalidArgumentException('The report pin does not match the selected cluster. Choose the correct cluster or select a new observation site, then confirm your actual location.');
         }
 
         $sitio = $this->cleanText($payload['sitio_name'] ?? '', 120, 'Sitio or location name');
@@ -262,7 +267,8 @@ final class ReportService
                     "SELECT COUNT(*) FROM reports WHERE user_id = :user_id AND status = 'pending'"
                 );
                 $pendingSubmissions->execute(['user_id' => $userId]);
-                if ((int) $pendingSubmissions->fetchColumn() >= (int) \config('pending_report_limit_per_guardian', 25)) {
+                if ((int) $pendingSubmissions->fetchColumn() >= (int) \config('pending_report_limit_per_guardian', 25)
+                    && $classification['status'] !== 'Healthy') {
                     throw new InvalidArgumentException('Your pending-report queue is full. Wait for expert review before submitting more reports.');
                 }
 
@@ -377,15 +383,22 @@ final class ReportService
                     ]);
                 }
 
+                $status = 'pending';
+                if ($classification['status'] === 'Healthy') {
+                    (new VerificationService($pdo))->autoVerifyHealthy($reportId);
+                    $status = 'verified';
+                }
+                if ($status === 'pending') (new NotificationService($pdo))->syncStaff();
+
                 \Audit::logRequired('report.submitted', 'report', $reportId, [
                     'report_code' => $reportCode,
-                    'status' => 'pending',
+                    'status' => $status,
                 ], $userId);
 
                 return [
                     'id' => $reportId,
                     'report_code' => $reportCode,
-                    'status' => 'pending',
+                    'status' => $status,
                     'suggested_health' => $classification['status'],
                     'health_score' => $classification['health_score'],
                     'health_max_score' => 6,
@@ -403,6 +416,7 @@ final class ReportService
     /** @return array<string,mixed> */
     public function dashboard(array $user): array
     {
+        (new NotificationService($this->pdo))->syncForUser($user);
         $userId = (int) $user['id'];
         $guardian = ($user['role'] ?? '') === 'guardian';
         $where = $guardian ? ' WHERE r.user_id = :user_id' : '';
@@ -494,7 +508,9 @@ final class ReportService
             }
         }
 
-        return ['stats' => $stats, 'latest_reports' => $latest->fetchAll(), 'reminders' => $reminders];
+        $clusters = $this->clustersForMap($user);
+        $stats['map_clusters'] = count($clusters);
+        return ['stats' => $stats, 'latest_reports' => $latest->fetchAll(), 'reminders' => $reminders, 'clusters' => $clusters];
     }
 
     /** @return array{items:list<array<string,mixed>>,total:int,page:int,pages:int,per_page:int} */
@@ -509,6 +525,14 @@ final class ReportService
             $params['viewer_id'] = (int) $user['id'];
         }
         $status = is_scalar($filters['status'] ?? null) ? (string) $filters['status'] : '';
+        if (($filters['needs_attention'] ?? '') === '1') {
+            $conditions[] = "r.status = 'verified' AND r.needs_attention = 1";
+        }
+        $clusterFilter = filter_var($filters['cluster_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($clusterFilter) {
+            $conditions[] = 'r.cluster_id = :cluster_id';
+            $params['cluster_id'] = (int) $clusterFilter;
+        }
         if (in_array($status, ['pending', 'verified', 'rejected'], true)) {
             $conditions[] = 'r.status = :status';
             $params['status'] = $status;
@@ -547,6 +571,7 @@ final class ReportService
         $items = $this->pdo->prepare(
             "SELECT r.id, r.report_code, r.status, r.submitted_at, r.verified_at,
                     r.next_followup_date, r.needs_attention, r.parent_report_id,
+                    r.latitude, r.longitude, r.cluster_id,
                     COALESCE(r.final_health, r.suggested_health) AS display_health,
                     CASE
                         WHEN r.status = 'verified' THEN fs.scientific_name
@@ -624,6 +649,7 @@ final class ReportService
             $code = (string) $observation['criteria_code'];
             if (!isset($grouped[$code])) {
                 $grouped[$code] = [
+                    'code' => $code,
                     'name' => (string) $observation['criteria_name'],
                     'score_group' => (string) $observation['score_group'],
                     'options' => [],
@@ -638,8 +664,11 @@ final class ReportService
         }
 
         $logs = $this->pdo->prepare(
-            'SELECT vl.*, u.full_name AS verifier_name
+            'SELECT vl.*, u.full_name AS verifier_name, ps.scientific_name AS previous_species_name,
+                    ns.scientific_name AS new_species_name
              FROM verification_logs vl JOIN users u ON u.id = vl.verifier_id
+             LEFT JOIN mangrove_species ps ON ps.id = vl.previous_species_id
+             LEFT JOIN mangrove_species ns ON ns.id = vl.new_species_id
              WHERE vl.report_id = :report_id ORDER BY vl.created_at, vl.id'
         );
         $logs->execute(['report_id' => $reportId]);
@@ -654,6 +683,7 @@ final class ReportService
         $statement = $this->pdo->prepare(
             "SELECT r.id, r.report_code, r.submitted_at, r.verified_at, r.next_followup_date,
                     COALESCE(r.final_health, r.suggested_health) AS health,
+                    r.health_score, r.health_max_score, r.parent_report_id,
                     s.scientific_name AS species_name
              FROM reports r
              LEFT JOIN mangrove_species s ON s.id = r.final_species_id
@@ -806,11 +836,12 @@ final class ReportService
             "SELECT r.id, r.user_id, r.report_code, r.submitted_at, r.verified_at,
                     r.final_health AS health, r.observed_alive_count, r.needs_attention,
                     r.photo_path, r.expert_feedback, r.latitude, r.longitude,
+                    r.health_score, r.health_max_score, r.parent_report_id,
                     s.scientific_name AS species_name
              FROM reports r
              LEFT JOIN mangrove_species s ON s.id = r.final_species_id
              WHERE r.cluster_id = :cluster_id AND r.status = 'verified'
-             ORDER BY COALESCE(r.verified_at, r.submitted_at), r.id"
+             ORDER BY r.submitted_at, r.id"
         );
         $timeline->execute(['cluster_id' => $clusterId]);
         $entries = $timeline->fetchAll();

@@ -149,7 +149,7 @@ test('a stalled stream becomes stale then stops, but a new fix can recover it', 
     assert.equal(f.tracker.isFresh(), true);
     f.advance(60000);
     assert.equal(f.tracker.active, false);
-    assert.match(f.states.at(-1).message, /no recent accurate reading/);
+    assert.match(f.states.at(-1).message, /Location expired/);
 });
 
 test('cancel/manual selection prevents queued callbacks overwriting the selected point', () => {

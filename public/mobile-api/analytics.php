@@ -16,7 +16,7 @@ $analytics = (new AnalyticsService(Database::connection()))->dashboard($_GET);
 $canViewSurvival = ($user['role'] ?? '') === 'system_admin';
 $analytics['capabilities'] = [
     'can_view_survival' => $canViewSurvival,
-    'can_export_pdf' => false,
+    'can_export_pdf' => $canViewSurvival,
 ];
 if (!$canViewSurvival) {
     unset($analytics['overall_survival'], $analytics['survival_eligible_clusters']);

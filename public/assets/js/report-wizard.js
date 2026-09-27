@@ -4,6 +4,17 @@
     const form = document.querySelector('[data-report-wizard]');
     if (!form) return;
 
+    form.querySelectorAll('[data-criteria-code]').forEach((group) => {
+        const choices = [...group.querySelectorAll('input[type="checkbox"]')];
+        const aggregate = (choice) => ['none_of_the_above', 'all_of_the_above'].includes(choice.dataset.optionCode);
+        choices.forEach((choice) => choice.addEventListener('change', () => {
+            if (!choice.checked) return;
+            choices.forEach((other) => {
+                if (other !== choice && (aggregate(choice) || aggregate(other))) other.checked = false;
+            });
+        }));
+    });
+
     const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
     })[character]);
@@ -21,6 +32,13 @@
     const locationStatus = form.querySelector('[data-location-status]');
     const clusterSelect = form.querySelector('[data-cluster-select]');
     const parentSelect = form.querySelector('[data-parent-report]');
+    const followupToggle = form.querySelector('[data-followup-toggle]');
+    const followupFields = form.querySelector('[data-followup-fields]');
+    const followupToggleWrap = form.querySelector('[data-followup-toggle-wrap]');
+    const summary = form.querySelector('[data-report-summary]');
+    const exitLink = form.querySelector('[data-exit-report]');
+    let submitting = false;
+    let reviewed = false;
     const photoInput = form.querySelector('[data-photo-input]');
     const photoPreview = form.querySelector('[data-photo-preview]');
     const gpsButton = form.querySelector('[data-use-gps]');
@@ -34,6 +52,7 @@
     const cancelAreaButton = form.querySelector('[data-cancel-area]');
     const areaStatus = form.querySelector('[data-area-status]');
     const maxGpsAccuracy = Math.max(10, Number(form.dataset.maxGpsAccuracy) || 100);
+    const barangayCenter = [Number(form.dataset.centerLat) || 10.2833, Number(form.dataset.centerLng) || 123.8833];
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
     let currentStep = 1;
     let map = null;
@@ -52,9 +71,35 @@
     let ipTimeout = null;
     let ipGeneration = 0;
 
+    const renderSummary = () => {
+        if (!summary) return;
+        const value = name => form.querySelector(`[name="${name}"]`)?.value?.trim() || 'None';
+        const row = (label, text) => `<dt class="col-sm-4">${escapeHtml(label)}</dt><dd class="col-sm-8">${escapeHtml(text)}</dd>`;
+        const card = (step, title, content) => `<div class="card mb-3"><div class="card-body"><div class="d-flex justify-content-between align-items-center mb-3"><h3 class="h6 mb-0">${title}</h3><button type="button" class="btn btn-sm btn-outline-success" data-edit-step="${step}">Edit ${title.toLowerCase()}</button></div>${content}</div></div>`;
+        const site = row('Site', clusterSelect?.value ? clusterSelect.selectedOptions[0].textContent : 'New site')
+            + row('Location name', value('sitio_name'))
+            + row('Map pin', `${latitude.value}, ${longitude.value}`)
+            + row('Location type', source.value === 'gps' ? `GPS (±${Math.ceil(Number(accuracy.value))} m)` : 'Manual pin')
+            + row('Living mangroves', value('observed_alive_count'))
+            + (parentSelect?.value ? row('Follow-up to', parentSelect.selectedOptions[0].textContent) : '');
+        const health = [...form.querySelectorAll('[data-criteria-code]')].map(group => {
+            const answers = [...group.querySelectorAll('input:checked')].map(input => group.querySelector(`label[for="${input.id}"]`)?.textContent.trim() || input.dataset.optionCode).join(', ');
+            return row(group.querySelector('legend')?.textContent.trim() || group.dataset.criteriaCode.replaceAll('_', ' '), answers || 'None selected');
+        }).join('');
+        const details = row('Roots', value('root_type')) + row('Leaves', value('leaf_shape'))
+            + row('Bark', value('bark_texture')) + row('Notes', value('guardian_remarks'));
+        summary.innerHTML = card(1, 'Site', `${previewObjectUrl ? `<img class="img-fluid rounded mb-3" style="max-height:180px" src="${escapeHtml(previewObjectUrl)}" alt="Report photo">` : ''}<dl class="row mb-0">${site}</dl>`)
+            + card(2, 'Health', `<dl class="row mb-0">${health}</dl>`)
+            + card(3, 'Details', `<dl class="row mb-0">${details}</dl>`);
+    };
+    summary?.addEventListener('click', event => {
+        const edit = event.target.closest('[data-edit-step]');
+        if (edit && !submitting) setStep(Number(edit.dataset.editStep));
+    });
+
     const setStep = (step) => {
         if (step !== 1 && liveLocation?.active && !freezeLiveLocation()) return;
-        currentStep = Math.max(1, Math.min(3, step));
+        currentStep = Math.max(1, Math.min(4, step));
         panels.forEach((panel) => { panel.hidden = Number(panel.dataset.stepPanel) !== currentStep; });
         indicators.forEach((item) => {
             const active = Number(item.dataset.stepIndicator) === currentStep;
@@ -65,13 +110,21 @@
             badge?.classList.toggle('text-bg-success', active);
             badge?.classList.toggle('text-bg-secondary', !active);
         });
-        const percentage = currentStep === 1 ? 33 : (currentStep === 2 ? 66 : 100);
+        const percentage = currentStep * 25;
         progress?.setAttribute('aria-valuenow', String(percentage));
         const bar = progress?.querySelector('.progress-bar');
         if (bar) bar.style.width = `${percentage}%`;
         backButton.hidden = currentStep === 1;
-        nextButton.hidden = currentStep === 3;
-        submitButton.hidden = currentStep !== 3;
+        nextButton.hidden = currentStep === 4;
+        nextButton.textContent = currentStep === 3 ? 'Review report' : 'Continue';
+        submitButton.hidden = currentStep !== 4;
+        if (exitLink) exitLink.hidden = currentStep !== 1;
+        if (currentStep === 4) { renderSummary(); reviewed = true; }
+        else {
+            reviewed = false;
+            const confirmation = form.querySelector('[name="field_confirmation"]');
+            if (confirmation) confirmation.checked = false;
+        }
         if (currentStep === 1 && map) window.setTimeout(() => map.invalidateSize(), 0);
         panels.find((panel) => Number(panel.dataset.stepPanel) === currentStep)?.querySelector('h2')?.focus?.({preventScroll: true});
         window.scrollTo({top: 0, behavior: 'smooth'});
@@ -100,12 +153,14 @@
             }
         }
         if (step === 1) {
+            const count = form.querySelector('[name="observed_alive_count"]');
+            if (count?.value && !clusterSelect?.value && Number(count.value) < 1) return showFieldError(count, 'A new site needs at least one living mangrove.');
             if (areaPending || ipRequest) {
-                locationStatus.textContent = 'Tap the actual observation spot to select a manual pin, or cancel the area lookup before continuing.';
+                locationStatus.textContent = 'Place a pin at your site or cancel the area search.';
                 return false;
             }
             if (liveLocation?.active && !liveLocation.isFresh()) {
-                locationStatus.textContent = 'Wait for a fresh accurate reading, cancel live capture, or choose the observation point manually.';
+                locationStatus.textContent = 'Wait for a clear location or place a pin.';
                 return false;
             }
             if (!latitude.value || !longitude.value || !['gps', 'manual'].includes(source.value)) {
@@ -113,7 +168,7 @@
             }
             if (source.value === 'gps') {
                 if (gpsNeedsRefresh) {
-                    locationStatus.textContent = 'This reading is no longer live. Capture again or choose the observation point manually.';
+                    locationStatus.textContent = 'Location expired. Try again or place a pin.';
                     return false;
                 }
                 const gpsAccuracy = Number(accuracy.value);
@@ -196,15 +251,16 @@
     if (source.value === 'gps' && (accuracy.value.trim() === '' || !Number.isFinite(Number(accuracy.value))
         || Number(accuracy.value) < 0 || Number(accuracy.value) > maxGpsAccuracy)) {
         latitude.value = longitude.value = source.value = accuracy.value = '';
-        locationStatus.textContent = 'The previous location was too approximate. Capture again or choose the observation point manually.';
+        locationStatus.textContent = 'Location was too approximate. Try again or place a pin.';
     }
 
     if (window.L) {
-        const initialLat = Number(latitude.value) || 10.2833;
-        const initialLng = Number(longitude.value) || 123.8833;
+        const initialCluster = clusterSelect?.value ? clusterSelect.selectedOptions[0] : null;
+        const initialLat = latitude.value !== '' ? Number(latitude.value) : Number(initialCluster?.dataset.lat ?? barangayCenter[0]);
+        const initialLng = longitude.value !== '' ? Number(longitude.value) : Number(initialCluster?.dataset.lng ?? barangayCenter[1]);
         map = window.L.map(form.querySelector('[data-location-map]')).setView([initialLat, initialLng], latitude.value ? 18 : 15);
         window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 20,
+            maxZoom: 19,
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
         if (latitude.value && longitude.value) {
@@ -224,11 +280,11 @@
             source.value = 'manual';
             accuracy.value = '';
             gpsNeedsRefresh = false;
-            locationStatus.textContent = 'Manual coordinates entered. Verify them carefully before submitting.';
+            locationStatus.textContent = 'Coordinates saved. Check your pin before submitting.';
         };
         latitude.addEventListener('input', manualCoordinates);
         longitude.addEventListener('input', manualCoordinates);
-        locationStatus.textContent = 'The map could not load. Enter coordinates manually or use live GPS.';
+        locationStatus.textContent = 'Map unavailable. Enter coordinates or use GPS.';
     }
 
     function areaControls() {
@@ -258,7 +314,7 @@
 
     function showApproximateArea(area, label) {
         if (!map) {
-            if (areaStatus) areaStatus.textContent = 'The map is unavailable. Enter the actual coordinates manually or retry live location.';
+            if (areaStatus) areaStatus.textContent = 'Map unavailable. Enter coordinates or retry GPS.';
             return;
         }
         stopGpsCapture();
@@ -277,7 +333,7 @@
         }
         const uncertainty = area.accuracy === null ? 'accuracy unknown'
             : `estimated radius ${area.accuracy >= 1000 ? `${(area.accuracy / 1000).toFixed(1)} km` : `${Math.ceil(area.accuracy)} m`}`;
-        const message = `${label} (${uncertainty}). Map guidance only—not a selected report location. Zoom in and tap the actual observation spot to save a manual pin.`;
+        const message = `${label} (${uncertainty}). Tap your actual site to place a pin.`;
         if (areaStatus) areaStatus.textContent = message;
         locationStatus.textContent = message;
         areaControls();
@@ -288,19 +344,19 @@
         if (Date.now() - deviceArea.timestamp > 300000) {
             deviceArea = null;
             areaControls();
-            areaStatus.textContent = 'That device estimate is too old. Retry live location or use another option.';
+            areaStatus.textContent = 'Area estimate expired. Try again.';
             return;
         }
         cancelIpLookup();
-        showApproximateArea({latitude: deviceArea.coords.latitude, longitude: deviceArea.coords.longitude, accuracy: deviceArea.coords.accuracy}, 'Approximate device area (source chosen by your browser)');
+        showApproximateArea({latitude: deviceArea.coords.latitude, longitude: deviceArea.coords.longitude, accuracy: deviceArea.coords.accuracy}, 'Approximate area');
     });
 
     ipConsent?.addEventListener('change', () => {
         if (!ipConsent.checked) {
             cancelIpLookup();
             clearAreaPreview();
-            if (areaStatus) areaStatus.textContent = 'IP area lookup is off. You can select a manual pin without this service.';
-            if (!liveLocation?.active) locationStatus.textContent = latitude.value && longitude.value ? 'Previous observation point kept.' : 'No location selected.';
+            if (areaStatus) areaStatus.textContent = 'Internet area search is off. You can place a pin.';
+            if (!liveLocation?.active) locationStatus.textContent = latitude.value && longitude.value ? 'Your pin is saved.' : 'No location selected.';
         }
         areaControls();
     });
@@ -311,14 +367,14 @@
         cancelIpLookup();
         clearAreaPreview();
         if (!window.ManGroovesLiveLocation?.lookupIpArea || !window.AbortController) {
-            areaStatus.textContent = 'IP lookup is unavailable in this browser. Choose the observation point manually.';
+            areaStatus.textContent = 'Area search unavailable. Place a pin.';
             return;
         }
         const requestGeneration = ipGeneration;
         const controller = new window.AbortController();
         ipRequest = controller;
         areaControls();
-        areaStatus.textContent = 'Looking up an approximate IP area with GeoJS…';
+        areaStatus.textContent = 'Finding your approximate area...';
         ipTimeout = window.setTimeout(() => controller.abort(), 10000);
         try {
             const area = await window.ManGroovesLiveLocation.lookupIpArea({signal: controller.signal});
@@ -326,7 +382,7 @@
             showApproximateArea(area, `Approximate IP area${area.label ? `: ${area.label}` : ''}`);
         } catch (error) {
             if (requestGeneration === ipGeneration) {
-                areaStatus.textContent = 'IP area lookup failed or timed out. Retry later, use live location, or place the actual site pin manually.';
+                areaStatus.textContent = 'Area not found. Try GPS or place a pin.';
             }
         } finally {
             if (requestGeneration === ipGeneration) {
@@ -341,12 +397,12 @@
         cancelIpLookup();
         clearAreaPreview();
         if (map) map.setView(latitude.value && longitude.value
-            ? [Number(latitude.value), Number(longitude.value)] : [10.2833, 123.8833], latitude.value ? 18 : 15);
-        areaStatus.textContent = 'Area lookup canceled. Your selected report coordinates were not changed.';
-        locationStatus.textContent = latitude.value && longitude.value ? 'Previous observation point kept.' : 'No location selected.';
+            ? [Number(latitude.value), Number(longitude.value)] : barangayCenter, latitude.value ? 18 : 15);
+        areaStatus.textContent = 'Search canceled. Your pin is saved.';
+        locationStatus.textContent = latitude.value && longitude.value ? 'Your pin is saved.' : 'No location selected.';
     });
     areaControls();
-    if (!map && areaStatus) areaStatus.textContent = 'Map assistance is unavailable. Enter actual coordinates manually or use live location.';
+    if (!map && areaStatus) areaStatus.textContent = 'Map unavailable. Enter coordinates or use GPS.';
 
     function locationControls(active) {
         if (gpsButton) { gpsButton.hidden = active; gpsButton.disabled = false; }
@@ -367,7 +423,7 @@
         stopGpsCapture();
         gpsNeedsRefresh = false;
         previousLocation = null;
-        locationStatus.textContent = `Observation location selected (estimated ±${Math.ceil(Number(accuracy.value))} m). Live updates stopped; continue with this field visit.`;
+        locationStatus.textContent = `Location saved (±${Math.ceil(Number(accuracy.value))} m).`;
         return true;
     }
 
@@ -405,7 +461,7 @@
         deviceArea = null;
         areaControls();
         if (!liveLocation) {
-            locationStatus.textContent = 'The location controls did not load. Refresh this page or place a manual pin.';
+            locationStatus.textContent = 'Location unavailable. Refresh or place a pin.';
             return;
         }
         previousLocation = {lat: latitude.value, lng: longitude.value, mode: source.value, accuracy: accuracy.value, needsRefresh: gpsNeedsRefresh};
@@ -421,13 +477,13 @@
         if (previousLocation?.lat && previousLocation?.lng) {
             setLocation(previousLocation.lat, previousLocation.lng, previousLocation.mode, previousLocation.accuracy);
             gpsNeedsRefresh = previousLocation.needsRefresh;
-            locationStatus.textContent = 'Live capture canceled. Your previous observation point was kept.';
+            locationStatus.textContent = 'Canceled. Your pin is saved.';
         } else {
             latitude.value = longitude.value = source.value = accuracy.value = '';
             gpsNeedsRefresh = false;
             if (marker) { map.removeLayer(marker); marker = null; }
             if (accuracyCircle) { map.removeLayer(accuracyCircle); accuracyCircle = null; }
-            locationStatus.textContent = 'Live capture canceled. Choose a location when you are ready.';
+            locationStatus.textContent = 'Canceled. Choose a location when ready.';
         }
         previousLocation = null;
     });
@@ -439,8 +495,8 @@
         locationChoiceMade = true;
         manualMode = true;
         locationStatus.textContent = map
-            ? 'Manual mode is active. Tap the exact observation spot on the map.'
-            : 'Manual mode is active. Enter latitude and longitude carefully.';
+            ? 'Tap your site on the map.'
+            : 'Enter your site coordinates.';
         if (marker?.dragging) marker.dragging.enable();
     });
 
@@ -452,31 +508,56 @@
         }).catch(() => { /* Browsers without permission queries use the explicit button. */ });
     }
 
+    let parentRequest = 0;
+    const syncFollowup = () => {
+        const enabled = Boolean(followupToggle?.checked);
+        if (followupFields) followupFields.hidden = !enabled;
+        if (parentSelect) {
+            parentSelect.disabled = !enabled;
+            parentSelect.required = enabled;
+            if (!enabled) parentSelect.value = '';
+        }
+    };
+    followupToggle?.addEventListener('change', syncFollowup);
     const loadPreviousReports = async () => {
+        const request = ++parentRequest;
         const clusterId = clusterSelect?.value || '';
         const selectedParent = String(form.dataset.selectedParent || parentSelect?.value || '');
-        parentSelect.innerHTML = '<option value="">Not a follow-up</option>';
-        if (!clusterId) return;
+        parentSelect.innerHTML = '<option value="">Choose a report</option>';
+        if (followupToggleWrap) followupToggleWrap.hidden = true;
+        if (!clusterId) { syncFollowup(); return; }
         try {
             const endpoint = new URL(form.dataset.previousReportsUrl, window.location.href);
             endpoint.searchParams.set('cluster_id', clusterId);
             const response = await fetch(endpoint, {headers: {'Accept': 'application/json'}, credentials: 'same-origin'});
             const payload = await response.json();
-            if (!response.ok || !payload.ok) throw new Error(payload.message || 'Unable to load follow-ups.');
-            payload.reports.forEach((report) => {
+            if (request !== parentRequest) return;
+            if (!response.ok || !payload.ok) throw new Error(payload.message || 'Could not load follow-ups.');
+            const reports = payload.reports || [];
+            reports.forEach((report) => {
                 const option = document.createElement('option');
                 option.value = String(report.id);
-                option.textContent = `${report.report_code} — ${report.health} (${new Date(report.submitted_at.replace(' ', 'T')).toLocaleDateString()})`;
+                option.textContent = `${report.report_code} - ${report.health}`;
                 option.selected = String(report.id) === selectedParent;
                 parentSelect.append(option);
             });
+            if (followupToggleWrap) followupToggleWrap.hidden = reports.length === 0;
+            if (followupToggle) followupToggle.checked = reports.some(report => String(report.id) === selectedParent);
             form.dataset.selectedParent = '';
+            syncFollowup();
         } catch (error) {
+            if (request !== parentRequest) return;
             form.querySelector('[data-followup-help]').textContent = error.message;
+            if (followupToggleWrap) followupToggleWrap.hidden = !selectedParent;
+            if (followupToggle) followupToggle.checked = Boolean(selectedParent);
+            syncFollowup();
         }
     };
 
     clusterSelect?.addEventListener('change', () => {
+        form.dataset.selectedParent = '';
+        if (followupToggle) followupToggle.checked = false;
+        syncFollowup();
         const option = clusterSelect.selectedOptions[0];
         const centerLat = Number(option?.dataset.lat);
         const centerLng = Number(option?.dataset.lng);
@@ -508,27 +589,36 @@
 
     const selectedObservationCodes = (criteriaCode) => [...form.querySelectorAll(`[data-criteria-code="${criteriaCode}"] input:checked`)]
         .map((input) => input.dataset.optionCode || '');
-    const hasObservationConflict = () => selectedObservationCodes('negative_signs').includes('no_animals')
-        && selectedObservationCodes('bio_indicators').length > 0;
+    const hasObservationConflict = () => selectedObservationCodes('negative_signs')
+        .some((code) => ['no_animals', 'all_of_the_above'].includes(code))
+        && selectedObservationCodes('bio_indicators').some((code) => code !== 'none_of_the_above');
 
     const observationInputs = [...form.querySelectorAll('[data-criteria-code] input')];
     const resolveObservationConflict = (changed) => {
         if (!changed.checked) return;
-        if (changed.dataset.optionCode === 'no_animals') {
-            form.querySelectorAll('[data-criteria-code="bio_indicators"] input:checked').forEach((input) => { input.checked = false; });
-        } else if (changed.closest('[data-criteria-code]')?.dataset.criteriaCode === 'bio_indicators') {
-            const noAnimals = form.querySelector('[data-option-code="no_animals"]');
-            if (noAnimals) noAnimals.checked = false;
+        const group = changed.closest('[data-criteria-code]')?.dataset.criteriaCode;
+        if (group === 'negative_signs' && ['no_animals', 'all_of_the_above'].includes(changed.dataset.optionCode)) {
+            form.querySelectorAll('[data-criteria-code="bio_indicators"] input:checked').forEach((input) => {
+                if (input.dataset.optionCode !== 'none_of_the_above') input.checked = false;
+            });
+        } else if (group === 'bio_indicators' && changed.dataset.optionCode !== 'none_of_the_above') {
+            form.querySelectorAll('[data-criteria-code="negative_signs"] input:checked').forEach((input) => {
+                if (['no_animals', 'all_of_the_above'].includes(input.dataset.optionCode)) input.checked = false;
+            });
         }
     };
 
     let healthTimer = 0;
+    let healthRequest = 0;
     const updateHealthPreview = () => {
+        const request = ++healthRequest;
+        const preview = form.querySelector('[data-health-preview]');
+        preview.textContent = 'Checking your answers...';
         window.clearTimeout(healthTimer);
         healthTimer = window.setTimeout(async () => {
             const singleChoiceGroups = [...form.querySelectorAll('[data-criteria-code]')]
                 .filter((group) => group.querySelector('input[type="radio"]'));
-            if (!singleChoiceGroups.every((group) => group.querySelector('input:checked'))) return;
+            if (!singleChoiceGroups.every((group) => group.querySelector('input:checked'))) { preview.textContent = 'Answer each checklist question to see the result.'; return; }
             const body = new FormData();
             body.append('csrf_token', csrf);
             observationInputs.filter((input) => input.checked).forEach((input) => body.append(input.name, input.value));
@@ -537,10 +627,12 @@
                 const response = await fetch(form.dataset.healthPreviewUrl, {method: 'POST', body, headers: {'Accept': 'application/json'}, credentials: 'same-origin'});
                 const payload = await response.json();
                 if (!response.ok || !payload.ok) throw new Error(payload.message || 'Preview unavailable.');
+                if (request !== healthRequest) return;
                 const result = payload.classification;
                 target.className = `alert border d-flex align-items-center justify-content-between gap-3 ${result.status === 'Healthy' ? 'alert-success' : (result.status === 'Stressed' ? 'alert-warning' : 'alert-danger')}`;
-                target.innerHTML = `<span><strong>Preview: ${escapeHtml(result.status)}</strong><br><small>Canonical health ${result.health_score}/${result.health_max_score}; context ${result.context_score}; environment ${result.environmental_score} (separate)</small></span>`;
+                target.innerHTML = `<span><strong>Preview: ${escapeHtml(result.status)}</strong><br><small>Health score: ${result.health_score}/${result.health_max_score}<br>6 Healthy | 3-5 Stressed | 0-2 At Risk</small><br>${(result.breakdown || []).map(row => `<small>${escapeHtml(row.name)}: ${escapeHtml(row.answer)} (${Number(row.points)}/2)</small>`).join('<br>')}</span>`;
             } catch (error) {
+                if (request !== healthRequest) return;
                 target.className = 'alert alert-warning border';
                 target.textContent = error.message;
             }
@@ -553,7 +645,11 @@
     updateHealthPreview();
 
     let speciesTimer = 0;
+    let speciesRequest = 0;
     const updateSpeciesPreview = () => {
+        const request = ++speciesRequest;
+        const target = form.querySelector('[data-species-preview]');
+        target.textContent = 'Choose the roots, leaves and bark to see a match.';
         window.clearTimeout(speciesTimer);
         speciesTimer = window.setTimeout(async () => {
             const fields = [...form.querySelectorAll('[data-species-trait]')];
@@ -561,18 +657,20 @@
             const body = new FormData();
             body.append('csrf_token', csrf);
             fields.forEach((field) => body.append(field.name, field.value));
-            const target = form.querySelector('[data-species-preview]');
+            target.textContent = 'Checking species...';
             try {
                 const response = await fetch(form.dataset.speciesMatchUrl, {method: 'POST', body, headers: {'Accept': 'application/json'}, credentials: 'same-origin'});
                 const payload = await response.json();
                 if (!response.ok || !payload.ok) throw new Error(payload.message || 'Match preview unavailable.');
+                if (request !== speciesRequest) return;
                 if (!payload.best) {
-                    target.innerHTML = '<strong>Needs manual identification.</strong> The ranked traits are not confident enough for an automatic suggestion.';
+                    target.innerHTML = '<strong>Species unclear.</strong> An expert can help identify it.';
                     return;
                 }
                 const alternatives = payload.ranked.slice(1, 3).map((item) => `<em>${escapeHtml(item.scientific_name)}</em> (${Number(item.confidence).toFixed(0)}%)`).join(', ');
-                target.innerHTML = `<strong>Best trait match:</strong> <em>${escapeHtml(payload.best.scientific_name)}</em> — ${Number(payload.best.confidence).toFixed(0)}%${alternatives ? `<br><small>Other ranked matches: ${alternatives}</small>` : ''}`;
+                target.innerHTML = `<strong>Suggested species:</strong> <em>${escapeHtml(payload.best.scientific_name)}</em> — ${Number(payload.best.confidence).toFixed(0)}% trait match${alternatives ? `<br><small>Other matches: ${alternatives}</small>` : ''}`;
             } catch (error) {
+                if (request !== speciesRequest) return;
                 target.textContent = error.message;
             }
         }, 250);
@@ -581,28 +679,33 @@
     updateSpeciesPreview();
 
     form.addEventListener('submit', (event) => {
-        if (![1, 2, 3].every(validateStep) || !form.checkValidity()) {
+        if (submitting) { event.preventDefault(); return; }
+        if (![1, 2, 3].every(validateStep)) { event.preventDefault(); return; }
+        if (currentStep !== 4 || !reviewed) {
             event.preventDefault();
-            const invalid = form.querySelector(':invalid');
-            const invalidPanel = invalid?.closest('[data-step-panel]');
-            if (invalidPanel) setStep(Number(invalidPanel.dataset.stepPanel));
-            invalid?.reportValidity();
+            setStep(4);
             return;
         }
+        if (!validateStep(4) || !form.checkValidity()) { event.preventDefault(); return; }
+        if (!window.confirm('Submit report? Check that your photo, location and answers are correct.')) {
+            event.preventDefault();
+            return;
+        }
+        submitting = true;
         submitButton.disabled = true;
-        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Submitting securely…';
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Submitting...';
     });
 
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && ipRequest) {
             cancelIpLookup();
-            if (areaStatus) areaStatus.textContent = 'IP lookup canceled while the page was hidden. Retry when ready.';
+            if (areaStatus) areaStatus.textContent = 'Area search paused. Try again when ready.';
         }
         if (document.hidden && liveLocation?.active) {
             if (!freezeLiveLocation()) {
                 if (source.value === 'gps') gpsNeedsRefresh = true;
                 stopGpsCapture();
-                locationStatus.textContent = 'Live location paused while the page was hidden. Capture again to continue.';
+                locationStatus.textContent = 'Location paused. Try again to continue.';
             }
         }
     });
