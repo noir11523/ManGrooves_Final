@@ -1,6 +1,3 @@
-<?php
-$currentScript = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'index.php'));
-?>
 <nav class="navbar navbar-expand-lg public-navbar sticky-top" aria-label="Primary navigation">
     <div class="container">
         <a class="navbar-brand app-brand" href="<?= e(url('index.php')) ?>" aria-label="ManGROOVES home">
@@ -12,7 +9,7 @@ $currentScript = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'index.php'));
         </button>
         <div class="collapse navbar-collapse" id="publicNavigation">
             <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
-                <li class="nav-item"><a class="nav-link <?= $currentScript === 'index.php' ? 'active' : '' ?>" href="<?= e(url('index.php#about')) ?>">About</a></li>
+                <li class="nav-item"><a class="nav-link" href="<?= e(url('index.php#about')) ?>">About</a></li>
                 <li class="nav-item"><a class="nav-link" href="<?= e(url('index.php#how-it-works')) ?>">How it works</a></li>
                 <li class="nav-item"><a class="nav-link" href="<?= e(url('explore.php')) ?>">Explore</a></li>
                 <?php if ($authUser): ?>

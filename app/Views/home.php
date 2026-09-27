@@ -68,7 +68,7 @@
                         <p>Dense roots slow waves, hold sediment, and reduce shoreline erosion.</p>
                     </article>
                     <article class="benefit-card">
-                        <span class="feature-icon"><i class="bi bi-fish" aria-hidden="true"></i></span>
+                        <span class="feature-icon"><i class="bi bi-tree" aria-hidden="true"></i></span>
                         <h3>Living nurseries</h3>
                         <p>Root systems offer food and shelter to fish, crabs, birds, and other wildlife.</p>
                     </article>
@@ -77,7 +77,7 @@
                         <h3>Climate resilience</h3>
                         <p>Mangroves store significant carbon while helping communities adapt to change.</p>
                     </article>
-                    <article class="benefit-card accent-card">
+                    <article class="benefit-card">
                         <span class="feature-icon"><i class="bi bi-binoculars" aria-hidden="true"></i></span>
                         <h3>Community evidence</h3>
                         <p>Repeat observations reveal patterns that one-time surveys can miss.</p>
