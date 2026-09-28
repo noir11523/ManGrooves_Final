@@ -52,15 +52,6 @@ $clientData = [
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div><h1 class="h3 mb-1"><?= $isPersonal ? 'My analytics' : 'Conservation analytics' ?></h1><p class="text-muted mb-0"><?= $isPersonal ? 'Your reports only.' : 'Reports from all users.' ?></p></div>
     <div class="d-flex flex-wrap gap-2 no-print">
-        <?php if (($currentUser['role'] ?? '') === 'system_admin' && is_file(APP_ROOT . '/public/admin/generate-charts.php')): ?>
-        <form method="post" action="<?= e(url('admin/generate-charts.php')) ?>">
-            <?= Csrf::field() ?>
-            <input type="hidden" name="date_from" value="<?= e($filters['date_from']) ?>"><input type="hidden" name="date_to" value="<?= e($filters['date_to']) ?>">
-            <?php if ($filters['barangay_id']): ?><input type="hidden" name="barangay_id" value="<?= (int) $filters['barangay_id'] ?>"><?php endif; ?>
-            <?php if ($filters['species_id']): ?><input type="hidden" name="species_id" value="<?= (int) $filters['species_id'] ?>"><?php endif; ?>
-            <button class="btn btn-outline-success" type="submit">Regenerate chart PNGs</button>
-        </form>
-        <?php endif; ?>
         <?php if ($canViewSurvival): ?><a class="btn btn-success" href="<?= e(url('admin/export-analytics.php?' . http_build_query($filters))) ?>"><i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>Generate PDF</a><?php endif; ?>
     </div>
 </div>
