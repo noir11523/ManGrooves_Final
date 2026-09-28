@@ -172,7 +172,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
                 <div class="row g-0">
                     <?php if (!empty($criterion['guide_image'])): ?>
                         <div class="col-md-4 col-lg-3">
-                            <img class="w-100 h-100 object-fit-cover rounded-start" style="max-height:260px" src="<?= e(asset((string) $criterion['guide_image'])) ?>" alt="Visual guide for <?= e($criterion['name']) ?>" loading="lazy">
+                            <img class="w-100 h-100 object-fit-contain rounded-start" style="max-height:260px" src="<?= e(asset((string) $criterion['guide_image'])) ?>" alt="Visual guide for <?= e($criterion['name']) ?>" loading="lazy">
                         </div>
                     <?php endif; ?>
                     <div class="<?= !empty($criterion['guide_image']) ? 'col-md-8 col-lg-9' : 'col-12' ?>">
@@ -195,7 +195,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
                                                data-option-code="<?= e($option['code']) ?>"
                                                <?= in_array((string) $option['id'], $selected, true) ? 'checked' : '' ?>
                                                <?= !$multiple && $index === 0 ? 'required' : '' ?>>
-                                        <label class="btn btn-outline-success text-start w-100 h-100" for="<?= e($inputId) ?>"><?= e($option['label']) ?></label>
+                                        <label class="btn btn-outline-success text-start w-100 h-100" for="<?= e($inputId) ?>"><?php if ($option['image_path']): ?><img class="d-block rounded mb-2 w-100" style="height:100px;object-fit:contain" src="<?= e(asset($option['image_path'])) ?>" alt="" loading="lazy"><?php endif; ?><?= e($option['label']) ?></label>
                                     </div>
                                 <?php endforeach; ?>
                             </div>

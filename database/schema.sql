@@ -168,10 +168,10 @@ CREATE TABLE IF NOT EXISTS reports (
     suggested_species_id SMALLINT UNSIGNED NULL,
     final_species_id SMALLINT UNSIGNED NULL,
     species_confidence DECIMAL(5, 2) NULL,
-    health_score SMALLINT NOT NULL DEFAULT 0,
+    health_score SMALLINT NULL DEFAULT NULL,
     health_max_score SMALLINT UNSIGNED NOT NULL DEFAULT 6,
     environmental_score SMALLINT NOT NULL DEFAULT 0,
-    suggested_health ENUM('Healthy', 'Stressed', 'At Risk') NOT NULL,
+    suggested_health ENUM('Healthy', 'Stressed', 'At Risk', 'Unknown') NOT NULL,
     final_health ENUM('Healthy', 'Stressed', 'At Risk') NULL,
     observed_alive_count INT UNSIGNED NULL,
     status ENUM('pending', 'verified', 'rejected') NOT NULL DEFAULT 'pending',
@@ -230,7 +230,7 @@ CREATE TABLE IF NOT EXISTS verification_logs (
     action ENUM('confirm', 'correct', 'reject') NOT NULL,
     previous_status ENUM('pending', 'verified', 'rejected') NOT NULL,
     new_status ENUM('pending', 'verified', 'rejected') NOT NULL,
-    previous_health ENUM('Healthy', 'Stressed', 'At Risk') NULL,
+    previous_health ENUM('Healthy', 'Stressed', 'At Risk', 'Unknown') NULL,
     new_health ENUM('Healthy', 'Stressed', 'At Risk') NULL,
     previous_species_id SMALLINT UNSIGNED NULL,
     new_species_id SMALLINT UNSIGNED NULL,
@@ -453,3 +453,16 @@ SET @ddl = IF(
     'ALTER TABLE users ADD INDEX idx_users_last_first (last_name, first_name)', 'DO 0'
 );
 PREPARE name_migration FROM @ddl; EXECUTE name_migration; DEALLOCATE PREPARE name_migration;
+
+-- Unknown is unscored and always requires a review.
+ALTER TABLE reports MODIFY health_score SMALLINT NULL DEFAULT NULL,
+    MODIFY suggested_health ENUM('Healthy', 'Stressed', 'At Risk', 'Unknown') NOT NULL;
+INSERT IGNORE INTO health_options (criteria_id, code, label, points, display_order)
+SELECT id, 'unknown', 'Not Sure', 0, 1002 FROM health_criteria;
+ALTER TABLE verification_logs MODIFY previous_health ENUM('Healthy', 'Stressed', 'At Risk', 'Unknown') NULL;
+
+-- Mixed health observations use the lowest ordinary score, not a sum.
+INSERT IGNORE INTO health_options (criteria_id, code, label, points, display_order)
+SELECT id, 'all_of_the_above', 'All of the above', 0, 1001 FROM health_criteria
+WHERE code IN ('leaf_color', 'pests', 'roots');
+UPDATE health_options SET label = 'Not Sure' WHERE code = 'unknown';

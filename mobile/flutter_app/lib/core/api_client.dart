@@ -150,6 +150,28 @@ class ApiClient {
   Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> form) =>
       _postJson('profile.php', form);
 
+  Future<Map<String, dynamic>> checklist() => _get('checklist.php');
+
+  Future<Map<String, dynamic>> saveChecklist(
+    Map<String, dynamic> data,
+    Map<String, String> images,
+  ) async {
+    return _withConnectionRecovery(() async {
+      final request = http.MultipartRequest('POST', _uri('checklist.php'));
+      request.headers.addAll(_headers());
+      request.fields['payload'] = jsonEncode(data);
+      for (final entry in images.entries) {
+        request.files.add(
+          await http.MultipartFile.fromPath(entry.key, entry.value),
+        );
+      }
+      final response = await http.Response.fromStream(
+        await request.send().timeout(const Duration(seconds: 60)),
+      );
+      return _decode(response);
+    });
+  }
+
   Future<Map<String, dynamic>> updateAccountSecurity(
     Map<String, dynamic> form,
   ) => _postJson('account-security.php', form);

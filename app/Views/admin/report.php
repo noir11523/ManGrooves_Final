@@ -3,7 +3,7 @@ $photoUrl = report_photo_url((int) $report['id']);
 $displayHealth = $report['final_health'] ?: $report['suggested_health'];
 $displaySpecies = $report['status'] === 'verified' ? ($report['final_common_name'] ?: 'Not identified') : ($report['suggested_common_name'] ?: 'Not identified');
 $displayScientific = $report['status'] === 'verified' ? $report['final_scientific_name'] : $report['suggested_scientific_name'];
-$oldAction = (string) old('action', 'confirm');
+$oldAction = (string) old('action', $report['suggested_health'] === 'Unknown' ? 'correct' : 'confirm');
 $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $oldAction : 'confirm';
 ?>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
@@ -46,7 +46,7 @@ $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $old
                 <thead><tr><th>Criterion</th><th>Observation</th><th>Group</th><th class="text-end">Points</th></tr></thead>
                 <tbody>
                 <?php foreach ($observations as $observation): ?>
-                    <tr><td><?= e($observation['criterion_name']) ?></td><td><?= e($observation['option_label']) ?></td><td><?= e(ucfirst($observation['score_group'])) ?></td><td class="text-end"><?= (int) $observation['points_snapshot'] ?></td></tr>
+                    <tr><td><?= e($observation['criterion_name']) ?></td><td><?= e($observation['option_label']) ?></td><td><?= e(ucfirst($observation['score_group'])) ?></td><td class="text-end"><?= $observation['points_snapshot'] === null ? 'Unscored' : (int) $observation['points_snapshot'] ?></td></tr>
                 <?php endforeach; ?>
                 <?php if ($observations === []): ?><tr><td colspan="4" class="text-center text-muted py-4">No checklist rows were stored.</td></tr><?php endif; ?>
                 </tbody>
@@ -60,7 +60,7 @@ $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $old
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-6"><div class="text-muted small">Health</div><span class="badge <?= e(health_class($displayHealth)) ?>"><?= e($displayHealth) ?></span></div>
-                    <div class="col-6"><div class="text-muted small">System score</div><strong><?= (int) $report['health_score'] ?> / <?= (int) $report['health_max_score'] ?></strong></div>
+                    <div class="col-6"><div class="text-muted small">System score</div><strong><?= $report['health_score'] === null ? 'Not scored. Needs review.' : (int) $report['health_score'] . ' / ' . (int) $report['health_max_score'] ?></strong></div>
                     <p class="small mb-0">6 Healthy · 3–5 Stressed · 0–2 At Risk</p>
                     <div class="col-12"><div class="text-muted small">Species</div><strong><?= e($displaySpecies) ?></strong><?php if ($displayScientific): ?><div class="small fst-italic"><?= e($displayScientific) ?></div><?php endif; ?></div>
                     <div class="col-12"><div class="text-muted small">Traits</div><ul class="mb-0"><li>Roots: <?= e($report['root_type']) ?></li><li>Leaf: <?= e($report['leaf_shape']) ?></li><li>Bark: <?= e($report['bark_texture']) ?></li></ul></div>
@@ -76,7 +76,7 @@ $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $old
                 <input type="hidden" name="report_id" value="<?= (int) $report['id'] ?>">
                 <fieldset class="mb-3">
                     <legend class="form-label">Decision</legend>
-                    <div class="form-check"><input class="form-check-input" type="radio" name="action" id="decision-confirm" value="confirm" <?= $oldAction === 'confirm' ? 'checked' : '' ?>><label class="form-check-label" for="decision-confirm"><strong>Confirm</strong> the automated assessment</label></div>
+                    <div class="form-check"><input class="form-check-input" type="radio" name="action" id="decision-confirm" value="confirm" <?= $report['suggested_health'] === 'Unknown' ? 'disabled' : '' ?> <?= $oldAction === 'confirm' ? 'checked' : '' ?>><label class="form-check-label" for="decision-confirm"><strong>Confirm</strong> the automated assessment</label></div>
                     <div class="form-check"><input class="form-check-input" type="radio" name="action" id="decision-correct" value="correct" <?= $oldAction === 'correct' ? 'checked' : '' ?>><label class="form-check-label" for="decision-correct"><strong>Correct</strong> health, species, or rarity</label></div>
                     <div class="form-check"><input class="form-check-input" type="radio" name="action" id="decision-reject" value="reject" <?= $oldAction === 'reject' ? 'checked' : '' ?>><label class="form-check-label" for="decision-reject"><strong>Reject</strong> unusable or insufficient evidence</label></div>
                 </fieldset>
@@ -84,7 +84,7 @@ $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $old
                 <div class="js-correction-fields border rounded p-3 mb-3" hidden>
                     <div class="mb-3">
                         <label class="form-label" for="final-health">Final health</label>
-                        <select class="form-select" id="final-health" name="final_health">
+                        <select class="form-select" id="final-health" name="final_health"><option value="">Choose health</option>
                             <?php foreach (['Healthy', 'Stressed', 'At Risk'] as $health): ?><option value="<?= e($health) ?>" <?= old('final_health', $displayHealth) === $health ? 'selected' : '' ?>><?= e($health) ?></option><?php endforeach; ?>
                         </select>
                     </div>

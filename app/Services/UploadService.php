@@ -14,6 +14,16 @@ final class UploadService
      */
     public function storeReportPhoto(array $file): array
     {
+        return $this->storeImage($file, false);
+    }
+
+    public function storeChecklistImage(array $file): array
+    {
+        return $this->storeImage($file, true);
+    }
+
+    private function storeImage(array $file, bool $checklist): array
+    {
         $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
         if ($error !== UPLOAD_ERR_OK) {
             throw new RuntimeException($this->uploadErrorMessage($error));
@@ -58,6 +68,10 @@ final class UploadService
         $extension = (string) $allowed[$mime];
         $relativeDirectory = 'storage/uploads/reports/' . date('Y/m');
         $directory = rtrim((string) \config('uploads.directory'), '/\\') . '/reports/' . date('Y/m');
+        if ($checklist) {
+            $relativeDirectory = 'img/checklist';
+            $directory = APP_ROOT . '/public/assets/img/checklist';
+        }
         if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
             throw new RuntimeException('Photo storage is unavailable. Please try again later.');
         }
@@ -90,6 +104,11 @@ final class UploadService
     public function removeStoredPhoto(?string $absolutePath): void
     {
         if (!$absolutePath || !is_file($absolutePath)) {
+            return;
+        }
+        if (preg_match('/^[a-f0-9]{40}\.(jpg|jpeg|png|webp)$/', basename($absolutePath))
+            && realpath(dirname($absolutePath)) === realpath(APP_ROOT . '/public/assets/img/checklist')) {
+            @unlink($absolutePath);
             return;
         }
         $uploadRoot = realpath((string) \config('uploads.directory'));

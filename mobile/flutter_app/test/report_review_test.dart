@@ -40,8 +40,16 @@ class _Api extends ApiClient {
     previews++;
     return {
       'classification': {
-        'status': 'Healthy',
-        'health_score': 6,
+        'status':
+            ((input['observations'] as Map?)?['bio_indicators'] as List? ?? [])
+                .contains(6)
+            ? 'Unknown'
+            : 'Healthy',
+        'health_score':
+            ((input['observations'] as Map?)?['bio_indicators'] as List? ?? [])
+                .contains(6)
+            ? null
+            : 6,
         'health_max_score': 6,
         'breakdown': [
           {'name': 'Leaf color', 'answer': 'Green', 'points': 2},
@@ -82,6 +90,7 @@ class _Api extends ApiClient {
           {'id': 2, 'code': 'crabs', 'label': 'Crabs'},
           {'id': 3, 'code': 'none_of_the_above', 'label': 'None of the above'},
           {'id': 4, 'code': 'all_of_the_above', 'label': 'All of the above'},
+          {'id': 6, 'code': 'unknown', 'label': 'Not Sure'},
         ],
       },
       {
@@ -198,6 +207,20 @@ void main() {
             .value,
         false,
       );
+      await tap(tester, find.text('Not Sure'));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.widgetWithText(CheckboxListTile, 'All of the above'),
+            )
+            .value,
+        false,
+      );
+      expect(find.text('Unknown - needs review'), findsOneWidget);
+      expect(find.textContaining('null/6'), findsNothing);
+      await tap(tester, find.text('All of the above'));
       await tap(tester, find.text('No animals'));
       expect(
         tester

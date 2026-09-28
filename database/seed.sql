@@ -37,9 +37,7 @@ VALUES
     (5, 'bark_trunk', 'Bark / Trunk', 'How does the bark or trunk look?', 'single', 'context', 'img/guides/bark.png', 5),
     (6, 'bio_indicators', 'Bio-Indicators', 'What animals did you see?', 'multiple', 'environment', 'img/guides/bio-indicators.png', 6),
     (7, 'negative_signs', 'Negative Signs', 'What negative signs did you see?', 'multiple', 'environment', 'img/guides/negative-signs.png', 7)
-ON DUPLICATE KEY UPDATE
-    name = VALUES(name), question_text = VALUES(question_text), selection_mode = VALUES(selection_mode),
-    score_group = VALUES(score_group), guide_image = VALUES(guide_image), display_order = VALUES(display_order), active = 1;
+ON DUPLICATE KEY UPDATE id = health_criteria.id;
 
 INSERT INTO health_options (id, criteria_id, code, label, points, display_order)
 VALUES
@@ -69,18 +67,21 @@ VALUES
     (24, 7, 'mosquitoes', 'Many Mosquitoes', -1, 1),
     (25, 7, 'trash', 'Trash / Plastic Visible', -1, 2),
     (26, 7, 'no_animals', 'No Animals at All', -1, 3)
-ON DUPLICATE KEY UPDATE label = VALUES(label), points = VALUES(points), display_order = VALUES(display_order), active = 1;
+ON DUPLICATE KEY UPDATE id = health_options.id;
+
+INSERT IGNORE INTO health_options (criteria_id, code, label, points, display_order)
+SELECT id, 'unknown', 'Not Sure', 0, 1002 FROM health_criteria;
 
 -- Aggregate checklist answers (also available as an additive migration).
 INSERT INTO health_options (criteria_id, code, label, points, display_order)
 SELECT id, 'none_of_the_above', 'None of the above', 0, 1000
 FROM health_criteria WHERE selection_mode = 'multiple'
-ON DUPLICATE KEY UPDATE label = VALUES(label), points = VALUES(points), display_order = VALUES(display_order), active = 1;
+ON DUPLICATE KEY UPDATE id = health_options.id;
 
 INSERT INTO health_options (criteria_id, code, label, points, display_order)
 SELECT id, 'all_of_the_above', 'All of the above', 0, 1001
 FROM health_criteria WHERE selection_mode = 'multiple'
-ON DUPLICATE KEY UPDATE label = VALUES(label), points = VALUES(points), display_order = VALUES(display_order), active = 1;
+ON DUPLICATE KEY UPDATE id = health_options.id;
 
 INSERT INTO badges (id, code, badge_name, metric, target_value, description, image_path)
 VALUES
@@ -198,3 +199,9 @@ VALUES
 
 UPDATE notifications SET dedupe_key = 'followup_overdue:2'
 WHERE id = 1 AND type = 'followup_overdue' AND dedupe_key IS NULL;
+
+-- Mixed health observations use the lowest ordinary score, not a sum.
+INSERT IGNORE INTO health_options (criteria_id, code, label, points, display_order)
+SELECT id, 'all_of_the_above', 'All of the above', 0, 1001 FROM health_criteria
+WHERE code IN ('leaf_color', 'pests', 'roots');
+UPDATE health_options SET label = 'Not Sure' WHERE code = 'unknown';

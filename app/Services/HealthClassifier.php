@@ -26,7 +26,7 @@ final class HealthClassifier
      * @param array<string, array<int|string>|int|string> $selections criterion code => option id(s)
      * @return array{
      *   status:string,
-     *   health_score:int,
+     *   health_score:?int,
      *   health_max_score:int,
      *   context_score:int,
      *   environmental_score:int,
@@ -46,6 +46,7 @@ final class HealthClassifier
         $environmentalScore = 0;
         $selectedCodes = [];
         $breakdown = [];
+        $hasUnknown = false;
 
         foreach ($criteria as $criterion) {
             $code = (string) $criterion['code'];
@@ -72,17 +73,23 @@ final class HealthClassifier
                 $option = $allowed[$id];
                 $points = (int) $option['points'];
                 $optionCode = (string) $option['code'];
-                if (in_array($optionCode, ['none_of_the_above', 'all_of_the_above'], true)) {
-                    if ($criterion['selection_mode'] !== 'multiple' || count($ids) !== 1) {
+                if (in_array($optionCode, ['none_of_the_above', 'all_of_the_above', 'unknown'], true)) {
+                    if (($optionCode !== 'unknown' && !($optionCode === 'all_of_the_above' && in_array($code, self::HEALTH_CODES, true)) && $criterion['selection_mode'] !== 'multiple') || count($ids) !== 1) {
                         throw new InvalidArgumentException('Choose ' . $option['label'] . ' on its own for ' . $criterion['name'] . '.');
                     }
                     $points = 0;
+                    if ($optionCode === 'unknown') $hasUnknown = true;
                     if ($optionCode === 'all_of_the_above') {
+                        $includedPoints = [];
                         foreach ($allowed as $included) {
-                            if (!in_array($included['code'], ['none_of_the_above', 'all_of_the_above'], true)) {
+                            if (!in_array($included['code'], ['none_of_the_above', 'all_of_the_above', 'unknown'], true)) {
+                                $includedPoints[] = (int) $included['points'];
                                 $points += (int) $included['points'];
                                 $selectedCodes[$code][] = (string) $included['code'];
                             }
+                        }
+                        if (in_array($code, self::HEALTH_CODES, true)) {
+                            $points = $includedPoints === [] ? 0 : min($includedPoints);
                         }
                     }
                 } else {
@@ -108,7 +115,7 @@ final class HealthClassifier
                         throw new InvalidArgumentException('The health scoring settings need an administrator check.');
                     }
                     $healthScore += $points;
-                    $breakdown[] = ['name' => $criterion['name'], 'answer' => $option['label'], 'points' => $points, 'max_points' => 2];
+                    $breakdown[] = ['name' => $criterion['name'], 'answer' => $option['label'], 'points' => $optionCode === 'unknown' ? null : $points, 'max_points' => 2];
                 } elseif ($criterion['score_group'] === 'environment') {
                     $environmentalScore += $points;
                 } else {
@@ -125,11 +132,13 @@ final class HealthClassifier
         }
 
         // These exact thresholds are the canonical rules supplied for ManGROOVES.
-        $status = $healthScore >= 6 ? 'Healthy' : ($healthScore >= 3 ? 'Stressed' : 'At Risk');
+        $status = $hasUnknown ? 'Unknown' : ($healthScore >= 6 ? 'Healthy' : ($healthScore >= 3 ? 'Stressed' : 'At Risk'));
 
         return [
             'status' => $status,
-            'health_score' => $healthScore,
+            'health_score' => $hasUnknown ? null : $healthScore,
+            'needs_review' => $hasUnknown,
+            'message' => $hasUnknown ? 'Some answers are unknown. An expert will review this report.' : null,
             'health_max_score' => 6,
             'context_score' => $contextScore,
             'environmental_score' => $environmentalScore,

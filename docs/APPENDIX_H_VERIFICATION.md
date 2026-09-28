@@ -5,7 +5,7 @@ Verified on September 5, 2026 against the source project, a disposable fresh dat
 September 27 update: web and Flutter now include submitted-report maps, validation
 history, health/growth timelines, server-scored checklist previews, and simpler
 report review and confirmation. Healthy submissions verify automatically. See
-[Mobile release verification](MOBILE_RELEASE_VERIFICATION.md) for release `1.1.11+13`
+[Mobile release verification](MOBILE_RELEASE_VERIFICATION.md) for release `1.1.12+14`
 and current results. The local database health check now passes.
 
 ## Role key and safe interpretation

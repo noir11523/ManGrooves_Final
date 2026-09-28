@@ -37,7 +37,7 @@
             <div class="col-lg-7">
                 <section class="card mb-3"><div class="card-body"><h4 class="h5">Classification</h4>
                     <dl class="row mb-0">
-                        <dt class="col-sm-5">System health score</dt><dd class="col-sm-7"><?= (int) $report['health_score'] ?>/<?= (int) $report['health_max_score'] ?> — <?= e($report['suggested_health']) ?></dd>
+                        <dt class="col-sm-5">System health score</dt><dd class="col-sm-7"><?= $report['health_score'] === null ? 'Not scored' : (int) $report['health_score'] . '/' . (int) $report['health_max_score'] ?> — <?= e($report['suggested_health']) ?></dd>
                         <dt class="col-sm-5">Final health</dt><dd class="col-sm-7"><?= e($report['final_health'] ?: 'Awaiting expert verification') ?></dd>
                         <dt class="col-sm-5">Suggested species</dt><dd class="col-sm-7"><em><?= e($report['suggested_species_name'] ?: 'Not identified') ?></em><?= $report['species_confidence'] !== null ? ' (' . e($report['species_confidence']) . '% trait match)' : '' ?></dd>
                         <dt class="col-sm-5">Final species</dt><dd class="col-sm-7"><em><?= e($report['final_species_name'] ?: ($report['status'] === 'verified' ? 'Unidentified' : 'Awaiting expert verification')) ?></em></dd>

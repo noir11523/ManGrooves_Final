@@ -24,7 +24,7 @@ The workbooks referenced 46 different image paths but contained no image files. 
 
 - Roles: `guardian`, `expert`, `system_admin`
 - Report workflow states: `pending`, `verified`, `rejected`
-- Health states: `Healthy`, `Stressed`, `At Risk`
+- Final health states: `Healthy`, `Stressed`, `At Risk`. A system suggestion can also be `Unknown` until reviewed.
 - `needs_attention` is a separate verified-report flag, not a fourth workflow or health state.
 - Public registration always creates a guardian. After the one-time CLI administrator bootstrap, privileged roles are assigned only by a system administrator.
 
@@ -55,6 +55,16 @@ against field measurements. Healthy submissions are automatically verified as
 requested; the other health states remain pending for staff review.
 
 Leaf surface and bark/trunk answers are stored as context for expert review and never automatically penalize a species for its normal morphology. Bio-indicators and negative signs form a separate environmental score. Experts see every answer and may correct the system suggestion while preserving the original score and a verification audit trail.
+
+## Checklist administration and unknown answers
+
+System administrators can edit checklist questions, ordinary option labels and points, and guide or choice images on web and Flutter. Scored criteria remain leaf color, pests, and roots, each with 0-2 points and at least one 0 and one 2 option. The existing 6-point threshold scheme stays fixed. Context/environment options accept -2 to 2 without affecting health. Stable option codes, selection modes and special-choice semantics are protected. Saves are audited and stale versions rejected.
+
+- Not Sure: exclusive in its group. Any unknown answer makes the health suggestion Unknown with a null score. The report stays pending; staff must explicitly choose a final health or reject insufficient evidence.
+- None of the above: available only in multiple-answer groups, mutually exclusive, adds 0. It means no listed signs were observed, not missing information.
+- All of the above: mutually exclusive. In the three scored health checks it means mixed conditions and uses the lowest regular score (0). In multiple-answer environmental groups it sums all ordinary active choices. It excludes Unknown and other aggregate choices. Conflicting animal observations still require correction.
+
+Old reports keep point, label, and criterion snapshots. Editing a checklist never recomputes them. New images are validated as genuine JPG, PNG or WebP, stored with random filenames, and shared with both clients. Imports preserve saved administrator checklist settings.
 
 ## Species suggestion
 

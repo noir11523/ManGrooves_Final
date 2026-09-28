@@ -5,7 +5,6 @@ declare(strict_types=1);
 $pageScripts = '<script src="' . e(asset('js/maps.js')) . '"></script>';
 $isGuardian = $user['role'] === 'guardian';
 ?>
-<a class="btn btn-outline-success mb-3" href="<?= e(url('report-map.php')) ?>"><i class="bi bi-map me-1" aria-hidden="true"></i>Report map</a>
 
 <section class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
     <div>
@@ -36,7 +35,7 @@ $isGuardian = $user['role'] === 'guardian';
             <label class="form-label" for="health">Health</label>
             <select class="form-select" id="health" name="health">
                 <option value="">All health</option>
-                <?php foreach (['Healthy', 'Stressed', 'At Risk'] as $value): ?><option value="<?= e($value) ?>" <?= $filters['health'] === $value ? 'selected' : '' ?>><?= e($value) ?></option><?php endforeach; ?>
+                <?php foreach (['Healthy', 'Stressed', 'At Risk', 'Unknown'] as $value): ?><option value="<?= e($value) ?>" <?= $filters['health'] === $value ? 'selected' : '' ?>><?= e($value) ?></option><?php endforeach; ?>
             </select>
         </div>
         <div class="col-sm-2 col-lg-3 d-flex gap-2">

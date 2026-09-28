@@ -182,7 +182,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
                 child: DropdownButtonFormField<String>(
                   initialValue: _health,
                   decoration: const InputDecoration(labelText: 'Health'),
-                  items: ['', 'Healthy', 'Stressed', 'At Risk']
+                  items: ['', 'Healthy', 'Stressed', 'At Risk', 'Unknown']
                       .map(
                         (value) => DropdownMenuItem(
                           value: value,
@@ -281,7 +281,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
               ),
             Wrap(
               spacing: 12,
-              children: ['Healthy', 'Stressed', 'At Risk']
+              children: ['Healthy', 'Stressed', 'At Risk', 'Unknown']
                   .map(
                     (health) => Chip(
                       avatar: Icon(

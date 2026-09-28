@@ -6,7 +6,7 @@
 
     form.querySelectorAll('[data-criteria-code]').forEach((group) => {
         const choices = [...group.querySelectorAll('input[type="checkbox"]')];
-        const aggregate = (choice) => ['none_of_the_above', 'all_of_the_above'].includes(choice.dataset.optionCode);
+        const aggregate = (choice) => ['none_of_the_above', 'all_of_the_above', 'unknown'].includes(choice.dataset.optionCode);
         choices.forEach((choice) => choice.addEventListener('change', () => {
             if (!choice.checked) return;
             choices.forEach((other) => {
@@ -591,7 +591,7 @@
         .map((input) => input.dataset.optionCode || '');
     const hasObservationConflict = () => selectedObservationCodes('negative_signs')
         .some((code) => ['no_animals', 'all_of_the_above'].includes(code))
-        && selectedObservationCodes('bio_indicators').some((code) => code !== 'none_of_the_above');
+        && selectedObservationCodes('bio_indicators').some((code) => !['none_of_the_above', 'unknown'].includes(code));
 
     const observationInputs = [...form.querySelectorAll('[data-criteria-code] input')];
     const resolveObservationConflict = (changed) => {
@@ -599,9 +599,9 @@
         const group = changed.closest('[data-criteria-code]')?.dataset.criteriaCode;
         if (group === 'negative_signs' && ['no_animals', 'all_of_the_above'].includes(changed.dataset.optionCode)) {
             form.querySelectorAll('[data-criteria-code="bio_indicators"] input:checked').forEach((input) => {
-                if (input.dataset.optionCode !== 'none_of_the_above') input.checked = false;
+                if (!['none_of_the_above', 'unknown'].includes(input.dataset.optionCode)) input.checked = false;
             });
-        } else if (group === 'bio_indicators' && changed.dataset.optionCode !== 'none_of_the_above') {
+        } else if (group === 'bio_indicators' && !['none_of_the_above', 'unknown'].includes(changed.dataset.optionCode)) {
             form.querySelectorAll('[data-criteria-code="negative_signs"] input:checked').forEach((input) => {
                 if (['no_animals', 'all_of_the_above'].includes(input.dataset.optionCode)) input.checked = false;
             });
@@ -630,7 +630,7 @@
                 if (request !== healthRequest) return;
                 const result = payload.classification;
                 target.className = `alert border d-flex align-items-center justify-content-between gap-3 ${result.status === 'Healthy' ? 'alert-success' : (result.status === 'Stressed' ? 'alert-warning' : 'alert-danger')}`;
-                target.innerHTML = `<span><strong>Preview: ${escapeHtml(result.status)}</strong><br><small>Health score: ${result.health_score}/${result.health_max_score}<br>6 Healthy | 3-5 Stressed | 0-2 At Risk</small><br>${(result.breakdown || []).map(row => `<small>${escapeHtml(row.name)}: ${escapeHtml(row.answer)} (${Number(row.points)}/2)</small>`).join('<br>')}</span>`;
+                target.innerHTML = `<span><strong>Preview: ${escapeHtml(result.status)}</strong><br><small>${result.health_score == null ? 'Not scored. Needs review.' : `Health score: ${result.health_score}/${result.health_max_score}`}<br>6 Healthy | 3-5 Stressed | 0-2 At Risk</small><br>${(result.breakdown || []).map(row => `<small>${escapeHtml(row.name)}: ${escapeHtml(row.answer)} (${row.points == null ? 'Unscored' : `${Number(row.points)}/2`})</small>`).join('<br>')}</span>`;
             } catch (error) {
                 if (request !== healthRequest) return;
                 target.className = 'alert alert-warning border';

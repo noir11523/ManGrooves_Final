@@ -207,7 +207,9 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
     try {
       final response = await widget.api.report(widget.reportId);
       _report = Map<String, dynamic>.from(response['report'] as Map);
-      _health = _report!['suggested_health']?.toString();
+      _health = _report!['suggested_health'] == 'Unknown'
+          ? null
+          : _report!['suggested_health']?.toString();
       _speciesId = _report!['suggested_species_id'] as int?;
       _rarity = _report!['rarity_level']?.toString() ?? 'Unassigned';
     } catch (error) {
@@ -223,6 +225,10 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
 
   Future<void> _review(String action) async {
     if (_busy) return;
+    if (action != 'reject' && _health == null) {
+      setState(() => _error = 'Choose the final health before saving.');
+      return;
+    }
     if (action == 'confirm' && _changed) {
       setState(() => _error = 'Use Save correction for your changes.');
       return;
@@ -354,7 +360,9 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                 const Divider(height: 24),
                 Text('Suggested health: ${_report!['suggested_health']}'),
                 Text(
-                  'Score: ${_report!['health_score']} / ${_report!['health_max_score']}',
+                  _report!['health_score'] == null
+                      ? 'Not scored. Choose the final health.'
+                      : 'Score: ${_report!['health_score']} / ${_report!['health_max_score']}',
                 ),
                 const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
                 Text(
@@ -378,7 +386,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
               final options = (criterion['options'] as List? ?? const [])
                   .map(
                     (item) =>
-                        '${item['label']}${criterion['score_group'] == 'health' ? ' (${item['points']}/2)' : ''}',
+                        '${item['label']}${criterion['score_group'] == 'health' ? ' (${item['points'] == null ? 'Unscored' : '${item['points']}/2'})' : ''}',
                   )
                   .join(', ');
               return ListTile(

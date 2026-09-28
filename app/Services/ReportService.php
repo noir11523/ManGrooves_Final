@@ -538,7 +538,7 @@ final class ReportService
             $params['status'] = $status;
         }
         $health = is_scalar($filters['health'] ?? null) ? (string) $filters['health'] : '';
-        if (in_array($health, ['Healthy', 'Stressed', 'At Risk'], true)) {
+        if (in_array($health, ['Healthy', 'Stressed', 'At Risk', 'Unknown'], true)) {
             $conditions[] = 'COALESCE(r.final_health, r.suggested_health) = :health';
             $params['health'] = $health;
         }
@@ -634,6 +634,7 @@ final class ReportService
                     COALESCE(ro.score_group_snapshot, c.score_group) AS score_group,
                     COALESCE(ro.selection_mode_snapshot, c.selection_mode) AS selection_mode,
                     o.id AS option_id,
+                    COALESCE(ro.option_code_snapshot, o.code) AS option_code,
                     COALESCE(ro.option_label_snapshot, o.label) AS option_label,
                     ro.points_snapshot
              FROM report_observations ro
@@ -658,7 +659,7 @@ final class ReportService
             if ($observation['option_id'] !== null) {
                 $grouped[$code]['options'][] = [
                     'label' => (string) $observation['option_label'],
-                    'points' => (int) $observation['points_snapshot'],
+                    'points' => $observation['option_code'] === 'unknown' ? null : (int) $observation['points_snapshot'],
                 ];
             }
         }

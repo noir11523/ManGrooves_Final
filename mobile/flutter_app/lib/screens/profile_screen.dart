@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import 'account_security_screen.dart';
+import 'checklist_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -226,6 +227,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 20),
+        if (user['role'] == 'system_admin')
+          OutlinedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => ChecklistScreen(api: widget.api),
+              ),
+            ),
+            icon: const Icon(Icons.checklist),
+            label: const Text('Health checklist'),
+          ),
         OutlinedButton.icon(
           onPressed: () => Navigator.push(
             context,

@@ -65,7 +65,7 @@ $observationsStatement = $pdo->prepare(
             COALESCE(ro.criteria_code_snapshot, hc.code) AS criterion_code,
             COALESCE(ro.score_group_snapshot, hc.score_group) AS score_group,
             COALESCE(ro.option_label_snapshot, ho.label) AS option_label,
-            ro.points_snapshot
+            CASE WHEN COALESCE(ro.option_code_snapshot, ho.code) = \'unknown\' THEN NULL ELSE ro.points_snapshot END AS points_snapshot
      FROM report_observations ro
      LEFT JOIN health_criteria hc ON hc.id = ro.criteria_id
      LEFT JOIN health_options ho ON ho.id = ro.option_id

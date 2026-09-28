@@ -35,6 +35,7 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow border-0">
                 <li><a class="dropdown-item" href="<?= e(url('settings.php')) ?>"><i class="bi bi-person-gear me-2" aria-hidden="true"></i>Profile settings</a></li>
+                <?php if ($authUser['role'] === 'system_admin'): ?><li><a class="dropdown-item" href="<?= e(url('admin/checklist.php')) ?>"><i class="bi bi-list-check me-2" aria-hidden="true"></i>Health checklist</a></li><?php endif; ?>
                 <li><button class="dropdown-item d-none" type="button" data-install-app><i class="bi bi-download me-2" aria-hidden="true"></i>Install app</button></li>
                 <li><hr class="dropdown-divider"></li>
                 <li>

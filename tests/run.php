@@ -138,7 +138,7 @@ try {
         same(5, (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(), 'user count');
         same(7, (int) $pdo->query('SELECT COUNT(*) FROM mangrove_species')->fetchColumn(), 'species count');
         same(7, (int) $pdo->query('SELECT COUNT(*) FROM health_criteria')->fetchColumn(), 'criteria count');
-        same(30, (int) $pdo->query('SELECT COUNT(*) FROM health_options')->fetchColumn(), 'option count');
+        same(40, (int) $pdo->query('SELECT COUNT(*) FROM health_options')->fetchColumn(), 'option count');
         same(3, (int) $pdo->query('SELECT COUNT(*) FROM mangrove_clusters')->fetchColumn(), 'cluster count');
         same(1, (int) $pdo->query(
             "SELECT COUNT(*) FROM information_schema.TABLES
@@ -367,7 +367,9 @@ try {
         $bioAll = $ids['bio_indicators']['all_of_the_above'];
         $negativeNone = $ids['negative_signs']['none_of_the_above'];
         $negativeAll = $ids['negative_signs']['all_of_the_above'];
-        same(false, isset($ids['leaf_color']['all_of_the_above']));
+        same(true, isset($ids['leaf_color']['all_of_the_above']));
+        same(false, isset($ids['leaf_color']['none_of_the_above']));
+        same(false, isset($ids['leaf_condition']['all_of_the_above']));
         $none = $classifier->classify($base + ['bio_indicators' => [$bioNone], 'negative_signs' => [$negativeNone]]);
         same(0, $none['environmental_score']);
         same('Healthy', $none['status']);
@@ -386,6 +388,121 @@ try {
         $pdo->exec(file_get_contents(APP_ROOT . '/database/migrations/20260927_report_choices.sql'));
         $pdo->exec(file_get_contents(APP_ROOT . '/database/migrations/20260927_report_choices.sql'));
         same($before, $pdo->query('SELECT * FROM health_options ORDER BY id')->fetchAll());
+    });
+
+    test_case('unknown answers are unscored and aggregate choices exclude unknown', static function () use ($pdo): void {
+        $classifier = new HealthClassifier($pdo);
+        $base = ['leaf_color' => 1, 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15];
+        foreach ($classifier->criteriaWithOptions() as $criterion) {
+            $special = [];
+            foreach ($criterion['options'] as $option) $special[$option['code']] = $option['id'];
+            $unknown = $classifier->classify(array_replace($base, [$criterion['code'] => $special['unknown']]));
+            same('Unknown', $unknown['status']);
+            same(null, $unknown['health_score']);
+            same(true, $unknown['needs_review']);
+            throws(static fn () => $classifier->classify(array_replace($base, [$criterion['code'] => [$special['unknown'], $criterion['options'][0]['id']]])), InvalidArgumentException::class);
+            if ($criterion['selection_mode'] === 'multiple') {
+                $none = $classifier->classify($base + [$criterion['code'] => $special['none_of_the_above']]);
+                same('Healthy', $none['status']);
+                same(0, $none['environmental_score']);
+                $all = $classifier->classify($base + [$criterion['code'] => $special['all_of_the_above']]);
+                same('Healthy', $all['status']);
+                same(false, $all['needs_review']);
+            }
+        }
+    });
+
+    test_case('all health choices use the lowest score and Not Sure stays unscored', static function () use ($pdo): void {
+        $classifier = new HealthClassifier($pdo);
+        $base = ['leaf_color' => 1, 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15];
+        $all = [];
+        foreach ($classifier->criteriaWithOptions() as $criterion) {
+            foreach ($criterion['options'] as $option) {
+                if ($option['code'] === 'unknown') same('Not Sure', $option['label']);
+                if (in_array($criterion['code'], HealthClassifier::HEALTH_CODES, true) && $option['code'] === 'all_of_the_above') {
+                    $all[$criterion['code']] = $option['id'];
+                    $result = $classifier->classify(array_replace($base, [$criterion['code'] => $option['id']]));
+                    same(4, $result['health_score']); same('Stressed', $result['status']);
+                    throws(static fn () => $classifier->classify(array_replace($base, [$criterion['code'] => [$option['id'], $base[$criterion['code']]]])), InvalidArgumentException::class);
+                }
+            }
+        }
+        same(3, count($all));
+        $result = $classifier->classify(array_replace($base, $all));
+        same(0, $result['health_score']); same('At Risk', $result['status']);
+    });
+
+    test_case('admin edits checklist scores with audit, stale protection and historical snapshots', static function () use ($pdo): void {
+        $pdo->beginTransaction();
+        try {
+            $service = new \App\Services\ChecklistService($pdo);
+            $input = $service->data()[0];
+            throws(static fn () => $service->save(['id' => 2, 'role' => 'expert'], $input), InvalidArgumentException::class);
+            $before = $pdo->query('SELECT * FROM report_observations WHERE report_id = 1')->fetchAll();
+            $input['options'][0]['points'] = 1;
+            $input['options'][1]['points'] = 2;
+            $input['options'][0]['label'] = 'Green leaves';
+            $service->save(['id' => 3, 'role' => 'system_admin'], $input);
+            $score = (new HealthClassifier($pdo))->classify(['leaf_color' => 1, 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15]);
+            same(5, $score['health_score']);
+            same('Stressed', $score['status']);
+            same($before, $pdo->query('SELECT * FROM report_observations WHERE report_id = 1')->fetchAll());
+            same(6, (int) $pdo->query('SELECT health_score FROM reports WHERE id = 1')->fetchColumn());
+            check((int) $pdo->query("SELECT COUNT(*) FROM audit_logs WHERE action = 'admin.checklist_updated'")->fetchColumn() > 0);
+            throws(static fn () => $service->save(['id' => 3, 'role' => 'system_admin'], $input), InvalidArgumentException::class);
+            $invalid = $service->data()[0];
+            $invalid['options'][0]['points'] = 3;
+            throws(static fn () => $service->save(['id' => 3, 'role' => 'system_admin'], $invalid), InvalidArgumentException::class);
+            $invalid = $service->data()[0];
+            foreach ($invalid['options'] as &$option) if ($option['code'] !== 'unknown') $option['points'] = 1;
+            unset($option);
+            throws(static fn () => $service->save(['id' => 3, 'role' => 'system_admin'], $invalid), InvalidArgumentException::class);
+        } finally { $pdo->rollBack(); }
+    });
+
+    test_case('reference imports keep administrator checklist settings and include unknown choices', static function () use ($pdo): void {
+        $pdo->beginTransaction();
+        try {
+            $pdo->exec("UPDATE health_criteria SET name = 'Custom leaf check', guide_image = NULL WHERE id = 1");
+            $pdo->exec("UPDATE health_options SET label = 'Custom green label', points = 1 WHERE id = 1");
+            $pdo->exec(file_get_contents(APP_ROOT . '/database/reference.sql'));
+            $pdo->exec(file_get_contents(APP_ROOT . '/database/reference.sql'));
+            same('Custom leaf check', $pdo->query('SELECT name FROM health_criteria WHERE id = 1')->fetchColumn());
+            same('Custom green label', $pdo->query('SELECT label FROM health_options WHERE id = 1')->fetchColumn());
+            same(1, (int) $pdo->query('SELECT points FROM health_options WHERE id = 1')->fetchColumn());
+            same(7, (int) $pdo->query("SELECT COUNT(*) FROM health_options WHERE code = 'unknown'")->fetchColumn());
+        } finally { $pdo->rollBack(); }
+    });
+
+    test_case('unknown report stays pending and requires an explicit final health', static function () use ($pdo): void {
+        $temporary = tempnam(sys_get_temp_dir(), 'mgr-unknown-');
+        copy(APP_ROOT . '/public/assets/img/guides/leaf-color.png', $temporary);
+        $storedPath = null;
+        $pdo->beginTransaction();
+        try {
+            $unknown = (int) $pdo->query("SELECT o.id FROM health_options o JOIN health_criteria c ON c.id = o.criteria_id WHERE c.code = 'leaf_color' AND o.code = 'unknown'")->fetchColumn();
+            $result = (new ReportService($pdo))->submitGuardianReport(1, [
+                'field_confirmation' => '1', 'latitude' => '10.279', 'longitude' => '123.879',
+                'location_source' => 'manual', 'sitio_name' => 'Unknown test',
+                'observed_alive_count' => '50', 'root_type' => 'Prop roots',
+                'leaf_shape' => 'Elliptic', 'bark_texture' => 'Rough, grayish to brown',
+                'observations' => ['leaf_color' => $unknown, 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15],
+            ], ['error' => UPLOAD_ERR_OK, 'tmp_name' => $temporary, 'size' => filesize($temporary), 'name' => 'unknown.png']);
+            $id = (int) $result['id'];
+            $row = $pdo->query('SELECT * FROM reports WHERE id = ' . $id)->fetch();
+            $storedPath = APP_ROOT . '/' . $row['photo_path'];
+            same('pending', $row['status']); same(null, $row['health_score']); same('Unknown', $row['suggested_health']);
+            $detail = (new ReportService($pdo))->reportDetail($id, ['id' => 1, 'role' => 'guardian']);
+            same(null, $detail['observations'][0]['options'][0]['points']);
+            throws(static fn () => (new VerificationService($pdo))->review($id, 2, ['action' => 'confirm']), InvalidArgumentException::class);
+            $verified = (new VerificationService($pdo))->review($id, 2, ['action' => 'correct', 'final_health' => 'Stressed', 'rarity_level' => 'Unassigned', 'expert_feedback' => 'Reviewed photo.']);
+            same('verified', $verified['status']);
+            same('Unknown', $pdo->query('SELECT previous_health FROM verification_logs WHERE report_id = ' . $id)->fetchColumn());
+        } finally {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            if ($storedPath && is_file($storedPath)) unlink($storedPath);
+            if (is_file($temporary)) unlink($temporary);
+        }
     });
 
     test_case('healthy submissions automatically verify with cluster, notification, badge and follow-up', static function () use ($pdo): void {

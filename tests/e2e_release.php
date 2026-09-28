@@ -185,6 +185,7 @@ $serverStdout = tempnam(sys_get_temp_dir(), 'mgr-e2e-out-');
 $serverStderr = tempnam(sys_get_temp_dir(), 'mgr-e2e-err-');
 $browsers = [];
 $uploadedPaths = [];
+$checklistUploads = [];
 $uploadDirectories = [];
 $registeredEmail = 'e2e.guardian.' . bin2hex(random_bytes(4)) . '@example.test';
 $registeredPassword = 'E2eMangrove123!';
@@ -1321,6 +1322,46 @@ try {
             "$analyticsRole mobile analytics ignores forged account scope and returns correct totals");
     }
 
+    record_result(!str_contains($guardian->request('GET', '/reports.php')->body, '>Report map</a>'), 'web My reports removes the Report map shortcut');
+    foreach ([[$guardian, $mobileGuardian, $mobileSession['token']], [$expert, $expertMobile, $expertToken]] as [$webViewer, $appViewer, $token]) {
+        record_result($webViewer->request('GET', '/admin/checklist.php')->status === 403, 'non-admin cannot open web checklist editor');
+        record_result($appViewer->request('GET', '/mobile-api/checklist.php', null, true, ['Authorization: Bearer ' . $token])->status === 403, 'non-admin cannot read mobile checklist editor');
+        record_result($appViewer->request('POST', '/mobile-api/checklist.php', ['id' => '1'], true, ['Authorization: Bearer ' . $token])->status === 403, 'non-admin cannot change checklist');
+    }
+    $checklistPage = $admin->request('GET', '/admin/checklist.php');
+    record_result($checklistPage->status === 200 && str_contains($checklistPage->body, 'Save checklist'), 'administrator opens responsive checklist editor');
+    $adminHeaders = ['Authorization: Bearer ' . $adminToken];
+    $checklistResponse = $adminMobile->request('GET', '/mobile-api/checklist.php', null, true, $adminHeaders);
+    $criteria = json_decode($checklistResponse->body, true)['criteria'];
+    $editedCriterion = $criteria[0];
+    $editedCriterion['name'] = 'Leaf color test';
+    $editedCriterion['options'][0]['points'] = 1;
+    $editedCriterion['options'][1]['points'] = 2;
+    $upload = $adminMobile->request('POST', '/mobile-api/checklist.php', [
+        'payload' => json_encode($editedCriterion),
+        'guide_image' => new CURLFile($root . '/public/assets/img/guides/leaf-color.png', 'image/png', 'guide.png'),
+        'option_image_' . $editedCriterion['options'][0]['id'] => new CURLFile($root . '/public/assets/img/guides/pests.png', 'image/png', 'choice.png'),
+    ], true, $adminHeaders);
+    $savedCriteria = json_decode($upload->body, true)['criteria'] ?? [];
+    require_result($upload->status === 200 && isset($savedCriteria[0]['guide_image']), 'administrator saves mobile points and real guide and choice images');
+    foreach ([$savedCriteria[0]['guide_image'], $savedCriteria[0]['options'][0]['image_path']] as $path) {
+        $checklistUploads[] = $path;
+        record_result($guardian->request('GET', '/assets/' . $path)->status === 200, 'uploaded checklist photo is available to report forms');
+    }
+    $staleSave = $adminMobile->request('POST', '/mobile-api/checklist.php', ['payload' => json_encode($editedCriterion)], true, $adminHeaders);
+    record_result($staleSave->status === 422, 'stale checklist changes cannot overwrite a newer edit');
+    $webFields = ['csrf_token' => csrf_token($checklistPage->body), 'id' => (string) $savedCriteria[0]['id'], 'version' => $savedCriteria[0]['version'], 'name' => 'Leaf Color', 'question_text' => $criteria[0]['question_text'], 'remove_guide' => '1'];
+    foreach ($criteria[0]['options'] as $index => $option) {
+        foreach (['id', 'label', 'points'] as $key) $webFields["options[$index][$key]"] = (string) $option[$key];
+        $webFields["options[$index][remove_image]"] = '1';
+    }
+    $savedWeb = $admin->request('POST', '/admin/checklist.php', $webFields);
+    record_result($savedWeb->status === 200 && str_contains($savedWeb->body, 'Checklist saved.'), 'administrator saves web checklist changes and removes photos');
+    $invalidImage = $adminMobile->request('GET', '/mobile-api/checklist.php', null, true, $adminHeaders);
+    $imagePayload = json_decode($invalidImage->body, true)['criteria'][0];
+    $badUpload = $adminMobile->request('POST', '/mobile-api/checklist.php', ['payload' => json_encode($imagePayload), 'guide_image' => new CURLFile($root . '/README.md', 'image/png', 'bad.png')], true, $adminHeaders);
+    record_result($badUpload->status === 422, 'checklist upload rejects files that are not real images');
+
     // Account settings must behave consistently for every role.
     foreach ([
         ['guardian', $otherGuardian, 'guardian@test.com', $changedPassword],
@@ -1460,6 +1501,12 @@ try {
         }
     }
 
+    foreach ($checklistUploads as $path) {
+        if (preg_match('#^img/checklist/[a-f0-9]{40}\.(jpg|png|webp)$#', $path)) {
+            $absolute = $root . '/public/assets/' . $path;
+            if (is_file($absolute)) unlink($absolute);
+        }
+    }
     foreach ($uploadedPaths as $relativePath) {
         $relativePath = str_replace('\\', '/', (string) $relativePath);
         if (!preg_match('#^storage/uploads/reports/\d{4}/\d{2}/[a-f0-9]{40}\.(?:jpg|png|webp)$#', $relativePath)) {

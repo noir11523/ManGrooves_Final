@@ -1179,7 +1179,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
               child: Image.network(
                 _assetUrl(guideImage),
                 height: 150,
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
                 errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
@@ -1201,6 +1201,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
                         value: option['id'] as int,
                         contentPadding: EdgeInsets.zero,
                         title: Text(option['label']?.toString() ?? ''),
+                        subtitle: option['image_path'] == null
+                            ? null
+                            : Image.network(
+                                _assetUrl('${option['image_path']}'),
+                                height: 90,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) =>
+                                    const SizedBox.shrink(),
+                              ),
                       ),
                     )
                     .toList(),
@@ -1213,6 +1222,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
                 value: selected.contains(id),
                 contentPadding: EdgeInsets.zero,
                 title: Text(option['label']?.toString() ?? ''),
+                subtitle: option['image_path'] == null
+                    ? null
+                    : Image.network(
+                        _assetUrl('${option['image_path']}'),
+                        height: 90,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
                 controlAffinity: ListTileControlAffinity.leading,
                 onChanged: (checked) {
                   setState(() {
@@ -1220,6 +1237,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
                     const aggregateCodes = [
                       'none_of_the_above',
                       'all_of_the_above',
+                      'unknown',
                     ];
                     if (checked == true) {
                       if (aggregateCodes.contains(option['code'])) {
@@ -1251,12 +1269,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
   void _resolveObservationConflict(String group, String option) {
     String? otherGroup;
     bool shouldRemove(String code) => otherGroup == 'bio_indicators'
-        ? code != 'none_of_the_above'
+        ? !['none_of_the_above', 'unknown'].contains(code)
         : ['no_animals', 'all_of_the_above'].contains(code);
     if (group == 'negative_signs' &&
         ['no_animals', 'all_of_the_above'].contains(option)) {
       otherGroup = 'bio_indicators';
-    } else if (group == 'bio_indicators' && option != 'none_of_the_above') {
+    } else if (group == 'bio_indicators' &&
+        !['none_of_the_above', 'unknown'].contains(option)) {
       otherGroup = 'negative_signs';
     }
     if (otherGroup == null) return;
@@ -1344,14 +1363,18 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
             const Text('Answer the checklist to see the result.'),
           if (health != null) ...[
             Text(
-              '${health['status']} · ${health['health_score']}/${health['health_max_score']}',
+              health['health_score'] == null
+                  ? 'Unknown - needs review'
+                  : '${health['status']} - ${health['health_score']}/${health['health_max_score']}',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const Text('6 Healthy · 3–5 Stressed · 0–2 At Risk'),
             for (final row in health['breakdown'] as List? ?? [])
-              Text('${row['name']}: ${row['answer']} (${row['points']}/2)'),
+              Text(
+                '${row['name']}: ${row['answer']} (${row['points'] == null ? 'Unscored' : '${row['points']}/2'})',
+              ),
             const Text(
-              'Other answers give context and do not change this score.',
+              'Unknown answers need review. Other choices add context.',
               style: TextStyle(fontSize: 12),
             ),
             if (_rootType != null && _leafShape != null && _barkTexture != null)

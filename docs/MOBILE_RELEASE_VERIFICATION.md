@@ -5,10 +5,10 @@ Verification date: 2026-09-28 (Asia/Manila)
 ## Verified Android artifact
 
 - File: `mobile/flutter_app/dist/ManGROOVES-Flutter.apk`
-- Version: `1.1.11+13`
+- Version: `1.1.12+14`
 - Application ID: `org.mangrooves.mobile`
-- Size: 57,843,058 bytes (55.16 MiB)
-- SHA-256: `81244677B5E72EF3232D15AF5B284CF7493E9DA05BAB80565D4612E35B8017CA`
+- Size: 57,875,878 bytes (55.19 MiB)
+- SHA-256: `BD2827C40D203922BA8C295FB4DE95510A9FC62418A79F2BA8111A0A568BD99E`
 - Minimum Android SDK: 24; target Android SDK: 36
 - Native ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`
 - APK Signature Scheme v2: verified after packaging
@@ -26,7 +26,8 @@ Web and Flutter share the server's report data, health scoring, validation rules
 and role permissions. This release includes:
 
 - Analytics appears above Health history in the web Clusters menu and replaces
-  Report map in the app's top menu. Report maps remain available from Reports.
+  Report map in the app's top menu. The redundant Report map button is removed
+  from web My reports; Flutter Reports retains its map.
 - Guardians see their own report totals, health distribution, monthly verified
   reports, and attention reports. Experts and administrators see all users'
   aggregated data. The authenticated account determines scope on the server;
@@ -65,8 +66,17 @@ and role permissions. This release includes:
 - Incomplete or tied species matches remain unresolved. Match percentages describe
   trait similarity. Edited expert assessments require Save correction and verify;
   Confirm suggestion is available for unchanged suggestions.
-- None of the above and All of the above for multiple-answer groups only, mutually
-  exclusive within each group. Conflicting animal observations clear each other.
+- All of the above is available in leaf color, pests, and roots and uses the
+  lowest regular score (0), keeping mixed conditions out of automatic Healthy
+  verification. Environmental multiple-answer groups retain All of the above
+  (sum of regular choices) and None of the above (0).
+- Not Sure is capitalized consistently and available in every checklist group.
+  It stays unscored, makes the report pending, and requires an explicit final
+  health decision from a reviewer. Special choices are exclusive in their group.
+- Administrators can edit checklist names, questions, normal choice labels,
+  points, guide photos, and choice photos from web Health checklist or app Account.
+  Updates have role checks, audit logs, stale-edit protection, and genuine-image
+  validation. Existing reports keep their recorded scores and answer snapshots.
 - Healthy submissions automatically verify without entering the review queue.
 - A four-step report form: Site, Health, Details, Review. Follow-up choices are
   hidden until enabled. Back, exit, section editing, updated summaries, and a final
@@ -80,10 +90,10 @@ and role permissions. This release includes:
 
 | Check | Result |
 | --- | --- |
-| PHP domain/integration suite | 45 passed, 0 failed |
-| Disposable-database web/mobile HTTP journeys | 205 passed, 0 failed |
-| JavaScript location/report-flow tests | Unchanged; 37 passed in the preceding release |
-| Flutter navigation/widget checks | 3 passed, covering guardian, expert, and administrator Analytics menus and back navigation |
+| PHP domain/integration suite | 50 passed, 0 failed |
+| Disposable-database web/mobile HTTP journeys | 219 passed, 0 failed |
+| JavaScript location/report-flow tests | 37 passed, 0 failed |
+| Flutter navigation/widget checks | 33 passed, 1 optional live-LAN test skipped |
 | Flutter analyzer | No issues found |
 | Android release build | Completed |
 | APK metadata, v2 signature, checksum | Verified |
@@ -99,7 +109,9 @@ server logs contained no PHP warnings, notices, deprecations, or fatal errors.
 Phone-size widget checks covered report editing and final confirmation, GPS/manual
 selection, map filters and paging, health/growth tabs, private evidence links,
 validation details, and expert correction. Empty timelines and zero living counts
-also have regression coverage.
+also have regression coverage. The checklist editor is tested at a 320-pixel
+phone width, including save confirmation, score editing, and keeping/discarding
+unsaved changes. Unknown reports and all health aggregate choices are covered.
 
 The September 12 database startup problem recorded in the previous release notes
 was not present during this verification. The existing database passed the health
@@ -110,6 +122,12 @@ the database health check and live configuration endpoint passed again. These
 services must remain running when using the local web app or APK.
 
 ## Server and installation
+
+Existing servers must run `C:\xampp\php\php.exe scripts\migrate-checklist.php`
+before serving this version. The additive migration was applied locally and the
+health check confirmed 7 checklist groups and 40 choices. Existing reports were
+preserved. Include `public/assets/img/checklist/` when transferring admin-uploaded
+checklist images to a different server.
 
 The APK first tries `http://192.168.100.12/mangrooves_v2/public/mobile-api` and can
 discover the configured ManGROOVES API on the phone's private LAN. Apache and MySQL
@@ -126,9 +144,8 @@ See [Mobile installation](MOBILE_INSTALLATION.md) and
 
 ## Remaining manual acceptance
 
-The browser automation tool was unavailable, so this release has automated web
-route/behavior checks but no live visual browser sign-off. No Android device or
-emulator was connected. Real camera capture, GPS reception and permission dialogs,
+This release has automated web route/behavior checks but no live visual browser
+sign-off. No Android device or emulator was connected. Real camera capture, GPS reception and permission dialogs,
 map-tile network behavior, and installation still need a physical-device check.
 
 An iPhone IPA requires macOS, Xcode, and Apple signing credentials. This Windows

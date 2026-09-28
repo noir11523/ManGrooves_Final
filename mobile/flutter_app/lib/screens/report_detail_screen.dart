@@ -124,7 +124,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ),
         const SizedBox(height: 18),
         Text(
-          'System health score: ${_report!['health_score']} / ${_report!['health_max_score']}',
+          _report!['health_score'] == null
+              ? 'Not scored. Needs review.'
+              : 'System health score: ${_report!['health_score']} / ${_report!['health_max_score']}',
         ),
         const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
         const SizedBox(height: 8),
