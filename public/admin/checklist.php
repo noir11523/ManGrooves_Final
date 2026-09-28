@@ -16,4 +16,4 @@ if (is_post()) {
         $error = $exception->getMessage();
     }
 }
-render('admin/checklist', ['pageTitle' => 'Health checklist', 'criteria' => $service->data(), 'error' => $error]);
+render('admin/checklist', ['pageTitle' => 'Health checklist', 'criteria' => $service->data(), 'error' => $error, 'pageScripts' => '<script src="' . e(asset('js/checklist-editor.js') . '?v=' . filemtime(APP_ROOT . '/public/assets/js/checklist-editor.js')) . '"></script>']);

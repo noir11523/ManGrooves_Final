@@ -133,4 +133,57 @@ void main() {
     expect(api.saves, 0);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'admin can rename special choices, undo deletion and add new choices',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final api = _Api();
+      await tester.pumpWidget(MaterialApp(home: ChecklistScreen(api: api)));
+      await tester.pumpAndSettle();
+      await _tap(tester, find.text('Leaf color'));
+      final unknownField = find.byWidgetPredicate(
+        (w) => w is TextField && w.controller?.text == 'Not Sure',
+      );
+      await tester.scrollUntilVisible(
+        unknownField,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(unknownField, 'Cannot tell');
+      await tester.pumpAndSettle();
+      final unknownCard = find.byWidgetPredicate(
+        (w) => w is Card && w.key is ValueKey && (w.key as ValueKey).value == 4,
+      );
+      await _tap(
+        tester,
+        find.descendant(of: unknownCard, matching: find.text('Delete choice')),
+      );
+      await _tap(tester, find.text('Undo delete'));
+      expect(find.text('Cannot tell'), findsOneWidget);
+      await _tap(tester, find.text('Add choice'));
+      final kind = find.byType(DropdownButtonFormField<String>);
+      await _tap(tester, kind);
+      await _tap(tester, find.text('All choices').last);
+      final allField = find.byWidgetPredicate(
+        (w) => w is TextField && w.controller?.text == 'All of the above',
+      );
+      await tester.ensureVisible(allField);
+      await tester.enterText(allField, 'Mixed colors');
+      await _tap(tester, find.text('Save checklist'));
+      await _tap(tester, find.text('Save'));
+      final choices = api.sent!['options'] as List;
+      expect(
+        choices.firstWhere((o) => o['code'] == 'unknown')['label'],
+        'Cannot tell',
+      );
+      expect(choices.last['kind'], 'all_of_the_above');
+      expect(choices.last['label'], 'Mixed colors');
+      expect(choices.last['points'], 0);
+      expect(choices.last['id'], lessThan(0));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

@@ -74,7 +74,7 @@ final class HealthClassifier
                 $points = (int) $option['points'];
                 $optionCode = (string) $option['code'];
                 if (in_array($optionCode, ['none_of_the_above', 'all_of_the_above', 'unknown'], true)) {
-                    if (($optionCode !== 'unknown' && !($optionCode === 'all_of_the_above' && in_array($code, self::HEALTH_CODES, true)) && $criterion['selection_mode'] !== 'multiple') || count($ids) !== 1) {
+                    if (($optionCode === 'none_of_the_above' && $criterion['selection_mode'] !== 'multiple') || count($ids) !== 1) {
                         throw new InvalidArgumentException('Choose ' . $option['label'] . ' on its own for ' . $criterion['name'] . '.');
                     }
                     $points = 0;

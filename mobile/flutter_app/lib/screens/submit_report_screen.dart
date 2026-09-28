@@ -1268,11 +1268,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
 
   void _resolveObservationConflict(String group, String option) {
     String? otherGroup;
+    final hasNoAnimals = _criteria
+        .where((c) => c['code'] == 'negative_signs')
+        .any(
+          (c) => (c['options'] as List).any((o) => o['code'] == 'no_animals'),
+        );
+    bool includesNoAnimals(String code) =>
+        code == 'no_animals' || (code == 'all_of_the_above' && hasNoAnimals);
     bool shouldRemove(String code) => otherGroup == 'bio_indicators'
         ? !['none_of_the_above', 'unknown'].contains(code)
-        : ['no_animals', 'all_of_the_above'].contains(code);
-    if (group == 'negative_signs' &&
-        ['no_animals', 'all_of_the_above'].contains(option)) {
+        : includesNoAnimals(code);
+    if (group == 'negative_signs' && includesNoAnimals(option)) {
       otherGroup = 'bio_indicators';
     } else if (group == 'bio_indicators' &&
         !['none_of_the_above', 'unknown'].contains(option)) {

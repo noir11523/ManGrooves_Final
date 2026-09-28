@@ -589,21 +589,23 @@
 
     const selectedObservationCodes = (criteriaCode) => [...form.querySelectorAll(`[data-criteria-code="${criteriaCode}"] input:checked`)]
         .map((input) => input.dataset.optionCode || '');
+    const includesNoAnimals = (code) => code === 'no_animals' || (code === 'all_of_the_above'
+        && !!form.querySelector('[data-criteria-code="negative_signs"] input[data-option-code="no_animals"]'));
     const hasObservationConflict = () => selectedObservationCodes('negative_signs')
-        .some((code) => ['no_animals', 'all_of_the_above'].includes(code))
+        .some(includesNoAnimals)
         && selectedObservationCodes('bio_indicators').some((code) => !['none_of_the_above', 'unknown'].includes(code));
 
     const observationInputs = [...form.querySelectorAll('[data-criteria-code] input')];
     const resolveObservationConflict = (changed) => {
         if (!changed.checked) return;
         const group = changed.closest('[data-criteria-code]')?.dataset.criteriaCode;
-        if (group === 'negative_signs' && ['no_animals', 'all_of_the_above'].includes(changed.dataset.optionCode)) {
+        if (group === 'negative_signs' && includesNoAnimals(changed.dataset.optionCode)) {
             form.querySelectorAll('[data-criteria-code="bio_indicators"] input:checked').forEach((input) => {
                 if (!['none_of_the_above', 'unknown'].includes(input.dataset.optionCode)) input.checked = false;
             });
         } else if (group === 'bio_indicators' && !['none_of_the_above', 'unknown'].includes(changed.dataset.optionCode)) {
             form.querySelectorAll('[data-criteria-code="negative_signs"] input:checked').forEach((input) => {
-                if (['no_animals', 'all_of_the_above'].includes(input.dataset.optionCode)) input.checked = false;
+                if (includesNoAnimals(input.dataset.optionCode)) input.checked = false;
             });
         }
     };

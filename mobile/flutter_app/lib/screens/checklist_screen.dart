@@ -65,7 +65,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   child: Padding(
                     padding: EdgeInsets.all(16),
                     child: Text(
-                      '6 Healthy | 3-5 Stressed | 0-2 At Risk\n\nLeaf color, pests, and roots add 0-2 points each. Not Sure is unscored and needs review.\n\nNone: 0. All: lowest score (0) for health; total of regular choices for environment. Context and environment do not change health.\n\nSaved reports keep their original scores.',
+                      '6 Healthy | 3-5 Stressed | 0-2 At Risk\n\nLeaf color, pests, and roots add 0-2 points each. Not Sure is unscored and needs review.\n\nNone: 0. All: lowest score (0) for health; total of regular choices for context and environment. Context and environment do not change health.\n\nAdd, rename, or delete choices. Past reports stay unchanged. Keep a 0-point and a 2-point choice in each health check.',
                     ),
                   ),
                 ),
@@ -111,6 +111,43 @@ class _ChecklistEditor extends StatefulWidget {
 
 class _ChecklistEditorState extends State<_ChecklistEditor> {
   final _form = GlobalKey<FormState>();
+  final _scroll = ScrollController();
+  int _nextId = -1;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _addChoice() {
+    if (_options.where((o) => o['delete'] != true).length >= 30) {
+      setState(() => _error = 'Use up to 30 choices.');
+      return;
+    }
+    setState(() {
+      _options.add({
+        'id': _nextId--,
+        'code': 'standard',
+        'kind': 'standard',
+        'label': '',
+        'points': 0,
+        'image_path': null,
+      });
+      _dirty = true;
+      _error = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   late final Map<String, dynamic> _data = jsonDecode(
     jsonEncode(widget.criterion),
   );
@@ -166,7 +203,7 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
       builder: (dialog) => AlertDialog(
         title: const Text('Save checklist?'),
         content: const Text(
-          'New reports will use these settings. Saved reports stay unchanged.',
+          'Save added, edited, and deleted choices? Past reports stay unchanged.',
         ),
         actions: [
           TextButton(
@@ -186,7 +223,11 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
       _error = null;
     });
     try {
-      await widget.api.saveChecklist(_data, _images);
+      final images = Map<String, String>.from(_images);
+      for (final option in _options.where((o) => o['delete'] == true)) {
+        images.remove('option_image_${option['id']}');
+      }
+      await widget.api.saveChecklist(_data, images);
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -275,15 +316,28 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: FilledButton(
-            onPressed: _busy ? null : _save,
-            child: Text(_busy ? 'Saving...' : 'Save checklist'),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _addChoice,
+                icon: const Icon(Icons.add),
+                label: const Text('Add choice'),
+              ),
+              FilledButton(
+                onPressed: _busy ? null : _save,
+                child: Text(_busy ? 'Saving...' : 'Save checklist'),
+              ),
+            ],
           ),
         ),
       ),
       body: Form(
         key: _form,
         child: ListView(
+          controller: _scroll,
           padding: const EdgeInsets.all(16),
           children: [
             if (_error != null)
@@ -332,16 +386,98 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                 'none_of_the_above',
                 'all_of_the_above',
               ].contains(option['code']);
+              if (option['delete'] == true) {
+                return Card(
+                  key: ValueKey(option['id']),
+                  child: ListTile(
+                    title: Text('${option['label']}'),
+                    subtitle: const Text('Will be deleted on save'),
+                    trailing: TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() {
+                              option['delete'] = false;
+                              _dirty = true;
+                            }),
+                      child: const Text('Undo delete'),
+                    ),
+                  ),
+                );
+              }
               return Card(
+                key: ValueKey(option['id']),
                 margin: const EdgeInsets.only(bottom: 12),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => setState(() {
+                                  if ((option['id'] as int) < 0) {
+                                    _images.remove(
+                                      'option_image_${option['id']}',
+                                    );
+                                    _options.remove(option);
+                                  } else {
+                                    option['delete'] = true;
+                                  }
+                                  _dirty = true;
+                                }),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Delete choice'),
+                        ),
+                      ),
+                      if ((option['id'] as int) < 0)
+                        DropdownButtonFormField<String>(
+                          initialValue: option['kind'] as String,
+                          decoration: const InputDecoration(
+                            labelText: 'Answer type',
+                          ),
+                          isExpanded: true,
+                          items: [
+                            const DropdownMenuItem(
+                              value: 'standard',
+                              child: Text('Regular choice'),
+                            ),
+                            const DropdownMenuItem(
+                              value: 'all_of_the_above',
+                              child: Text('All choices'),
+                            ),
+                            const DropdownMenuItem(
+                              value: 'unknown',
+                              child: Text('Not Sure (needs review)'),
+                            ),
+                            if (_data['selection_mode'] == 'multiple')
+                              const DropdownMenuItem(
+                                value: 'none_of_the_above',
+                                child: Text('None of the above'),
+                              ),
+                          ],
+                          onChanged: _busy
+                              ? null
+                              : (kind) => setState(() {
+                                  option['kind'] = kind;
+                                  option['code'] = kind;
+                                  option['points'] = 0;
+                                  option['label'] = switch (kind) {
+                                    'all_of_the_above' => 'All of the above',
+                                    'unknown' => 'Not Sure',
+                                    'none_of_the_above' => 'None of the above',
+                                    _ => '',
+                                  };
+                                  _dirty = true;
+                                }),
+                        ),
                       TextFormField(
                         initialValue: '${option['label']}',
-                        readOnly: reserved,
+                        key: ValueKey(
+                          '${option['id']}-${option['kind'] ?? option['code']}',
+                        ),
                         enabled: !_busy,
                         maxLength: 190,
                         decoration: const InputDecoration(labelText: 'Choice'),
@@ -356,11 +492,11 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                       if (reserved)
                         Text(
                           option['code'] == 'unknown'
-                              ? 'Unscored. Needs review.'
+                              ? 'Not Sure rule: unscored; needs review.'
                               : option['code'] == 'all_of_the_above'
                               ? (_data['score_group'] == 'health'
-                                    ? 'Mixed conditions: uses the lowest score (0).'
-                                    : 'Adds all regular choices.')
+                                    ? 'All choices rule: lowest score (0).'
+                                    : 'All choices rule: totals regular choices.')
                               : 'Adds 0 points.',
                         )
                       else

@@ -1329,7 +1329,7 @@ try {
         record_result($appViewer->request('POST', '/mobile-api/checklist.php', ['id' => '1'], true, ['Authorization: Bearer ' . $token])->status === 403, 'non-admin cannot change checklist');
     }
     $checklistPage = $admin->request('GET', '/admin/checklist.php');
-    record_result($checklistPage->status === 200 && str_contains($checklistPage->body, 'Save checklist'), 'administrator opens responsive checklist editor');
+    record_result($checklistPage->status === 200 && str_contains($checklistPage->body, 'Add choice') && str_contains($checklistPage->body, 'Delete choice') && !str_contains($checklistPage->body, 'readonly'), 'administrator opens responsive checklist editor');
     $adminHeaders = ['Authorization: Bearer ' . $adminToken];
     $checklistResponse = $adminMobile->request('GET', '/mobile-api/checklist.php', null, true, $adminHeaders);
     $criteria = json_decode($checklistResponse->body, true)['criteria'];
@@ -1355,12 +1355,38 @@ try {
         foreach (['id', 'label', 'points'] as $key) $webFields["options[$index][$key]"] = (string) $option[$key];
         $webFields["options[$index][remove_image]"] = '1';
     }
+    $newChoiceIndex = count($criteria[0]['options']);
+    foreach (['id' => '-1', 'kind' => 'standard', 'label' => 'Web added color', 'points' => '1'] as $key => $value) $webFields["options[$newChoiceIndex][$key]"] = $value;
+    foreach ($criteria[0]['options'] as $index => $option) if ($option['code'] === 'all_of_the_above') $webFields["options[$index][label]"] = 'Mixed colors';
     $savedWeb = $admin->request('POST', '/admin/checklist.php', $webFields);
     record_result($savedWeb->status === 200 && str_contains($savedWeb->body, 'Checklist saved.'), 'administrator saves web checklist changes and removes photos');
     $invalidImage = $adminMobile->request('GET', '/mobile-api/checklist.php', null, true, $adminHeaders);
     $imagePayload = json_decode($invalidImage->body, true)['criteria'][0];
     $badUpload = $adminMobile->request('POST', '/mobile-api/checklist.php', ['payload' => json_encode($imagePayload), 'guide_image' => new CURLFile($root . '/README.md', 'image/png', 'bad.png')], true, $adminHeaders);
     record_result($badUpload->status === 422, 'checklist upload rejects files that are not real images');
+
+    $latest = json_decode($adminMobile->request('GET', '/mobile-api/checklist.php', null, true, $adminHeaders)->body, true)['criteria'];
+    $added = array_values(array_filter($latest[0]['options'], static fn ($o) => $o['label'] === 'Web added color'));
+    record_result(count($added) === 1 && str_contains($savedWeb->body, 'Mixed colors'), 'web editor adds choices and renames automatic labels');
+    $contextInput = $latest[1];
+    $removedId = $contextInput['options'][0]['id'];
+    $historyBefore = $databasePdo->query('SELECT * FROM report_observations WHERE option_id = ' . (int) $removedId)->fetchAll();
+    $contextInput['options'][0]['delete'] = true;
+    foreach ($contextInput['options'] as &$option) if ($option['code'] === 'all_of_the_above') $option['label'] = 'Mixed leaf textures';
+    unset($option);
+    $contextInput['options'][] = ['id' => -1, 'kind' => 'standard', 'label' => 'New context choice', 'points' => 1];
+    $contextSave = $adminMobile->request('POST', '/mobile-api/checklist.php', [
+        'payload' => json_encode($contextInput),
+        'option_image_-1' => new CURLFile($root . '/public/assets/img/guides/pests.png', 'image/png', 'choice.png'),
+    ], true, $adminHeaders);
+    $contextSaved = json_decode($contextSave->body, true)['criteria'][1] ?? [];
+    $newContext = array_values(array_filter($contextSaved['options'] ?? [], static fn ($o) => $o['label'] === 'New context choice'));
+    require_result($contextSave->status === 200 && count($newContext) === 1 && $newContext[0]['image_path'], 'mobile checklist adds a choice with its photo and deletes an existing choice');
+    $checklistUploads[] = $newContext[0]['image_path'];
+    record_result(!in_array($removedId, array_column($contextSaved['options'], 'id'), true)
+        && $historyBefore === $databasePdo->query('SELECT * FROM report_observations WHERE option_id = ' . (int) $removedId)->fetchAll(), 'deleting choices hides them from new forms while keeping saved observations');
+    $formChoices = json_decode($mobileGuardian->request('GET', '/mobile-api/report-form.php', null, true, ['Authorization: Bearer ' . $mobileSession['token']])->body, true);
+    record_result(str_contains(json_encode($formChoices), 'Mixed leaf textures') && str_contains(json_encode($formChoices), 'New context choice'), 'guardian report form receives renamed context All and newly added choices');
 
     // Account settings must behave consistently for every role.
     foreach ([

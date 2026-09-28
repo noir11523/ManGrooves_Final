@@ -5,10 +5,10 @@ Verification date: 2026-09-28 (Asia/Manila)
 ## Verified Android artifact
 
 - File: `mobile/flutter_app/dist/ManGROOVES-Flutter.apk`
-- Version: `1.1.12+14`
+- Version: `1.1.13+15`
 - Application ID: `org.mangrooves.mobile`
-- Size: 57,875,878 bytes (55.19 MiB)
-- SHA-256: `BD2827C40D203922BA8C295FB4DE95510A9FC62418A79F2BA8111A0A568BD99E`
+- Size: 57,957,886 bytes (55.27 MiB)
+- SHA-256: `60C069660C01856F02DE5F06A91B552B054999BB43B57E14FDE8C6C27D132F05`
 - Minimum Android SDK: 24; target Android SDK: 36
 - Native ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`
 - APK Signature Scheme v2: verified after packaging
@@ -73,8 +73,13 @@ and role permissions. This release includes:
 - Not Sure is capitalized consistently and available in every checklist group.
   It stays unscored, makes the report pending, and requires an explicit final
   health decision from a reviewer. Special choices are exclusive in their group.
-- Administrators can edit checklist names, questions, normal choice labels,
-  points, guide photos, and choice photos from web Health checklist or app Account.
+- Leaf Condition and Bark/Trunk include All of the above as context answers;
+  they do not change the health score.
+- Administrators can add, delete, and rename all choices, including automatic
+  choice labels, from web Health checklist or app Account. Delete supports Undo
+  before saving. Archived choices disappear from new forms while historical
+  report answers and scores stay intact. Re-adding an automatic type restores it.
+  Questions, points, guide photos, and choice photos remain editable.
   Updates have role checks, audit logs, stale-edit protection, and genuine-image
   validation. Existing reports keep their recorded scores and answer snapshots.
 - Healthy submissions automatically verify without entering the review queue.
@@ -90,10 +95,10 @@ and role permissions. This release includes:
 
 | Check | Result |
 | --- | --- |
-| PHP domain/integration suite | 50 passed, 0 failed |
-| Disposable-database web/mobile HTTP journeys | 219 passed, 0 failed |
-| JavaScript location/report-flow tests | 37 passed, 0 failed |
-| Flutter navigation/widget checks | 33 passed, 1 optional live-LAN test skipped |
+| PHP domain/integration suite | 53 passed, 0 failed |
+| Disposable-database web/mobile HTTP journeys | 223 passed, 0 failed |
+| JavaScript location/report-flow tests | 40 passed, 0 failed |
+| Flutter navigation/widget checks | 4 targeted checks passed (checklist editor and report review); preceding full suite: 33 passed, 1 optional live-LAN test skipped |
 | Flutter analyzer | No issues found |
 | Android release build | Completed |
 | APK metadata, v2 signature, checksum | Verified |
@@ -111,7 +116,10 @@ selection, map filters and paging, health/growth tabs, private evidence links,
 validation details, and expert correction. Empty timelines and zero living counts
 also have regression coverage. The checklist editor is tested at a 320-pixel
 phone width, including save confirmation, score editing, and keeping/discarding
-unsaved changes. Unknown reports and all health aggregate choices are covered.
+unsaved changes, renaming Not Sure, undoing deletion, and adding an All choices
+answer. HTTP tests cover new choice photos and report-form synchronization.
+JavaScript tests cover adding, deleting, undoing, and automatic answer types.
+Unknown reports and health/context aggregate choices are covered.
 
 The September 12 database startup problem recorded in the previous release notes
 was not present during this verification. The existing database passed the health
@@ -125,7 +133,7 @@ services must remain running when using the local web app or APK.
 
 Existing servers must run `C:\xampp\php\php.exe scripts\migrate-checklist.php`
 before serving this version. The additive migration was applied locally and the
-health check confirmed 7 checklist groups and 40 choices. Existing reports were
+health check confirmed 7 checklist groups and 42 choices. Existing reports were
 preserved. Include `public/assets/img/checklist/` when transferring admin-uploaded
 checklist images to a different server.
 

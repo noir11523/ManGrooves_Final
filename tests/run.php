@@ -138,7 +138,7 @@ try {
         same(5, (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(), 'user count');
         same(7, (int) $pdo->query('SELECT COUNT(*) FROM mangrove_species')->fetchColumn(), 'species count');
         same(7, (int) $pdo->query('SELECT COUNT(*) FROM health_criteria')->fetchColumn(), 'criteria count');
-        same(40, (int) $pdo->query('SELECT COUNT(*) FROM health_options')->fetchColumn(), 'option count');
+        same(42, (int) $pdo->query('SELECT COUNT(*) FROM health_options')->fetchColumn(), 'option count');
         same(3, (int) $pdo->query('SELECT COUNT(*) FROM mangrove_clusters')->fetchColumn(), 'cluster count');
         same(1, (int) $pdo->query(
             "SELECT COUNT(*) FROM information_schema.TABLES
@@ -369,7 +369,7 @@ try {
         $negativeAll = $ids['negative_signs']['all_of_the_above'];
         same(true, isset($ids['leaf_color']['all_of_the_above']));
         same(false, isset($ids['leaf_color']['none_of_the_above']));
-        same(false, isset($ids['leaf_condition']['all_of_the_above']));
+        same(true, isset($ids['leaf_condition']['all_of_the_above']));
         $none = $classifier->classify($base + ['bio_indicators' => [$bioNone], 'negative_signs' => [$negativeNone]]);
         same(0, $none['environmental_score']);
         same('Healthy', $none['status']);
@@ -457,6 +457,78 @@ try {
             foreach ($invalid['options'] as &$option) if ($option['code'] !== 'unknown') $option['points'] = 1;
             unset($option);
             throws(static fn () => $service->save(['id' => 3, 'role' => 'system_admin'], $invalid), InvalidArgumentException::class);
+        } finally { $pdo->rollBack(); }
+    });
+
+    test_case('context All choices remain exclusive and never inflate health', static function () use ($pdo): void {
+        $classifier = new HealthClassifier($pdo);
+        $base = ['leaf_color' => 1, 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15];
+        $count = 0;
+        foreach ($classifier->criteriaWithOptions() as $criterion) {
+            if ($criterion['score_group'] !== 'context') continue;
+            $all = array_values(array_filter($criterion['options'], static fn ($o) => $o['code'] === 'all_of_the_above'))[0];
+            $result = $classifier->classify(array_replace($base, [$criterion['code'] => $all['id']]));
+            same(6, $result['health_score']); same('Healthy', $result['status']);
+            throws(static fn () => $classifier->classify(array_replace($base, [$criterion['code'] => [$all['id'], $base[$criterion['code']]]])), InvalidArgumentException::class);
+            $count++;
+        }
+        same(2, $count);
+    });
+
+    test_case('checklist choices can be added archived renamed and restored without changing history', static function () use ($pdo): void {
+        $pdo->beginTransaction();
+        try {
+            $service = new \App\Services\ChecklistService($pdo);
+            $admin = ['id' => 3, 'role' => 'system_admin'];
+            $before = $pdo->query('SELECT * FROM report_observations ORDER BY report_id, option_id')->fetchAll();
+            $input = $service->data()[0];
+            foreach ($input['options'] as &$option) {
+                if ($option['code'] === 'unknown') { $unknownId = $option['id']; $option['label'] = 'Cannot tell'; }
+                if ($option['code'] === 'all_of_the_above') $option['label'] = 'Mixed colors';
+                if ($option['id'] === 2) $option['delete'] = true;
+            }
+            unset($option);
+            $input['options'][] = ['id' => -1, 'kind' => 'standard', 'label' => 'Partly yellow', 'points' => 1];
+            $service->save($admin, $input);
+            $saved = $service->data()[0];
+            $added = array_values(array_filter($saved['options'], static fn ($o) => $o['label'] === 'Partly yellow'))[0];
+            check($added['id'] > 0); check(str_starts_with($added['code'], 'custom_'));
+            same(0, (int) $pdo->query('SELECT active FROM health_options WHERE id = 2')->fetchColumn());
+            $base = ['leaf_color' => $added['id'], 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15];
+            same(5, (new HealthClassifier($pdo))->classify($base)['health_score']);
+            throws(static fn () => (new HealthClassifier($pdo))->classify(array_replace($base, ['leaf_color' => 2])), InvalidArgumentException::class);
+            same('Unknown', (new HealthClassifier($pdo))->classify(array_replace($base, ['leaf_color' => $unknownId]))['status']);
+            $pdo->exec(file_get_contents(APP_ROOT . '/database/reference.sql'));
+            same('Cannot tell', $pdo->query('SELECT label FROM health_options WHERE id = ' . $unknownId)->fetchColumn());
+            same(0, (int) $pdo->query('SELECT active FROM health_options WHERE id = 2')->fetchColumn());
+            $input = $service->data()[0];
+            foreach ($input['options'] as &$option) if ($option['id'] === $unknownId) $option['delete'] = true;
+            unset($option);
+            $service->save($admin, $input);
+            $input = $service->data()[0];
+            $input['options'][] = ['id' => -1, 'kind' => 'unknown', 'label' => 'Not Sure', 'points' => 0];
+            $service->save($admin, $input);
+            same(1, (int) $pdo->query('SELECT active FROM health_options WHERE id = ' . $unknownId)->fetchColumn());
+            same('Not Sure', $pdo->query('SELECT label FROM health_options WHERE id = ' . $unknownId)->fetchColumn());
+            same($before, $pdo->query('SELECT * FROM report_observations ORDER BY report_id, option_id')->fetchAll());
+        } finally { $pdo->rollBack(); }
+    });
+
+    test_case('choice editing rejects partial foreign duplicate and unsafe scoring changes atomically', static function () use ($pdo): void {
+        $pdo->beginTransaction();
+        try {
+            $service = new \App\Services\ChecklistService($pdo);
+            $admin = ['id' => 3, 'role' => 'system_admin'];
+            $original = $service->data()[0];
+            $partial = $original; array_pop($partial['options']);
+            $foreign = $original; $foreign['options'][] = ['id' => 4, 'delete' => true];
+            $duplicate = $original; $duplicate['options'][] = ['id' => -1, 'kind' => 'unknown', 'label' => 'Unsure again', 'points' => 0];
+            $unsafe = $original; $unsafe['options'][0]['delete'] = true;
+            $wrongKind = $original; $wrongKind['options'][] = ['id' => -1, 'kind' => 'none_of_the_above', 'label' => 'None', 'points' => 0];
+            foreach ([$partial, $foreign, $duplicate, $unsafe, $wrongKind] as $input) {
+                throws(static fn () => $service->save($admin, $input), InvalidArgumentException::class);
+                same($original, $service->data()[0]);
+            }
         } finally { $pdo->rollBack(); }
     });
 
