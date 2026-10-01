@@ -1309,10 +1309,16 @@ try {
             && str_contains($analyticsPage->body, 'data-analytics-total>' . $expectedWebTotal . '</div>')
             && str_contains($analyticsPage->body, $personal ? 'Your reports only.' : 'Reports from all users.'),
             "$analyticsRole web analytics has the correct account scope and total");
-        preg_match('/class="cluster-submenu">(.*?)<\/div>/s', $analyticsPage->body, $submenu);
-        record_result(isset($submenu[1]) && strpos($submenu[1], '>Analytics</a>') !== false
-            && strpos($submenu[1], '>Analytics</a>') < strpos($submenu[1], '>Health history</a>'),
-            "$analyticsRole menu puts Analytics above Health history");
+        preg_match('/<nav class="sidebar-nav"[^>]*>(.*?)<\/nav>/s', $analyticsPage->body, $sidebar);
+        $sidebarHtml = $sidebar[1] ?? '';
+        $analyticsPosition = strpos($sidebarHtml, '<span>Analytics</span>');
+        $healthPosition = strpos($sidebarHtml, '<span>Health history</span>');
+        $growthPosition = strpos($sidebarHtml, '<span>Growth timeline</span>');
+        record_result($analyticsPosition !== false && $healthPosition !== false && $growthPosition !== false
+            && $analyticsPosition < $healthPosition && $healthPosition < $growthPosition
+            && str_contains($sidebarHtml, '<details class="analytics-nav" open>')
+            && str_contains($sidebarHtml, 'class="analytics-nav-children"'),
+            "$analyticsRole sidebar groups Health history and Growth timeline under expandable Analytics");
         $analyticsResponse = $appViewer->request('GET', '/mobile-api/analytics.php?date_from=2020-01-01&user_id=4&scope=all_users', null, true, ['Authorization: Bearer ' . $analyticsToken]);
         $analyticsData = json_decode($analyticsResponse->body, true)['analytics'] ?? [];
         $totalSql = 'SELECT COUNT(*) FROM reports' . ($personal ? ' WHERE user_id = ' . (int) $appId : '');

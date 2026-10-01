@@ -12,19 +12,24 @@ $roleIcon = match ($role) {
     default => 'bi-tree',
 };
 
+$analyticsNavigation = ['Analytics', 'analytics.php', 'bi-bar-chart-fill', [
+    ['Health history', 'clusters.php?view=health', 'bi-clock-history'],
+    ['Growth timeline', 'clusters.php?view=growth', 'bi-graph-up-arrow'],
+]];
+
 $navigation = $role === 'guardian'
     ? [
         ['Dashboard', 'dashboard.php', 'bi-grid-1x2-fill'],
         ['Submit report', 'submit-report.php', 'bi-camera-fill'],
         ['My reports', 'reports.php', 'bi-journal-text'],
         ['Explore species', 'explore.php', 'bi-map-fill'],
-        ['Clusters', 'clusters.php', 'bi-pin-map-fill'],
+        $analyticsNavigation,
         ['My badges', 'badges.php', 'bi-award-fill'],
     ]
     : [
         ['Dashboard', 'dashboard.php', 'bi-grid-1x2-fill'],
         ['Verification', 'admin/verification.php', 'bi-clipboard2-check-fill'],
-        ['Clusters', 'admin/cluster.php', 'bi-pin-map-fill'],
+        $analyticsNavigation,
     ];
 
 if ($role === 'system_admin') {
@@ -37,9 +42,18 @@ if ($role === 'system_admin') {
     ]);
 }
 
-$isActive = static function (string $href) use ($requestPath): bool {
-    $needle = '/' . strtolower($href);
-    return str_ends_with($requestPath, $needle);
+parse_str((string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_QUERY), $navigationQuery);
+$isActive = static function (string $href) use ($requestPath, $navigationQuery): bool {
+    $needle = '/' . strtolower((string) parse_url($href, PHP_URL_PATH));
+    if (!str_ends_with($requestPath, $needle)) {
+        return false;
+    }
+    parse_str((string) parse_url($href, PHP_URL_QUERY), $linkQuery);
+    if (isset($linkQuery['view'])) {
+        $currentView = ($navigationQuery['view'] ?? '') === 'growth' ? 'growth' : 'health';
+        return $linkQuery['view'] === $currentView;
+    }
+    return true;
 };
 ?>
 <aside class="app-sidebar d-none d-lg-flex" aria-label="Application sidebar">
@@ -57,14 +71,19 @@ $isActive = static function (string $href) use ($requestPath): bool {
 
     <nav class="sidebar-nav" aria-label="Workspace navigation">
         <span class="sidebar-section-label">Workspace</span>
-        <?php foreach ($navigation as [$label, $href, $icon]): ?>
-            <?php if ($label === 'Clusters'): ?>
-                <details class="cluster-nav" data-cluster-menu>
-                    <summary class="sidebar-link <?= ($isActive($href) || $isActive('analytics.php') || $isActive('clusters.php')) ? 'active' : '' ?>"><i class="bi <?= e($icon) ?>" aria-hidden="true"></i><span>Clusters</span><i class="bi bi-chevron-down ms-auto" aria-hidden="true"></i></summary>
-                    <div class="cluster-submenu">
-                        <a href="<?= e(url('analytics.php')) ?>" <?= $isActive('analytics.php') ? 'aria-current="page"' : '' ?>>Analytics</a>
-                        <a href="<?= e(url('clusters.php?view=health')) ?>">Health history</a>
-                        <a href="<?= e(url('clusters.php?view=growth')) ?>">Growth timeline</a>
+        <?php foreach ($navigation as $navigationItem): ?>
+            <?php [$label, $href, $icon] = $navigationItem; ?>
+            <?php if (isset($navigationItem[3])): ?>
+                <?php $groupActive = $isActive($href) || $isActive('clusters.php'); ?>
+                <details class="analytics-nav" open>
+                    <summary class="analytics-nav-heading <?= $groupActive ? 'is-current' : '' ?>">
+                        <i class="bi bi-caret-right-fill analytics-nav-arrow" aria-hidden="true"></i>
+                        <a class="sidebar-link" href="<?= e(url($href)) ?>" <?= $isActive($href) ? 'aria-current="page"' : '' ?>><i class="bi <?= e($icon) ?>" aria-hidden="true"></i><span><?= e($label) ?></span></a>
+                    </summary>
+                    <div class="analytics-nav-children">
+                        <?php foreach ($navigationItem[3] as [$childLabel, $childHref, $childIcon]): ?>
+                            <a class="sidebar-link <?= $isActive($childHref) ? 'active' : '' ?>" href="<?= e(url($childHref)) ?>" <?= $isActive($childHref) ? 'aria-current="page"' : '' ?>><i class="bi <?= e($childIcon) ?>" aria-hidden="true"></i><span><?= e($childLabel) ?></span></a>
+                        <?php endforeach; ?>
                     </div>
                 </details>
             <?php else: ?>

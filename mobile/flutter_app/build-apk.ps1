@@ -1,5 +1,8 @@
 param(
-    [string]$ApiBaseUrl = 'http://192.168.100.12/mangrooves_v2/public/mobile-api',
+    [string]$ApiBaseUrl = 'http://192.168.213.53/mangrooves_v2/public/mobile-api',
+    [string]$FlutterSdk = '',
+    [string]$AndroidSdk = '',
+    [string]$JavaHome = '',
     [switch]$Online,
     [switch]$SkipClean
 )
@@ -34,7 +37,12 @@ if (Test-Path -LiteralPath $gitDirectory) {
     $env:PATH = $gitDirectory + ';' + $env:PATH
 }
 $flutter = Get-Command flutter -ErrorAction SilentlyContinue
-if ($null -eq $flutter) {
+if ($FlutterSdk -ne '') {
+    $flutterCommand = Join-Path $FlutterSdk 'bin\flutter.bat'
+    if (-not (Test-Path -LiteralPath $flutterCommand)) {
+        throw "Flutter was not found at $flutterCommand."
+    }
+} elseif ($null -eq $flutter) {
     $flutterPath = 'C:\src\flutter\bin\flutter.bat'
     if (-not (Test-Path -LiteralPath $flutterPath)) {
         throw 'Flutter was not found on PATH or at C:\src\flutter\bin\flutter.bat.'
@@ -45,8 +53,19 @@ if ($null -eq $flutter) {
 }
 
 $project = Split-Path -Parent $MyInvocation.MyCommand.Path
-$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
-$env:ANDROID_HOME = 'C:\Users\User\AppData\Local\Android\Sdk'
+if ($JavaHome -ne '') {
+    $env:JAVA_HOME = $JavaHome
+} elseif (-not $env:JAVA_HOME -and (Test-Path -LiteralPath 'C:\Program Files\Android\Android Studio\jbr')) {
+    $env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+}
+if ($AndroidSdk -ne '') {
+    $env:ANDROID_HOME = $AndroidSdk
+} elseif (-not $env:ANDROID_HOME) {
+    $env:ANDROID_HOME = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
+}
+if (-not (Test-Path -LiteralPath $env:ANDROID_HOME)) {
+    throw 'Android SDK was not found. Set ANDROID_HOME or pass -AndroidSdk with its installed folder.'
+}
 
 Push-Location $project
 try {

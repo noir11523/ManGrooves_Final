@@ -19,8 +19,12 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient({String baseUrl = defaultBaseUrl})
+  ApiClient({
+    String baseUrl = defaultBaseUrl,
+    http.Client Function()? probeClientFactory,
+  })
     : _endpointPolicy = ApiEndpointPolicy(baseUrl),
+      _probeClientFactory = probeClientFactory ?? http.Client.new,
       _baseUrl = baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
 
   static const _tokenKey = 'mangrooves_api_token';
@@ -28,23 +32,44 @@ class ApiClient {
   static const _serverKey = 'mangrooves_discovered_api_base_url_v2';
   static const _legacyServerKey = 'mangrooves_api_base_url';
   static const _apiIdentity = 'org.mangrooves.mobile-api';
-  static const _localApiPath = '/mangrooves_v2/public/mobile-api';
   static const defaultBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.100.12/mangrooves_v2/public/mobile-api',
+    defaultValue: 'http://192.168.213.53/mangrooves_v2/public/mobile-api',
   );
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final ApiEndpointPolicy _endpointPolicy;
+  final http.Client Function() _probeClientFactory;
 
   String? _token;
   String _baseUrl;
   Map<String, dynamic>? _configurationCache;
 
   String get baseUrl => _baseUrl;
+  bool get supportsLocalServerSelection => _endpointPolicy.allowsLanDiscovery;
   bool get hasToken => _token != null && _token!.isNotEmpty;
   Map<String, String> get imageHeaders =>
       hasToken ? {'Authorization': 'Bearer $_token'} : const {};
+
+  Future<void> connectToLocalServer(String address) async {
+    final String candidate;
+    try {
+      candidate = _endpointPolicy.localServerUrl(address);
+    } on FormatException catch (error) {
+      throw ApiException(error.message);
+    }
+    final result = await _probeConfiguration(
+      candidate, timeout: const Duration(seconds: 10),
+    );
+    if (result == null) {
+      throw ApiException(
+        'Could not connect to ManGROOVES at $candidate. '
+        'Check the laptop address and that its server is reachable from this phone.',
+      );
+    }
+    // Only save an address after verifying the ManGROOVES API identity.
+    await _useDiscoveredServer(result);
+  }
 
   Future<void> initialize() async {
     _token = await _storage.read(key: _tokenKey);
@@ -87,7 +112,8 @@ class ApiClient {
 
     throw ApiException(
       _endpointPolicy.allowsLanDiscovery
-          ? 'Unable to reach ManGROOVES. Connect to the same local network as the pilot server and try again.'
+          ? 'Unable to find the ManGROOVES server. On the sign-in screen, '
+              'tap the sliders icon (Server connection) and enter the laptop\'s current Wi-Fi IP address.'
           : 'Unable to reach ManGROOVES. Check your internet connection and try again shortly.',
     );
   }
@@ -326,9 +352,10 @@ class ApiClient {
     String candidate, {
     required Duration timeout,
   }) async {
+    final client = _probeClientFactory();
     try {
       final uri = Uri.parse('$candidate/configuration.php');
-      final response = await http
+      final response = await client
           .get(uri, headers: const {'Accept': 'application/json'})
           .timeout(timeout);
       if (response.statusCode != 200) return null;
@@ -341,6 +368,8 @@ class ApiClient {
       return MapEntry(candidate, Map<String, dynamic>.from(decoded));
     } catch (_) {
       return null;
+    } finally {
+      client.close();
     }
   }
 
@@ -377,12 +406,12 @@ class ApiClient {
         final probes = <Future<MapEntry<String, Map<String, dynamic>>?>>[];
         for (var host = start; host < start + 32 && host <= 254; host++) {
           final address = '$prefix.$host';
-          final candidate = 'http://$address$_localApiPath';
+          final candidate = _endpointPolicy.discoveryUrl(address, _baseUrl);
           if (!tried.add(candidate)) continue;
           probes.add(
             _probeConfiguration(
               candidate,
-              timeout: const Duration(milliseconds: 900),
+              timeout: const Duration(seconds: 2),
             ),
           );
         }

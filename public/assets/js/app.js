@@ -185,11 +185,3 @@
         });
     }
 })();
-
-// Native details provides click/keyboard support; pointer hover is an added shortcut.
-document.querySelectorAll('[data-cluster-menu]').forEach(menu => {
-    menu.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') menu.open = true; });
-    menu.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse' && !menu.contains(document.activeElement)) menu.open = false; });
-    menu.addEventListener('keydown', event => { if (event.key === 'Escape') { menu.open = false; menu.querySelector('summary').focus(); } });
-    menu.addEventListener('focusout', event => { if (!menu.contains(event.relatedTarget)) menu.open = false; });
-});

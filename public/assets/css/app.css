@@ -546,6 +546,19 @@ textarea {
 .sidebar-link:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 .sidebar-link.active { color: var(--mg-brown); background: var(--mg-sand); box-shadow: 0 .4rem 1rem rgba(22, 16, 14, .16); }
 .sidebar-link.active > i { color: var(--mg-green); }
+.analytics-nav-heading { display: flex; align-items: center; padding-left: .6rem; color: rgba(255, 255, 255, .7); border-radius: .65rem; list-style: none; cursor: pointer; }
+.analytics-nav-heading::-webkit-details-marker { display: none; }
+.analytics-nav-heading:hover { background: rgba(255, 255, 255, .08); }
+.analytics-nav-heading.is-current { color: var(--mg-brown); background: var(--mg-sand); }
+.analytics-nav-heading .sidebar-link { flex: 1; min-width: 0; padding-left: .5rem; color: inherit; }
+.analytics-nav-heading.is-current .sidebar-link > i { color: var(--mg-green); }
+.analytics-nav-arrow { flex: 0 0 1rem; font-size: .65rem; text-align: center; }
+.analytics-nav[open] > .analytics-nav-heading .analytics-nav-arrow { transform: rotate(90deg); }
+.analytics-nav-heading:focus-visible, .analytics-nav a:focus-visible { outline: 2px solid var(--mg-sand); outline-offset: 2px; }
+.analytics-nav-children { display: grid; gap: .2rem; margin: .3rem 0 .25rem 1.1rem; padding-left: .65rem; border-left: 1px solid rgba(230, 213, 184, .25); }
+.analytics-nav-children .sidebar-link { min-height: 2.5rem; gap: .6rem; font-size: .82rem; }
+.analytics-nav-children .sidebar-link.active { background: rgba(230, 213, 184, .14); color: #fff; box-shadow: none; }
+.analytics-nav-children .sidebar-link.active > i { color: var(--mg-sand); }
 .sidebar-badge { margin-left: auto; padding: .15rem .43rem; color: #fff; background: var(--mg-danger); border-radius: 999px; font-size: .65rem; line-height: 1.25; }
 .sidebar-footer { display: grid; gap: .25rem; margin-top: auto; padding-top: 1.5rem; }
 .sidebar-footer form { margin: 0; }
@@ -788,12 +801,7 @@ textarea {
     a { color: inherit; text-decoration: none; }
 }
 
-/* Cluster menus and readable timelines, shared by guardian and staff views. */
-.cluster-nav summary { list-style: none; cursor: pointer; }
-.cluster-nav summary::-webkit-details-marker { display: none; }
-.cluster-submenu { margin: .25rem .5rem .75rem 2.25rem; padding: .5rem; background: #fff8ed; border-radius: .75rem; }
-.cluster-submenu a { display: block; padding: .6rem; color: #354b2e; text-decoration: none; border-radius: .4rem; }
-.cluster-submenu a:hover, .cluster-submenu a:focus-visible { background: #e6eedf; }
+/* Readable timelines, shared by guardian and staff views. */
 .health-history-strip { display: flex; gap: 1rem; overflow-x: auto; padding: .5rem 0 1rem; }
 .health-history-point { display: flex; flex: 0 0 135px; flex-direction: column; gap: .6rem; border-left: 3px solid #b7c9af; padding: .5rem .75rem; }
 .growth-row { display: grid; grid-template-columns: 100px minmax(40px, 1fr) 55px 160px; gap: .75rem; align-items: center; padding: .75rem 0; border-bottom: 1px solid #e5e9e2; }

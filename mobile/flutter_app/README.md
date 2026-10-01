@@ -9,13 +9,18 @@ restricted to system administrators.
 
 ## Server configuration
 
-The server URL is intentionally not displayed in the normal mobile interface.
-It is a technical build setting, not user-facing account information.
+Local pilot builds include a small sliders icon below the sign-in buttons,
+with the tooltip **Server connection**. Tapping it opens a dismissible popup;
+connection settings stay hidden until requested. If
+automatic discovery fails, enter the laptop's Wi-Fi IPv4 address (and Apache
+port if different from the build setting), then select **Check and connect**.
+The app verifies the API before saving the address. Switching servers clears
+the previous login session. Hosted builds keep their configured HTTPS server.
 
 The current local pilot address is:
 
 ```text
-http://192.168.100.12/mangrooves_v2/public/mobile-api
+http://192.168.213.53/mangrooves_v2/public/mobile-api
 ```
 
 Build for a different local computer address from the repository root:
@@ -31,11 +36,23 @@ For production Android and iPhone builds, use the public HTTPS endpoint:
 https://YOUR-DOMAIN/mobile-api
 ```
 
-Hiding the URL in the GUI does not disable the connection. The compiled URL is
-only the first address attempted. If it is unavailable, the app scans the
+The compiled URL is only the first address attempted. If it is unavailable, the app scans the
 phone's private LAN subnet for an endpoint that identifies itself as the
 ManGROOVES API, connects to it, and securely remembers the working address.
-Normal DHCP address changes therefore do not require another APK build.
+Discovery preserves the configured API path and port. If discovery is blocked
+or misses the server, use **Server connection**; DHCP address changes do not
+require another APK build after installing this version.
+
+The updated source must be rebuilt and the new APK installed on the phone;
+changing files on the laptop does not update an already installed app. Building
+requires Flutter, an Android SDK and a compatible JDK. The build script accepts
+`-FlutterSdk`, `-AndroidSdk` and `-JavaHome` for nonstandard installations, and
+respects existing SDK environment variables. Verify the manual connection flow
+and endpoint rules from `mobile/flutter_app` with:
+
+```powershell
+flutter test test/api_endpoint_policy_test.dart test/server_connection_test.dart
+```
 
 Automatic discovery still requires Apache and MySQL to be running and the phone
 and server computer to be on the same non-guest local network. Production builds

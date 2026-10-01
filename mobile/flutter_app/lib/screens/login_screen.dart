@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import 'register_screen.dart';
+import 'server_connection_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
@@ -55,6 +56,25 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     if (!mounted || user == null) return;
     widget.onAuthenticated(user);
+  }
+
+  Future<void> _openServerConnection() async {
+    final connected = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: 560),
+      builder: (context) => SizedBox(
+        height: MediaQuery.sizeOf(context).height * .8,
+        child: ServerConnectionScreen(api: widget.api),
+      ),
+    );
+    if (!mounted || connected != true) return;
+    setState(() => _error = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Connected to ManGROOVES. You can sign in now.')),
+    );
   }
 
   @override
@@ -135,6 +155,19 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _busy ? null : _openRegistration,
                       child: const Text('Create guardian account'),
                     ),
+                    if (widget.api.supportsLocalServerSelection) ...[
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: IconButton(
+                          onPressed: _busy ? null : _openServerConnection,
+                          tooltip: 'Server connection',
+                          iconSize: 20,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          icon: const Icon(Icons.tune_rounded),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
