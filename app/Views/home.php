@@ -48,7 +48,7 @@
                 <h3>Coastal Guardian</h3>
                 <p>Document visible mangrove conditions through photos, location data and a guided field checklist.</p>
 
-                <ol class="home-role-actions" aria-label="What Coastal Guardians do"><li><i class="bi bi-eye" aria-hidden="true"></i>Observe</li><li><i class="bi bi-camera" aria-hidden="true"></i>Photograph</li><li><i class="bi bi-send" aria-hidden="true"></i>Report</li></ol>
+                <ol class="home-role-actions" aria-label="What Coastal Guardians do"><li><i class="bi bi-eye" aria-hidden="true"></i>Visit</li><li><i class="bi bi-camera" aria-hidden="true"></i>Photograph</li><li><i class="bi bi-send" aria-hidden="true"></i>Submit Report</li></ol>
                 <?php if ($authUser): ?>
                     <a class="text-link" href="<?= e(url($authUser['role'] === 'guardian' ? 'submit-report.php' : 'dashboard.php')) ?>">Continue to ManGROOVES <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
                 <?php elseif (defined('MANGROOVES_CLOUD')): ?>
@@ -76,9 +76,9 @@
 
         </div>
         <ol class="home-process-steps">
-            <li><span class="home-step-number">01</span><h3>Observe</h3><p>Visit a monitored area and check visible conditions.</p></li>
+            <li><span class="home-step-number">01</span><h3>Visit</h3><p>Visit a monitored area and check visible conditions.</p></li>
             <li><span class="home-step-number">02</span><h3>Document</h3><p>Take a photo, place the location pin and complete the checklist.</p></li>
-            <li><span class="home-step-number">03</span><h3>Submit</h3><p>Send your field report through ManGROOVES.</p></li>
+            <li><span class="home-step-number">03</span><h3>Submit Report</h3><p>Send your field report through ManGROOVES.</p></li>
             <li><span class="home-step-number">04</span><h3>Review</h3><p>Reports needing review go to a qualified expert for validation or feedback.</p></li>
         </ol>
         <p class="home-process-note">Healthy reports may be verified automatically. Verified records support follow-up monitoring over time.</p>

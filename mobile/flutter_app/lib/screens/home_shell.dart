@@ -67,7 +67,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final titles = _guardian
-        ? ['Dashboard', 'Reports', 'Submit a report', 'Badges', 'Account']
+        ? ['Dashboard', 'Reports', 'Submit Report', 'Badges', 'Account']
         : ['Dashboard', 'Reports', 'Review reports', 'Analytics', 'Account'];
     final pages = _guardian
         ? <Widget>[
@@ -198,12 +198,12 @@ class _HomeShellState extends State<HomeShell> {
         floatingActionButton: _user['role'] == 'expert' && _index == 1
             ? FloatingActionButton.extended(
                 icon: const Icon(Icons.add_a_photo_outlined),
-                label: const Text('Submit report'),
+                label: const Text('Submit Report'),
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute<void>(
                     builder: (context) => Scaffold(
-                      appBar: AppBar(title: const Text('Submit a report')),
+                      appBar: AppBar(title: const Text('Submit Report')),
                       body: SubmitReportScreen(
                         api: widget.api,
                         draftOwner: '${_user['uid'] ?? _user['id']}',
@@ -219,6 +219,7 @@ class _HomeShellState extends State<HomeShell> {
               )
             : null,
         bottomNavigationBar: NavigationBar(
+          labelPadding: const EdgeInsets.fromLTRB(2, 4, 2, 0),
           selectedIndex: _index,
           onDestinationSelected: (value) => setState(() => _index = value),
           destinations: [
@@ -236,7 +237,7 @@ class _HomeShellState extends State<HomeShell> {
               const NavigationDestination(
                 icon: Icon(Icons.add_a_photo_outlined),
                 selectedIcon: Icon(Icons.add_a_photo),
-                label: 'Submit',
+                label: 'Submit Report',
               ),
             if (_guardian)
               const NavigationDestination(

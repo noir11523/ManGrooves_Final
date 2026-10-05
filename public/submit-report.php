@@ -62,7 +62,7 @@ if ($requestedParent) {
 }
 
 render('submit-report', [
-    'pageTitle' => 'Submit a report',
+    'pageTitle' => 'Submit Report',
     'user' => $user,
     'criteria' => $form['criteria'],
     'clusters' => $form['clusters'],

@@ -6,7 +6,7 @@ Reports now use a clear desktop table with report number, site/species, health, 
 
 Verification has four clickable groups: Pending, Verified needing attention, Verified and Rejected. Pending opens the oldest reports first with Review; completed reports open with View. Verified needing attention means verified reports whose recorded health is Stressed, At Risk or Unknown; it does not reopen a review or change the report status. The reviewer’s own reports are excluded from both the list and totals. Totals cover all reviewable reports, while search, health and dates narrow the list. Clicking a group retains those filters and resets pagination. Filter and Reset remain the only search actions; dates use inclusive Manila calendar days.
 
-The Supabase APK `2.0.0+32` includes matching category cards, report information and optional date filters. The homepage retains its existing theme, routes and fast deferred statistics. Repeated role descriptions and “no experience required” copy are removed, and monitoring after planting is the central message. Public and sidebar APK links use a download icon with the short label Android APK.
+The Supabase APK `2.0.0+33` includes matching category cards, report information and optional date filters. Web and app navigation use the full Submit Report label, including on phones. The homepage retains its existing theme, routes and fast deferred statistics. Repeated role descriptions and “no experience required” copy are removed, and monitoring after planting is the central message. Public and sidebar APK links use a download icon with the short label Android APK.
 
 ## Loading improvements — October 5, 2026
 
@@ -28,7 +28,7 @@ This package keeps the original PHP home page, dashboard, navigation, header, an
 
 ## Navigation
 
-All three roles use the top-bar bell for notifications, including the unread count. Profile settings and Sign out remain in the top-right account menu; their duplicate sidebar links are removed. Download Android APK follows the workspace links with a small divider instead of a large empty gap. On narrow screens, the More menu contains only extra workspace destinations, while the bottom navigation uses the app's Home, Reports, Submit/Review and Badges/Analytics labels. The short Submit label opens Submit report and fits on small phones. Analytics, Health history and Growth timeline remain available in their existing insights menu.
+All three roles use the top-bar bell for notifications, including the unread count. Profile settings and Sign out remain in the top-right account menu; their duplicate sidebar links are removed. Android APK follows the workspace links with a small divider instead of a large empty gap. On narrow screens, the More menu contains only extra workspace destinations, while the bottom navigation uses the app's Home, Reports, Submit Report/Review and Badges/Analytics labels. Submit Report opens the existing report form; its label wraps when needed on small phones. Analytics, Health history and Growth timeline remain available in their existing insights menu.
 
 The Flutter app keeps one Sign out under Account and one Notifications button in the top bar. Report map remains on the dashboard. The report form keeps its existing app-bar Back control instead of a second exit button; automatic drafts remain enabled.
 

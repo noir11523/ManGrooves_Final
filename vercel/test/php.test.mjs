@@ -120,6 +120,8 @@ test('all roles keep account actions in the top bar and reachable mobile navigat
     assert.equal(topbar.querySelectorAll('a[href="/notifications.php"]').length,1,role);
     assert.equal(topbar.querySelector('.notification-count').textContent,'2');
     const bottom=[...doc.querySelectorAll('.mobile-bottom-nav a')].map(a=>a.getAttribute('href'));
+    if(role==='guardian')assert.equal(doc.querySelector('.mobile-bottom-nav a[href="/submit-report.php"] span').textContent,'Submit Report');
+    if(role!=='admin')assert.equal(sidebar.querySelector('a[href="/submit-report.php"] span').textContent,'Submit Report');
     const more=[...topbar.querySelector('[aria-label="Open menu"]').parentElement.querySelectorAll('a')].map(a=>a.getAttribute('href'));
     assert.equal(new Set(bottom).size,bottom.length,role);
     assert.equal(more.some(href=>bottom.includes(href)||href==='/analytics.php'),false,role);

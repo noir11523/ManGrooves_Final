@@ -161,7 +161,7 @@ void main() {
         await tester.pumpAndSettle();
         for (final label
             in role == 'guardian'
-                ? ['Reports', 'Submit', 'Badges', 'Account']
+                ? ['Reports', 'Submit Report', 'Badges', 'Account']
                 : ['Reports', 'Review', 'Analytics', 'Account']) {
           await tester.tap(
             find.descendant(
@@ -174,7 +174,7 @@ void main() {
           if (label == 'Reports') {
             expect(find.text('Report map'), findsNothing);
           }
-          if (label == 'Submit') {
+          if (label == 'Submit Report') {
             expect(find.text('Back to dashboard'), findsNothing);
           }
           if (label == 'Account') {

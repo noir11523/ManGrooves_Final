@@ -38,7 +38,7 @@ final class CloudRouter
         }
         $pages = [
             '/dashboard.php' => ['dashboard', 'Dashboard'], '/reports.php' => ['reports', 'Reports'],
-            '/report-detail.php' => ['report', 'Report details'], '/submit-report.php' => ['submit', 'Submit a report'],
+            '/report-detail.php' => ['report', 'Report details'], '/submit-report.php' => ['submit', 'Submit Report'],
             '/analytics.php' => ['analytics', 'Analytics'], '/clusters.php' => ['clusters', 'Health history'],
             '/cluster.php' => ['cluster', 'Site visits'], '/report-map.php' => ['report-map', 'Report map'],
             '/settings.php' => ['profile', 'Profile settings'], '/notifications.php' => ['notifications', 'Notifications'],

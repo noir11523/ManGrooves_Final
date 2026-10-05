@@ -15,7 +15,7 @@ $analyticsNavigation = ['Analytics', 'analytics.php', 'bi-bar-chart-fill', [
 $navigation = $role === 'guardian'
     ? [
         ['Dashboard', 'dashboard.php', 'bi-grid-1x2-fill'],
-        ['Submit report', 'submit-report.php', 'bi-camera-fill'],
+        ['Submit Report', 'submit-report.php', 'bi-camera-fill'],
         ['My reports', 'reports.php', 'bi-journal-text'],
         ['Explore species', 'explore.php', 'bi-map-fill'],
         $analyticsNavigation,
@@ -44,7 +44,7 @@ if (defined('MANGROOVES_CLOUD')) {
         $navigation[] = ['Review history', 'admin/validation-history.php', 'bi-clock-history'];
     }
     if ($role === 'expert') {
-        array_splice($navigation, 2, 0, [['Submit report', 'submit-report.php', 'bi-camera-fill']]);
+        array_splice($navigation, 2, 0, [['Submit Report', 'submit-report.php', 'bi-camera-fill']]);
         $navigation[] = ['My badges', 'badges.php', 'bi-award-fill'];
     }
     if ($role === 'system_admin') {
@@ -57,7 +57,7 @@ $mobileItems = $role === 'guardian'
     ? [
         ['Home', 'dashboard.php', 'bi-house-door-fill'],
         ['Reports', 'reports.php', 'bi-journal-text'],
-        ['Submit', 'submit-report.php', 'bi-camera-fill'],
+        ['Submit Report', 'submit-report.php', 'bi-camera-fill'],
         ['Badges', 'badges.php', 'bi-award-fill'],
     ]
     : [

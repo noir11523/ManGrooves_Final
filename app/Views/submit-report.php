@@ -16,7 +16,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
 
 <section class="mb-4">
     <a class="small text-decoration-none" href="<?= e(url('dashboard.php')) ?>"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Dashboard</a>
-    <h1 class="h2 mt-2 mb-1">Submit a mangrove report</h1>
+    <h1 class="h2 mt-2 mb-1">Submit Report</h1>
     <p class="text-body-secondary mb-0">Add your details, review, then submit.</p>
 </section>
 
@@ -251,6 +251,6 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
         <button class="btn btn-outline-secondary" type="button" data-step-back hidden><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Back</button>
         <span class="ms-auto"></span>
         <button class="btn btn-success" type="button" data-step-next>Continue<i class="bi bi-arrow-right ms-1" aria-hidden="true"></i></button>
-        <button class="btn btn-success btn-lg" type="submit" data-submit-report hidden><i class="bi bi-send me-2" aria-hidden="true"></i>Submit report</button>
+        <button class="btn btn-success btn-lg" type="submit" data-submit-report hidden><i class="bi bi-send me-2" aria-hidden="true"></i>Submit Report</button>
     </div>
 </form>

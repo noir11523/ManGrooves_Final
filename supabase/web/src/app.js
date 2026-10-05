@@ -47,7 +47,7 @@ async function loginPage() {
 async function registerPage(){return registrationPage(authLayout);}
 function shell(route) {
   const admin = viewer.role === 'system_admin', staff = viewer.role !== 'guardian';
-  const links = [['dashboard', 'Dashboard'], ['reports', staff ? 'Reports' : 'My reports'], ...(viewer.role!=='system_admin' ? [['submit','Submit a report'],['badges','Badges']]:[]), ...(staff?[['verification','Review reports'],['history','Review history']]:[]),
+  const links = [['dashboard', 'Dashboard'], ['reports', staff ? 'Reports' : 'My reports'], ...(viewer.role!=='system_admin' ? [['submit','Submit Report'],['badges','Badges']]:[]), ...(staff?[['verification','Review reports'],['history','Review history']]:[]),
     ['label', 'Clusters'], ['analytics', 'Analytics'], ['clusters', 'Health history'], ['growth', 'Growth timeline'],
     ...(admin ? [['label', 'Administration'], ['checklist', 'Health checklist'], ['users', 'Users'], ['expert-applications','Expert applications'], ['certificate-settings','Certificate signer'], ['species', 'Species'], ['badge-settings', 'Badge settings'], ['audit', 'Audit logs']] : []),
     ['label', 'Account'], ['profile', 'Profile settings']];
