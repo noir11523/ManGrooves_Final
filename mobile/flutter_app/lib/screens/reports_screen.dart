@@ -15,12 +15,14 @@ class ReportsScreen extends StatefulWidget {
     this.needsAttention = false,
     this.clusterId,
     this.active = true,
+    this.showSubmitter = false,
   });
   final String initialStatus;
   final bool needsAttention;
   final int? clusterId;
   final ApiClient api;
   final bool active;
+  final bool showSubmitter;
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -35,6 +37,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   int _pages = 1;
   bool _loading = false;
   String _query = '', _health = '';
+  String _dateFrom = '', _dateTo = '';
 
   @override
   void didUpdateWidget(covariant ReportsScreen oldWidget) {
@@ -60,7 +63,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
               !_attention &&
               widget.clusterId == null &&
               _query.isEmpty &&
-              _health.isEmpty
+              _health.isEmpty &&
+              _dateFrom.isEmpty &&
+              _dateTo.isEmpty
           ? await widget.api.reports(page: requestPage)
           : await widget.api.filteredReports(
               page: requestPage,
@@ -69,6 +74,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
               clusterId: widget.clusterId,
               query: _query,
               health: _health,
+              dateFrom: _dateFrom,
+              dateTo: _dateTo,
             );
       _pages = (result['pages'] as num?)?.toInt() ?? 1;
       _page = (result['page'] as num?)?.toInt() ?? requestPage;
@@ -150,6 +157,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       'Unknown': 'Unknown',
                     },
                     busy: _loading,
+                    dates: true,
+                    onDatesChanged: (from, to) {
+                      _dateFrom = from;
+                      _dateTo = to;
+                    },
                     onApply: (query, health) {
                       _query = query;
                       _health = health;
@@ -222,6 +234,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (widget.showSubmitter)
+                            Text(
+                              'Submitted by: ${report['guardian_name'] ?? 'Community member'}',
+                            ),
                           Text(
                             report['cluster_name']?.toString() ??
                                 report['sitio_name']?.toString() ??
@@ -229,6 +245,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           ),
                           Text(
                             '${report['display_health'] ?? 'Unknown'} · ${_formatDate(report['submitted_at'])}',
+                          ),
+                          Text(
+                            report['species_name']?.toString() ??
+                                'Species not identified',
                           ),
                         ],
                       ),

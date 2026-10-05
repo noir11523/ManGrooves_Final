@@ -207,6 +207,18 @@ try {
   const ownReviewQueue=await request(`verification.php?q=${encodeURIComponent(`Report #${own.report.report_id}`)}`,expert);
   assert.equal(ownReviewQueue.total,0);
   pass('report numbers and review decisions are searchable while guardian privacy and expert self-review restrictions hold');
+  const sample=(id,status,health,date,user=other)=>({id,user_id:user.id,guardian_name:user.full_name,status,final_health:status==='verified'?health:null,suggested_health:health,sitio_name:'Table test site',barangay_name:'Coast',submitted_at:date});
+  const samples=[sample(5001,'pending','Stressed','2026-10-01T16:30:00Z'),sample(5002,'pending','Unknown','2026-09-30T00:00:00Z'),sample(5003,'verified','At Risk','2026-10-01T00:00:00Z'),sample(5004,'rejected','Stressed','2026-10-01T00:00:00Z'),sample(5005,'verified','Stressed','2026-10-01T00:00:00Z',expert)];
+  const batch=db.batch();for(const row of samples)batch.set(db.collection('reports').doc(String(row.id)),row);await batch.commit();
+  const queue=await request('verification.php?q=Table%20test',expert);assert.deepEqual(queue.items.map(r=>r.id),[5002,5001]);
+  const verified=await request('verification.php?q=Table%20test&status=verified',expert);assert.deepEqual(verified.items.map(r=>r.id),[5003]);assert.equal(verified.items[0].guardian_name,other.full_name);
+  const verifiedAttentionGroup=await request('verification.php?q=Table%20test&verified_attention=1',expert);assert.deepEqual(verifiedAttentionGroup.items.map(r=>r.id),[5003]);assert.equal(verifiedAttentionGroup.summary.verified_attention,verified.summary.verified_attention);
+  assert.deepEqual((await request('verification.php?q=Table%20test&status=rejected',expert)).items.map(r=>r.id),[5004]);
+  assert.equal((await request('reports.php?q=Table%20test',guardianSession)).total,0);
+  assert.equal((await request('reports.php?q=Table%20test&date_from=2026-10-02&date_to=2026-10-02',admin)).total,1);
+  await request('verification.php?status=all',expert,null,422);await request('verification.php?date_from=2026-02-30',expert,null,422);
+  await request('verification.php?status=verified',guardianSession,null,403);
+  pass('verification card groups return real totals, oldest pending first, reviewed records and correct role limits');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

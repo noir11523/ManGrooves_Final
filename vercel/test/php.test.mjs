@@ -57,7 +57,11 @@ test('PHP home renders before any API call and loads real counts separately',asy
   const totals=await b.request('/cloud-api.php?route=explore.php&summary_only=1');assert.equal(totals.data.summary.verified_reports,12);assert.equal(calls.at(-1).region,'ap-northeast-2');
   const dom=new JSDOM(text),doc=dom.window.document;
   assert.equal(doc.querySelectorAll('h1').length,1);
-  assert.match(doc.querySelector('.home-role-guardian').textContent,/No professional experience needed/);
+  assert.match(doc.querySelector('.home-role-guardian').textContent,/guided field checklist/);
+  assert.doesNotMatch(text,/No environmental experience required|No professional experience needed|No environmental degree required/);
+  assert.equal(doc.querySelector('.home-hero-roles'),null);
+  assert.equal(doc.querySelectorAll('.home-benefit-grid article').length,3);
+  assert.equal(doc.querySelector('a[download]').textContent.trim(),'Android APK');
   assert.match(doc.querySelector('#for-experts').textContent,/work or professional ID code/);
   const routes=new Set();
   for(const link of doc.querySelectorAll('a[href]')){
@@ -87,7 +91,7 @@ test('map security policy allows the actual tile provider',async()=>{
 test('APK is downloadable and the profile menu has no install action',async()=>{
   const {b}=await login();const dashboard=await b.request('/dashboard.php');
   assert.doesNotMatch(dashboard.text,/data-install-app|>Install app</);
-  assert.match(dashboard.text,/Download Android APK/);
+  assert.match(dashboard.text,/Android APK/);
   const topbar=dashboard.text.match(/<header class="app-topbar">[\s\S]*?<\/header>/)?.[0];
   assert.match(topbar,/Profile settings/);assert.doesNotMatch(topbar,/Install app|Download Android APK/);
   assert.doesNotMatch(dashboard.text,/class="sidebar-user"/);assert.match(topbar,/Clement Guardian/);

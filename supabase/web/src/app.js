@@ -5,7 +5,7 @@ import {expertApplicationsPage,certificateSettingsPage,certificateQr} from './ac
 import {registrationPage,recoveryPage,signInPage} from './auth-pages.js';
 import Chart from 'chart.js/auto';
 import { initialize, api, login, logout, changePassword, friendly } from './client.js';
-import { $, $$, esc, pill, displayLabel, reportStatus, field, select, formValues, errorBox, showError, toast, confirm, pager, reportRows, map, privatePhoto, download } from './ui.js';
+import { $, $$, esc, pill, displayLabel, reportStatus, field, select, formValues, errorBox, showError, toast, confirm, pager, reportRows, reportTable, map, privatePhoto, download } from './ui.js';
 import { reportWizard, reportDraft } from './report-form.js';
 import {reportMapPage} from './report-map.js';
 import { checklistPage, adminPage } from './admin.js';
@@ -70,16 +70,35 @@ async function dashboardPage(node) {
 async function reportsPage(node, query, verification = false) {
   const data = await api(verification ? 'verification.php' : 'reports.php', {query});
   const filter = query.needs_attention === '1' ? 'attention' : query.status ?? '';
-  const filtered = Boolean(filter || query.health || query.q);
-  set(node, `${title(verification ? 'Review reports' : viewer.role === 'guardian' ? 'My reports' : 'Reports', verification ? 'Review health and species suggestions.' : '')}
-    ${!verification ? `<form id="filters" class="filters">${select('status_filter', 'Status', [['', 'All reports'], ['verified', 'Verified'], ['pending', 'Pending'], ['attention', 'Needs attention'], ['rejected', 'Rejected']], filter)}${select('health', 'Health', [['', 'All health'], ...['Healthy', 'Stressed', 'At Risk', 'Unknown'].map(v => [v, v])], query.health)}${field('q', 'Search', query.q ?? '', 'search', 'placeholder="Site or report number"')}<button>Apply</button>${filtered ? '<a class="button outline" href="#reports">Clear filters</a>' : ''}</form>` : ''}
-    ${!data.items.length && filtered && !verification ? '<p class="empty">No reports match your filters. Try another search or clear the filters.</p>' : verification && !data.items.length ? '<p class="empty">No reports waiting for review.</p>' : reportRows(data.items)}${pager(data, verification ? 'verification' : 'reports', {...query, page: undefined})}`);
-  if (verification) {
-    node.querySelector('.page-head').insertAdjacentHTML('afterend',listFilters(query,[['health','Health',[['','All health'],...['Healthy','Stressed','At Risk','Unknown'].map(v=>[v,v])]]],'Site or report number'));
-    bindListFilters(node,query,q=>listRoute('verification',q),data.total);
-    if (!data.items.length && (query.q || query.health)) node.querySelector('.empty').textContent='No pending reports match. Try another search or clear the filters.';
-  }
-  back(); $('#filters')?.addEventListener('submit', event => { event.preventDefault(); const values = formValues(event.target), selected = values.status_filter; delete values.status_filter; if (selected === 'attention') values.needs_attention = '1'; else if (selected) values.status = selected; location.hash = `reports?${new URLSearchParams(Object.entries(values).filter(([, value]) => value))}`; });
+  const base = verification ? 'verification' : 'reports', guardian = viewer.role === 'guardian';
+  const current = verification ? query.verified_attention === '1' ? 'verified_attention' : query.status || 'pending' : filter;
+  const filtered = Boolean(filter || query.health || query.q || query.date_from || query.date_to || query.verified_attention);
+  const route = values => `#${base}${Object.keys(values).length ? `?${new URLSearchParams(values)}` : ''}`;
+  const cardQuery = key => {
+    const values={...query};for(const field of ['page','status','needs_attention','verified_attention'])delete values[field];
+    if(key==='verified_attention')values.verified_attention='1';else values.status=key;
+    return route(values);
+  };
+  const summary = data.summary ?? {};
+  const cards = verification ? `<div class="verification-stats" aria-label="Filter verification reports">${[['pending','Pending'],['verified_attention','Verified needing attention'],['verified','Verified'],['rejected','Rejected']].map(([key,label])=>`<a class="stat ${current===key?'selected':''}" href="${esc(cardQuery(key))}" ${current===key?'aria-current="true"':''}><span>${label}</span><strong>${summary[key]??0}</strong></a>`).join('')}</div><p class="muted verification-help">${current==='verified_attention'?'Verified reports with stressed, at-risk or unknown health.':current==='pending'?'Review pending reports below. Your own submissions are excluded.':'View completed reports below. Your own submissions are excluded.'}</p>` : '';
+  const reset = verification ? route({...(query.verified_attention==='1'?{verified_attention:'1'}:{status:query.status||'pending'})}) : route(query.cluster_id?{cluster_id:query.cluster_id}:{});
+  set(node, `${title(verification ? 'Verification queue' : guardian ? 'My reports' : 'Reports', verification ? 'Review community observations and follow up on site health.' : guardian ? 'Your submitted observations and their review status.' : 'Community reports available to your account.')}
+    ${cards}<form id="filters" class="filters list-filters report-filters" role="search">
+    ${field('q','Search',query.q??'','search',`maxlength="200" placeholder="${guardian?'Report number, site or species':'Report number, name, site or species'}"`)}
+    ${!verification?select('status_filter','Status',[['','All reports'],['verified','Verified'],['pending','Pending'],['attention','Needs attention'],['rejected','Rejected']],filter):''}
+    ${select('health','Health',[['','All health'],...['Healthy','Stressed','At Risk','Unknown'].map(v=>[v,v])],query.health)}
+    ${field('date_from','From',query.date_from??'','date')}${field('date_to','To',query.date_to??'','date')}
+    <div class="actions"><button type="submit">Filter</button><a class="button outline" href="${esc(reset)}">Reset</a></div><p class="error" role="alert"></p></form>
+    <div class="report-results"><p class="result-count" role="status">${data.total??data.items.length} report${(data.total??data.items.length)===1?'':'s'}</p><p class="muted">${verification&&current==='pending'?'Oldest pending reports appear first.':'Newest reports appear first.'}</p></div>
+    ${data.items.length?reportTable(data.items,{guardian,verification}):`<p class="empty">${filtered?'No reports match. Try another search or reset the filters.':verification?'No reports waiting for review.':'No reports here yet.'}</p>`}${pager(data,base,Object.fromEntries(Object.entries(query).filter(([key])=>key!=='page')))}`);
+  back();$('#filters').addEventListener('submit',event=>{
+    event.preventDefault();const values=formValues(event.target),selected=values.status_filter;delete values.status_filter;
+    if(values.date_from&&values.date_to&&values.date_from>values.date_to){showError(event.target.querySelector('.error'),'From must be on or before To.');return;}
+    if(verification){if(query.verified_attention==='1')values.verified_attention='1';else values.status=query.status||'pending';}
+    else if(selected==='attention')values.needs_attention='1';else if(selected)values.status=selected;
+    if(query.cluster_id)values.cluster_id=query.cluster_id;
+    location.hash=route(Object.fromEntries(Object.entries(values).filter(([,value])=>value))).slice(1);
+  });
 }
 async function reportPage(node, id) {
   const data = await api('report.php', {query: {id}}), r = data.report, staff = viewer.role !== 'guardian', canReview = staff && r.user_id !== viewer.id;

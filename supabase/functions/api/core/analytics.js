@@ -4,13 +4,21 @@ export const newest = (a, b) => String(b.submitted_at ?? b.created_at).localeCom
 export const needsReview = r => r.status === 'pending';
 export const reportLabel = r => `Report #${r.report_id ?? r.id}`;
 export const displayHealth = r => r.final_health ?? r.suggested_health ?? 'Unknown';
+export const verifiedNeedsAttention = r => r.status === 'verified' && ['Stressed', 'At Risk', 'Unknown'].includes(displayHealth(r));
 export function reportList(rows, query = {}) {
+  const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0,10) === value;
+  for (const key of ['date_from','date_to']) if (query[key] && !validDate(query[key])) throw new AppError('Choose valid dates.');
+  if (query.date_from && query.date_to && query.date_from > query.date_to) throw new AppError('From must be on or before To.');
   return paginate(rows.filter(r => (!query.status || r.status === query.status)
     && (!query.health || displayHealth(r) === query.health)
     && (!query.cluster_id || r.cluster_id === Number(query.cluster_id))
     && (query.needs_attention !== '1' || needsReview(r))
-    && (!String(query.q ?? '').trim() || `${reportLabel(r)} ${r.report_code ?? ''} ${r.cluster_name ?? ''} ${r.sitio_name} ${r.barangay_name}`.toLowerCase().includes(String(query.q).trim().toLowerCase())))
-    .sort(newest).map(r => ({id: r.id, report_code: reportLabel(r), cluster_id: r.cluster_id,
+    && (query.verified_attention !== '1' || verifiedNeedsAttention(r))
+    && (!query.date_from || manilaDate(r.submitted_at) >= query.date_from)
+    && (!query.date_to || manilaDate(r.submitted_at) <= query.date_to)
+    && (!String(query.q ?? '').trim() || `${reportLabel(r)} ${r.report_code ?? ''} ${r.guardian_name ?? ''} ${r.cluster_name ?? ''} ${r.sitio_name ?? ''} ${r.barangay_name ?? ''} ${r.final_species_name ?? r.suggested_species_name ?? ''}`.toLowerCase().includes(String(query.q).trim().toLowerCase())))
+    .sort(query.sort === 'oldest' ? (a,b)=>-newest(a,b) : newest).map(r => ({id: r.id, report_code: reportLabel(r), cluster_id: r.cluster_id,
+      guardian_name: r.guardian_name,
       cluster_name: r.cluster_name, barangay_name: r.barangay_name, sitio_name: r.sitio_name,
       latitude: r.latitude, longitude: r.longitude, status: r.status, display_health: displayHealth(r),
       health: displayHealth(r), final_health: r.final_health, suggested_health: r.suggested_health,

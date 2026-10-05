@@ -27,6 +27,24 @@ export function reportRows(items) {
   if (!items.length) return '<p class="empty">No reports here yet.</p>';
   return `<div class="list">${items.map(r => `<a class="report-row" href="#report/${r.id}"><div><strong>${esc(r.report_code)}</strong><p>${esc(r.cluster_name ?? r.sitio_name ?? r.barangay_name)} · ${esc(r.display_health ?? r.final_health ?? r.suggested_health ?? '')}</p><small>${esc(r.submitted_at?.slice(0, 10))}</small></div>${pill(reportStatus(r))}</a>`).join('')}</div>`;
 }
+export function reportTable(items, {guardian = false, verification = false} = {}) {
+  const date = value => {
+    if (!value) return 'Not available';
+    const parsed = new Date(/(?:Z|[+-]\d\d:\d\d)$/.test(value) ? value : (value.length===10?value+'T00:00:00':value.replace(' ','T'))+'+08:00');
+    return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  };
+  const headers = verification ? ['Report','Submitted by / location','Assessment','Submitted','Status','Action'] : ['Report',...(!guardian?['Submitted by']:[]),'Site','Health','Status','Submitted','Action'];
+  return `<section class="report-table-card"><div class="table-wrap"><table class="report-table"><caption class="sr-only">${verification?'Verification reports':guardian?'Your reports':'Community reports'}</caption><thead><tr>${headers.map(label=>`<th scope="col">${label}</th>`).join('')}</tr></thead><tbody>${items.map(r=>{
+    const site=r.cluster_name||r.sitio_name||r.barangay_name||'New site',species=r.species_name||'Not identified';
+    const cell=(label,html)=>`<td data-label="${esc(label)}">${html}</td>`;
+    const report=cell('Report',`<strong>${esc(r.report_code)}</strong>`);
+    const person=cell(verification?'Submitted by / location':'Submitted by',`${esc(r.guardian_name||'Community member')}${verification?`<small>${esc(site)}${r.barangay_name&&r.barangay_name!==site?` · ${esc(r.barangay_name)}`:''}</small>`:''}`);
+    const health=cell(verification?'Assessment':'Health',`${pill(r.display_health||r.final_health||r.suggested_health||'Unknown')}${verification?`<small>${esc(species)}</small>`:''}`);
+    const submitted=cell('Submitted',esc(date(r.submitted_at))),status=cell('Status',pill(r.status));
+    const action=cell('Action',`<a class="button ${verification&&r.status==='pending'?'':'outline'}" href="#report/${r.id}" aria-label="${verification&&r.status==='pending'?'Review':'View'} ${esc(r.report_code)}">${verification&&r.status==='pending'?'Review':'View'}</a>`);
+    return `<tr>${verification?report+person+health+submitted+status+action:report+(!guardian?person:'')+cell('Site',`${esc(site)}<small>${esc(species)}</small>`)+health+status+submitted+action}</tr>`;
+  }).join('')}</tbody></table></div></section>`;
+}
 export const healthColor = health => ({Healthy: '#3f7f43', Stressed: '#cf961d', 'At Risk': '#c6513c'}[health] ?? '#788778');
 export function mapPoint(item) {
   const values = [item.latitude ?? item.center_lat, item.longitude ?? item.center_lng];

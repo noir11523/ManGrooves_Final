@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/display_text.dart';
 import '../shared/retry_view.dart';
 import '../shared/list_filters.dart';
 import 'validation_history_screen.dart';
+import 'report_detail_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
   const VerificationScreen({super.key, required this.api, this.active = true});
@@ -21,6 +23,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   bool _loading = false;
   int _page = 1;
   String _query = '', _health = '';
+  String _view = 'pending', _dateFrom = '', _dateTo = '';
 
   @override
   void didUpdateWidget(covariant VerificationScreen oldWidget) {
@@ -45,6 +48,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
         page: page ?? _page,
         query: _query,
         health: _health,
+        status: _view == 'verified_attention' ? 'verified' : _view,
+        verifiedAttention: _view == 'verified_attention',
+        dateFrom: _dateFrom,
+        dateTo: _dateTo,
       );
       _page = (_data!['page'] as num?)?.toInt() ?? 1;
     } catch (error) {
@@ -81,11 +88,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
           if (_error != null)
             TextButton(onPressed: _load, child: Text('$_error Retry')),
           Text(
-            'Review reports',
+            'Verification queue',
             style: Theme.of(context).textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const Text('Check the photo and answers, then choose your decision.'),
+          const Text(
+            'Review community observations and follow up on site health.',
+          ),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -100,8 +109,47 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) => Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final entry in {
+                  'pending': 'Pending',
+                  'verified_attention': 'Verified needing attention',
+                  'verified': 'Verified',
+                  'rejected': 'Rejected',
+                }.entries)
+                  SizedBox(
+                    width: (constraints.maxWidth - 10) / 2,
+                    child: _SummaryChip(
+                      entry.value,
+                      summary[entry.key],
+                      _view == entry.key,
+                      _loading
+                          ? null
+                          : () {
+                              setState(() {
+                                _view = entry.key;
+                                _page = 1;
+                              });
+                              _load(page: 1);
+                            },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _view == 'verified_attention'
+                ? 'Verified reports with stressed, at-risk or unknown health.'
+                : _view == 'pending'
+                ? 'Oldest pending reports appear first. Your own reports are excluded.'
+                : 'Completed reports. Your own reports are excluded.',
+          ),
           ListFilters(
-            hint: 'Site or report number',
+            hint: 'Report number, name or site',
             filterLabel: 'Health',
             options: const {
               '': 'All health',
@@ -111,6 +159,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
               'Unknown': 'Unknown',
             },
             busy: _loading,
+            dates: true,
+            onDatesChanged: (from, to) {
+              _dateFrom = from;
+              _dateTo = to;
+            },
             onApply: (query, health) {
               _query = query;
               _health = health;
@@ -118,15 +171,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
             },
           ),
           Text('${_data!["total"] ?? items.length} results'),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _SummaryChip('Pending', summary['pending'], Colors.orange),
-              _SummaryChip('Verified', summary['verified'], Colors.green),
-              _SummaryChip('Rejected', summary['rejected'], Colors.red),
-            ],
-          ),
           const SizedBox(height: 20),
           if (items.isEmpty)
             Card(
@@ -134,8 +178,10 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 padding: EdgeInsets.all(22),
                 child: Text(
                   _query.isNotEmpty || _health.isNotEmpty
-                      ? 'No pending reports match. Try another search or clear the filters.'
-                      : 'No reports waiting for review.',
+                      ? 'No reports match. Try another search or clear the filters.'
+                      : _view == 'pending'
+                      ? 'No reports waiting for review.'
+                      : 'No reports in this category.',
                 ),
               ),
             )
@@ -149,11 +195,18 @@ class _VerificationScreenState extends State<VerificationScreen> {
                       final reviewed = await Navigator.push<bool>(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => ReviewReportScreen(
-                            api: widget.api,
-                            reportId: report['id'] as int,
-                            species: species,
-                          ),
+                          builder: (_) =>
+                              report['status'] == 'pending' ||
+                                  report['status'] == null
+                              ? ReviewReportScreen(
+                                  api: widget.api,
+                                  reportId: report['id'] as int,
+                                  species: species,
+                                )
+                              : ReportDetailScreen(
+                                  api: widget.api,
+                                  reportId: report['id'] as int,
+                                ),
                         ),
                       );
                       if (reviewed == true && mounted) _load();
@@ -163,10 +216,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     ),
                     title: Text(report['report_code']?.toString() ?? ''),
                     subtitle: Text(
-                      '${report['guardian_name'] ?? ''}\n${report['cluster_name'] ?? report['sitio_name'] ?? 'New site'}',
+                      '${report['guardian_name'] ?? 'Community member'} · ${report['cluster_name'] ?? report['sitio_name'] ?? 'New site'}\n${report['display_health'] ?? 'Unknown'} · ${statusLabel(report['status'] ?? 'pending')}\n${report['species_name'] ?? 'Species not identified'} · ${report['submitted_at'] ?? ''}',
                     ),
                     isThreeLine: true,
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Text(
+                      report['status'] == 'pending' || report['status'] == null
+                          ? 'Review'
+                          : 'View',
+                    ),
                   ),
                 ),
               ),
@@ -532,14 +589,36 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
 }
 
 class _SummaryChip extends StatelessWidget {
-  const _SummaryChip(this.label, this.value, this.color);
+  const _SummaryChip(this.label, this.value, this.selected, this.onTap);
   final String label;
   final dynamic value;
-  final Color color;
+  final bool selected;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Chip(
-    avatar: CircleAvatar(backgroundColor: color, radius: 7),
-    label: Text('$label ${value ?? 0}'),
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    button: true,
+    child: Card(
+      color: selected ? Theme.of(context).colorScheme.primaryContainer : null,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 8),
+              Text(
+                '${value ?? 0}',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
   );
 }

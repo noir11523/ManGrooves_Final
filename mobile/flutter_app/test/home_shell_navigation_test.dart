@@ -45,6 +45,10 @@ class _Api extends ApiClient {
     int page = 1,
     String query = '',
     String health = '',
+    String status = 'pending',
+    bool verifiedAttention = false,
+    String dateFrom = '',
+    String dateTo = '',
   }) async {
     verificationLoads++;
     return {'summary': {}, 'items': []};

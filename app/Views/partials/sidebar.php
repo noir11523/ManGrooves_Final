@@ -116,7 +116,7 @@ $isActive = static function (string $href) use ($requestPath, $navigationQuery):
 
     <div class="sidebar-footer">
         <a class="sidebar-link" href="<?= e(defined('MANGROOVES_CLOUD') ? url('downloads/ManGROOVES-Supabase.apk') : 'https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk') ?>" download="ManGROOVES-Supabase.apk">
-            <i class="bi bi-download" aria-hidden="true"></i><span>Download Android APK</span>
+            <i class="bi bi-download" aria-hidden="true"></i><span>Android APK</span>
         </a>
     </div>
 </aside>

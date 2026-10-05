@@ -204,9 +204,21 @@ class ApiClient {
     int page = 1,
     String query = '',
     String health = '',
+    String status = 'pending',
+    bool verifiedAttention = false,
+    String dateFrom = '',
+    String dateTo = '',
   }) => _get(
     'verification.php',
-    query: {'page': '$page', 'q': query, 'health': health},
+    query: {
+      'page': '$page',
+      'q': query,
+      'health': health,
+      'status': status,
+      if (verifiedAttention) 'verified_attention': '1',
+      'date_from': dateFrom,
+      'date_to': dateTo,
+    },
   );
   Future<Map<String, dynamic>> analytics() => _get('analytics.php');
   Future<Uint8List> analyticsPdf() => _withConnectionRecovery(() async {
@@ -273,12 +285,16 @@ class ApiClient {
     int? clusterId,
     String query = '',
     String health = '',
+    String dateFrom = '',
+    String dateTo = '',
   }) => _get(
     'reports.php',
     query: {
       'page': '$page',
       'q': query,
       'health': health,
+      'date_from': dateFrom,
+      'date_to': dateTo,
       if (status.isNotEmpty) 'status': status,
       if (needsAttention) 'needs_attention': '1',
       if (clusterId != null) 'cluster_id': '$clusterId',

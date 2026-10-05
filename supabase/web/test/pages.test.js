@@ -43,14 +43,34 @@ test('report filters use one status control and one tag, and clear stale attenti
  await globalThis.restoreTestAccount({id:'user'});await tick();
  assert.equal($('#filters [name=status_filter]').value,'attention');
  assert.equal($('#filters [name=needs_attention]'),null);
- assert.equal(document.querySelectorAll('.report-row .pill').length,1);
- assert.equal($('.report-row .pill').textContent,'Needs attention');
+ assert.equal(document.querySelectorAll('.report-table [data-label=Status] .pill').length,1);
+ assert.equal($('.report-table [data-label=Status] .pill').textContent,'Pending');
+ assert.equal(document.querySelector('th:nth-child(2)').textContent,'Site');
  assert.equal($('.pagination'),null);
  const select=$('[name=status_filter]');select.value='verified';
  $('#filters').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
  await new Promise(resolve=>setTimeout(resolve,20));
  assert.equal(calls.at(-1).status,'verified');
  assert.equal(calls.at(-1).needs_attention,undefined);
+});
+test('verification cards apply the selected status, reset pagination and keep search and dates',async()=>{
+ history.replaceState(null,'','#verification?q=coast&date_from=2026-10-01&page=2');
+ const calls=[];
+ globalThis.testApi=async(path,options)=>{
+  if(path==='me.php')return {user:{id:2,role:'expert',full_name:'Test Expert'}};
+  assert.equal(path,'verification.php');calls.push({...options.query});
+  return {page:1,pages:1,total:1,summary:{pending:8,verified_attention:3,verified:9,rejected:2},items:[{id:9,report_code:'Report #9',guardian_name:'Local Guardian',status:options.query.status||'pending',display_health:'Stressed',submitted_at:'2026-10-01 14:29:00'}]};
+ };
+ await globalThis.restoreTestAccount({id:'expert'});await tick();
+ assert.equal(document.querySelectorAll('.verification-stats a').length,4);
+ const attention=[...document.querySelectorAll('.verification-stats a')].find(a=>a.textContent.includes('Verified needing'));
+ assert.match(attention.href,/verified_attention=1/);assert.match(attention.href,/q=coast/);assert.match(attention.href,/date_from=2026-10-01/);assert.doesNotMatch(attention.href,/page=/);
+ attention.click();await new Promise(resolve=>setTimeout(resolve,20));
+ assert.equal(calls.at(-1).verified_attention,'1');assert.match($('.verification-help').textContent,/Verified reports/);
+ assert.match($('.report-table').textContent,/Local Guardian/);
+ const verified=[...document.querySelectorAll('.verification-stats a')].find(a=>a.textContent==='Verified9');verified.click();await new Promise(resolve=>setTimeout(resolve,20));
+ assert.equal(calls.at(-1).status,'verified');assert.equal(calls.at(-1).verified_attention,undefined);
+ assert.equal($('.report-table a').textContent,'View');
 });
 test('earned and unearned badge pages attach every certificate and QR action',async()=>{
  history.replaceState(null,'','#badges');

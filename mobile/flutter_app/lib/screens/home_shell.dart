@@ -111,6 +111,7 @@ class _HomeShellState extends State<HomeShell> {
             ReportsScreen(
               key: ValueKey(_reportsVersion),
               api: widget.api,
+              showSubmitter: true,
               active: _index == 1,
             ),
             VerificationScreen(api: widget.api, active: _index == 2),

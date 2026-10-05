@@ -16,6 +16,7 @@
             if (fields.some((field) => !Number.isSafeInteger(data.summary?.[field.dataset.stat]) || data.summary[field.dataset.stat] < 0)) throw new Error('Invalid totals');
             fields.forEach((field) => { field.textContent = data.summary[field.dataset.stat].toLocaleString(); });
             homeStats.querySelector('[data-stats-status]').textContent = 'Community totals updated.';
+            homeStats.querySelector('[data-stats-status]').classList.add('visually-hidden');
         }).catch(() => {
             homeStats.querySelector('[data-stats-status]').textContent = 'Community totals are unavailable right now.';
         }).finally(() => { homeStats.setAttribute('aria-busy', 'false'); });

@@ -1,5 +1,13 @@
 # ManGROOVES PHP website on Vercel
 
+## Reports and homepage refinement — October 5, 2026
+
+Reports now use a clear desktop table with report number, site/species, health, status, submitted date and View. Staff also see who submitted the report. On phones, each row becomes a labelled card with one action. Guardians still receive only their own reports; staff access and report submission rules are unchanged.
+
+Verification has four clickable groups: Pending, Verified needing attention, Verified and Rejected. Pending opens the oldest reports first with Review; completed reports open with View. Verified needing attention means verified reports whose recorded health is Stressed, At Risk or Unknown; it does not reopen a review or change the report status. The reviewer’s own reports are excluded from both the list and totals. Totals cover all reviewable reports, while search, health and dates narrow the list. Clicking a group retains those filters and resets pagination. Filter and Reset remain the only search actions; dates use inclusive Manila calendar days.
+
+The Supabase APK `2.0.0+32` includes matching category cards, report information and optional date filters. The homepage retains its existing theme, routes and fast deferred statistics. Repeated role descriptions and “no experience required” copy are removed, and monitoring after planting is the central message. Public and sidebar APK links use a download icon with the short label Android APK.
+
 ## Loading improvements — October 5, 2026
 
 The PHP function now uses Vercel `icn1` (Seoul), matching the existing Supabase database's `ap-northeast-2` region. PHP API requests include `x-region: ap-northeast-2` so database-heavy Edge Function work runs there too. If the database moves, update both `vercel/build.mjs` and `app/Cloud/Client.php` together.

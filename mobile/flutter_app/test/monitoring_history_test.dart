@@ -28,6 +28,10 @@ class _Api extends ApiClient {
     int page = 1,
     String query = '',
     String health = '',
+    String status = 'pending',
+    bool verifiedAttention = false,
+    String dateFrom = '',
+    String dateTo = '',
   }) async {
     this.page = page;
     return {
@@ -137,6 +141,13 @@ Future<void> _phone(WidgetTester tester, Widget screen) async {
 }
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
+  if (finder.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      finder,
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+  }
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   await tester.tap(finder);
@@ -149,6 +160,11 @@ void main() {
     (tester) async {
       final api = _Api();
       await _phone(tester, Scaffold(body: VerificationScreen(api: api)));
+      await tester.scrollUntilVisible(
+        find.text('Queue page 1'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Queue page 1'), findsOneWidget);
       await _tap(tester, find.byTooltip('Next page'));
       expect(api.page, 2);

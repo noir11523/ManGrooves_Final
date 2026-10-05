@@ -868,7 +868,10 @@ textarea {
 .home-page .home-process-steps h3 { margin: .8rem 0 .5rem; font-size: 1.35rem; font-weight: 800; color: var(--mg-brown); }
 .home-page .home-process-steps p { margin: 0; color: #52604f; font-size: .94rem; line-height: 1.6; }
 .home-page .home-process-note { margin: 1.5rem 0 0; font-size: .8rem; color: #52604f; }
-.home-page .home-benefit-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.3rem; }
+.home-page .home-benefit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.3rem; }
+.home-page .home-local-fact { display: flex; align-items: start; gap: .75rem; margin: 1.75rem 0 0; padding: 1rem 1.2rem; border-left: 3px solid var(--mg-green); background: #eaf0e4; border-radius: 0 .7rem .7rem 0; font-size: .86rem; line-height: 1.6; color: #40523c; }
+.home-page .cta-panel > div { min-width: 0; }
+.home-page .cta-panel h2 { overflow-wrap: anywhere; }
 .home-page .benefit-card { padding: 0 1rem 0 0; border: none; border-radius: 0; box-shadow: none; background: none; }
 .home-page .benefit-card .feature-icon { background: none; border: 1px solid #c5d2bd; border-radius: 1rem 1rem 1rem .25rem; }
 .home-page .benefit-card p { color: #576259; }
@@ -892,10 +895,10 @@ textarea {
 .home-page .home-place-label { position: absolute; left: 1rem; bottom: 1rem; display: flex; align-items: center; gap: .5rem; padding: .6rem .85rem; border-radius: .6rem; background: #fcfcf8; color: var(--mg-green); font-size: .8rem; font-weight: 700; }
 .home-page .home-explore-copy p { margin: 1.15rem 0 1.5rem; max-width: 35ch; }
 .home-page .home-expert-section { padding-bottom: clamp(3rem, 5vw, 4.5rem); }
-.home-page .home-expert-panel { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 3.5rem; padding: 2.3rem; border: 1px solid #d8cbb6; border-radius: 1.2rem; background: #fcfaf5; }
+.home-page .home-expert-panel { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 2rem; padding: 1.5rem; border: 1px solid #d8cbb6; border-radius: 1.2rem; background: #fcfaf5; }
 .home-page .home-expert-intro .section-title { font-size: clamp(1.65rem, 2.7vw, 2.2rem); }
 .home-page .home-expert-intro > p { margin: 1rem 0 .65rem; color: #576259; font-size: .96rem; line-height: 1.7; }
-.home-page .home-expert-process ol { display: grid; gap: .7rem; list-style: none; padding: 0; margin: 0; }
+.home-page .home-expert-process ol { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; list-style: none; padding: 0; margin: 0; }
 .home-page .home-expert-process li { display: flex; align-items: center; gap: .8rem; font-size: .91rem; font-weight: 650; }
 .home-page .home-expert-process li span { display: grid; place-items: center; width: 1.9rem; height: 1.9rem; flex: 0 0 auto; background: #eaf0e4; color: var(--mg-green); border-radius: 50%; font-size: .68rem; }
 .home-page .home-expert-process > p { margin: 1.2rem 0 0; background: #eaf0e4; padding: .85rem 1rem; border-radius: .65rem; font-size: .86rem; line-height: 1.55; color: #314f2b; }

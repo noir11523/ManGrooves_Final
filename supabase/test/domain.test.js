@@ -2,9 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { classify, matchSpecies, updateCriterion, validateLocation, password, manilaDate, wireDates } from '../functions/api/core/domain.js';
-import { analyticsForUser, badgeMetrics } from '../functions/api/core/analytics.js';
+import { analyticsForUser, badgeMetrics, reportList, verifiedNeedsAttention } from '../functions/api/core/analytics.js';
 const reference = JSON.parse(readFileSync(new URL('../data/reference.json', import.meta.url)));
 const criteria = reference.criteria;
+test('report date filters use Manila days, search names and species, and queue sorting is oldest first',()=>{
+ const rows=[{id:1,status:'pending',guardian_name:'Local Guardian',suggested_species_name:'White Mangrove',submitted_at:'2026-10-01T16:30:00Z'},{id:2,status:'verified',final_health:'At Risk',submitted_at:'2026-10-01T00:00:00Z'},{id:3,status:'verified',final_health:'Healthy',submitted_at:'2026-09-30T00:00:00Z'}];
+ assert.equal(reportList(rows,{date_from:'2026-10-02',date_to:'2026-10-02',q:'guardian'}).total,1);
+ assert.equal(reportList(rows,{q:'White Mangrove'}).total,1);
+ assert.deepEqual(reportList(rows,{sort:'oldest'}).items.map(r=>r.id),[3,2,1]);
+ assert.deepEqual(reportList(rows,{verified_attention:'1'}).items.map(r=>r.id),[2]);
+ assert.equal(verifiedNeedsAttention(rows[0]),false);assert.equal(verifiedNeedsAttention(rows[2]),false);
+ assert.throws(()=>reportList(rows,{date_from:'2026-02-30'}),/valid dates/);
+ assert.throws(()=>reportList(rows,{date_from:'2026-10-03',date_to:'2026-10-01'}),/From/);
+});
 const choose = (code, option) => criteria.find(c => c.code === code).options.find(o => o.code === option).id;
 const healthy = () => ({leaf_color: [choose('leaf_color', 'green')], leaf_condition: [choose('leaf_condition', 'smooth_healthy')],
   pests: [choose('pests', 'none_visible')], roots: [choose('roots', 'firm_intact')], bark_trunk: [choose('bark_trunk', 'intact_smooth')], bio_indicators: [], negative_signs: []});

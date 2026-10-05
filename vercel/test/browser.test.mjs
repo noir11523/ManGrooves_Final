@@ -53,7 +53,7 @@ test('PHP registration uses the shared email code and typed expert ID form witho
 });
 test('embedded reports preserve attention filters and report details links',async()=>{
  globalThis.testApi=async(path,options)=>{assert.equal(path,'reports.php');assert.equal(options.query.needs_attention,'1');return {items:[{id:9,report_code:'Report #9',status:'pending',needs_attention:1}],pages:1};};
- await renderEmbedded('reports',node,{needs_attention:'1'},{role:'expert'});assert.equal($('[name=status_filter]').value,'attention');assert.equal($('.report-row').getAttribute('href'),'#report/9');assert.equal($('.pill').textContent,'Needs attention');
+ await renderEmbedded('reports',node,{needs_attention:'1'},{role:'expert'});assert.equal($('[name=status_filter]').value,'attention');assert.equal($('.report-table a').getAttribute('href'),'#report/9');assert.equal($('.report-table [data-label=Status] .pill').textContent,'Pending');
 });
 test('PHP routes preserve IDs, filters, and separate health and growth pages',()=>{
  assert.equal(phpRoute('#report/9'),'/report-detail.php?id=9');assert.equal(phpRoute('#growth'),'/clusters.php?view=growth');assert.equal(phpRoute('#cluster/2?tab=growth'),'/cluster.php?tab=growth&id=2');assert.equal(phpRoute('#reports?needs_attention=1&page=2'),'/reports.php?needs_attention=1&page=2');assert.equal(phpRoute('#about'),null);assert.equal(phpRoute('#https://evil.test'),null);

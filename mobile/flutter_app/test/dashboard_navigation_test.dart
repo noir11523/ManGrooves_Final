@@ -26,6 +26,8 @@ class _Api extends ApiClient {
     int? clusterId,
     String query = '',
     String health = '',
+    String dateFrom = '',
+    String dateTo = '',
   }) async {
     this.status = status;
     attention = needsAttention;

@@ -7,6 +7,8 @@ import 'package:mangrooves_mobile/screens/reports_screen.dart';
 
 class _Api extends ApiClient {
   final calls = <Map<String, dynamic>>[];
+  String lastStatus = 'pending';
+  bool lastAttention = false;
   Map<String, dynamic> result = {
     'items': [],
     'page': 1,
@@ -19,7 +21,13 @@ class _Api extends ApiClient {
     int page = 1,
     String query = '',
     String health = '',
+    String status = 'pending',
+    bool verifiedAttention = false,
+    String dateFrom = '',
+    String dateTo = '',
   }) async {
+    lastStatus = status;
+    lastAttention = verifiedAttention;
     calls.add({'page': page, 'q': query, 'filter': health});
     return {...result, 'page': page};
   }
@@ -45,6 +53,8 @@ class _Api extends ApiClient {
     int? clusterId,
     String query = '',
     String health = '',
+    String dateFrom = '',
+    String dateTo = '',
   }) async {
     calls.add({'page': page, 'q': query, 'filter': health});
     return {...result, 'page': page};
@@ -52,6 +62,28 @@ class _Api extends ApiClient {
 }
 
 void main() {
+  testWidgets(
+    'verification cards filter immediately without combining stale categories',
+    (tester) async {
+      final api = _Api();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: VerificationScreen(api: api)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Verified needing attention'));
+      await tester.pumpAndSettle();
+      expect(api.lastStatus, 'verified');
+      expect(api.lastAttention, isTrue);
+      expect(api.calls.last['page'], 1);
+      await tester.tap(find.text('Rejected'));
+      await tester.pumpAndSettle();
+      expect(api.lastStatus, 'rejected');
+      expect(api.lastAttention, isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'report search remains usable with the keyboard on a short phone',
     (tester) async {
@@ -95,6 +127,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Apply'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Apply'));
         await tester.pumpAndSettle();
         expect(api.calls.last, {
@@ -123,6 +156,7 @@ void main() {
           await tester.pumpAndSettle();
         }
         await tester.ensureVisible(find.text('Clear'));
+        await tester.pumpAndSettle();
         expect(
           tester
               .widget<TextField>(find.byType(TextField))

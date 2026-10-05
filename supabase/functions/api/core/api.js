@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { Service } from './service.js';
 import { AppError, integer, now, paginate, password, publicUser, requireRole, ROLES, text, wireDates } from './domain.js';
 import { filterRows } from './list-query.js';
-import { displayHealth, reportLabel, newest, reportList } from './analytics.js';
+import { displayHealth, reportLabel, newest, reportList, verifiedNeedsAttention } from './analytics.js';
 import { readInput, sendImage } from './uploads.js';
 import {searchPlaces} from './places.js';
 import {certificateSettings,getCertificate,certificatePdf,shareCertificate,sharedCertificate} from './certificates.js';
@@ -160,9 +160,11 @@ export function createApi({db, auth, bucket, projectId}) {
         }
         case 'verification.php': {
           only('GET'); requireRole(user, 'expert', 'system_admin'); const rows = (await service.reports(user)).filter(r => r.user_id !== user.id);
-          return send(res, {...reportList(rows, {...req.query, status: 'pending'}), summary: {
+          const status=req.query.verified_attention==='1'?'verified':req.query.status||'pending';
+          if (!['pending','verified','rejected'].includes(status)) throw new AppError('Choose a valid review status.');
+          return send(res, {...reportList(rows, {...req.query, status, sort:status==='pending'?'oldest':undefined}), summary: {
             pending: rows.filter(r => r.status === 'pending').length, verified: rows.filter(r => r.status === 'verified').length,
-            rejected: rows.filter(r => r.status === 'rejected').length, verified_attention: 0}, species: await service.species()});
+            rejected: rows.filter(r => r.status === 'rejected').length, verified_attention: rows.filter(verifiedNeedsAttention).length}, species: await service.species()});
         }
         case 'review.php': only('POST'); return send(res, {result: await service.review(user, req.body ?? {}), message: 'Review saved.'});
         case 'validation-history.php': only('GET'); requireRole(user, 'expert', 'system_admin'); return send(res, paginate(filterRows((await service.rows('verification_logs')).map(r=>({...r,report_code:reportLabel(r)})), req.query, ['report_code', 'verifier_name', 'reviewer'], ['action']).sort(newest), req.query.page));
