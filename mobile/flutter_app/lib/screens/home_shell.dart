@@ -235,7 +235,7 @@ class _HomeShellState extends State<HomeShell> {
               const NavigationDestination(
                 icon: Icon(Icons.add_a_photo_outlined),
                 selectedIcon: Icon(Icons.add_a_photo),
-                label: 'Observe',
+                label: 'Submit',
               ),
             if (_guardian)
               const NavigationDestination(

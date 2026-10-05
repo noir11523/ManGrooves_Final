@@ -56,7 +56,7 @@ To register:
 
 To choose the pin manually:
 
-1. Open **Observe** and stay on the **Site** step.
+1. Open **Submit** and stay on the **Site** step.
 2. Tap **Choose location on map** under the GPS button.
 3. Tap your actual field site, or drag the map underneath the centered pin.
 4. Check the coordinates and tap **Use this location**.

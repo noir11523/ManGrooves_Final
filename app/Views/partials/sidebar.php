@@ -57,7 +57,7 @@ $mobileItems = $role === 'guardian'
     ? [
         ['Home', 'dashboard.php', 'bi-house-door-fill'],
         ['Reports', 'reports.php', 'bi-journal-text'],
-        ['Observe', 'submit-report.php', 'bi-camera-fill'],
+        ['Submit', 'submit-report.php', 'bi-camera-fill'],
         ['Badges', 'badges.php', 'bi-award-fill'],
     ]
     : [
