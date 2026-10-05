@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import 'certificate_actions.dart';
 
 class BadgesScreen extends StatefulWidget {
   const BadgesScreen({super.key, required this.api, this.active = true});
@@ -63,7 +64,7 @@ class _BadgesScreenState extends State<BadgesScreen> {
             style: Theme.of(context).textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const Text('Badges unlock from contributions verified by CCENRO.'),
+          const Text('Earn badges through verified reports.'),
           const SizedBox(height: 18),
           Wrap(
             spacing: 10,
@@ -84,7 +85,7 @@ class _BadgesScreenState extends State<BadgesScreen> {
               ),
             )
           else
-            ...badges.map((badge) => _BadgeCard(badge: badge)),
+            ...badges.map((badge) => _BadgeCard(badge: badge, api: widget.api)),
         ],
       ),
     );
@@ -108,7 +109,8 @@ class _Metric extends StatelessWidget {
 }
 
 class _BadgeCard extends StatelessWidget {
-  const _BadgeCard({required this.badge});
+  const _BadgeCard({required this.badge, required this.api});
+  final ApiClient api;
   final Map<String, dynamic> badge;
 
   @override
@@ -146,6 +148,8 @@ class _BadgeCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(badge['description']?.toString() ?? ''),
+                    if (earned && api.supportsCloudAccounts)
+                      CertificateActions(api: api, badgeId: badge['id'] as int),
                     const SizedBox(height: 12),
                     LinearProgressIndicator(value: progress.clamp(0, 1)),
                     const SizedBox(height: 6),

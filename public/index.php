@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+if (defined('MANGROOVES_CLOUD')) {
+    require APP_ROOT . '/app/Cloud/Router.php';
+    CloudRouter::dispatch();
+    return;
+}
+
 require_once dirname(__DIR__) . '/app/bootstrap.php';
 
 $stats = [

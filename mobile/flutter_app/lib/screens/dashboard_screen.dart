@@ -104,7 +104,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Hello, ${user['full_name']?.toString().split(' ').first ?? 'Guardian'}',
+              "Hi, ${user['first_name'] ?? user['full_name']?.toString().split(' ').first ?? 'there'}!",
               style: Theme.of(context).textTheme.headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w800),
             ),
@@ -248,8 +248,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       title: Text(report['report_code']?.toString() ?? ''),
                       subtitle: Text(
-                        report['cluster_name']?.toString() ??
-                            'New observation site',
+                        report['cluster_name']?.toString() ?? 'New site',
                       ),
                       trailing: const Icon(Icons.chevron_right),
                     ),

@@ -1,0 +1,31 @@
+{
+  "functions": [{"source": "firebase/functions", "codebase": "mangrooves", "runtime": "nodejs22"}],
+  "firestore": {"rules": "firebase/firestore.rules", "indexes": "firebase/firestore.indexes.json"},
+  "storage": {"rules": "firebase/storage.rules"},
+  "hosting": {
+    "predeploy": ["npm --prefix firebase run build:web"],
+    "public": "firebase/web/dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {"source": "/mobile-api/**", "function": {"functionId": "api", "region": "asia-southeast1"}},
+      {"source": "**", "destination": "/index.html"}
+    ],
+    "headers": [
+      {"source": "**", "headers": [
+        {"key": "X-Content-Type-Options", "value": "nosniff"},
+        {"key": "Referrer-Policy", "value": "same-origin"},
+        {"key": "X-Frame-Options", "value": "DENY"}
+      ]},
+      {"source": "/mobile-api/**", "headers": [{"key": "Cache-Control", "value": "private, no-store"}]}
+    ]
+  },
+  "emulators": {
+    "auth": {"host": "127.0.0.1", "port": 9099},
+    "firestore": {"host": "127.0.0.1", "port": 8088},
+    "storage": {"host": "127.0.0.1", "port": 9199},
+    "functions": {"host": "127.0.0.1", "port": 5001},
+    "hosting": {"host": "127.0.0.1", "port": 5002},
+    "ui": {"enabled": true, "host": "127.0.0.1", "port": 4000},
+    "singleProjectMode": true
+  }
+}

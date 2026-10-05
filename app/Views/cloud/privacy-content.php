@@ -1,0 +1,6 @@
+<p>ManGROOVES saves your name, email, barangay, optional phone number, and field reports. Reports include a photo, location, checklist answers, and visit notes.</p>
+<p>Accounts, reports, and photos use Supabase. The website runs on Vercel. Guardians see their own private reports. Authorized experts and administrators can review reports and manage the monitoring program. Verified site summaries help the community follow mangrove health.</p>
+<p>Expert applicants enter a work or professional ID code for admin review. Only administrators can see the code. Older ID photos remain private.</p>
+<p>GPS is optional. You can place a pin yourself. Address searches are sent to Photon, so avoid entering private home details. New field photos have personal image metadata removed before storage.</p>
+<p>Supabase Auth handles passwords and email verification. The website uses an encrypted, secure sign-in cookie. Your email cannot be changed in Settings. Ask your program administrator about access, corrections, or account removal.</p>
+<p>Certificate QR links let anyone with the link download that certificate for 10 minutes. Downloaded certificates do not include a QR code.</p>

@@ -46,10 +46,37 @@ class ManGroovesApp extends StatelessWidget {
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(52),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            textStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
           ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            textStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
         ),
       ),
       home: AuthGate(api: api),

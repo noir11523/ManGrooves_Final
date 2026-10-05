@@ -12,17 +12,22 @@ $publicViews = ['home', 'auth/login', 'auth/register'];
 $isPublicLayout = ($layout ?? null) === 'public' || in_array($viewName, $publicViews, true) || (!Auth::check() && str_starts_with($viewName, 'errors/'));
 $authUser = Auth::user();
 $unreadNotificationCount = 0;
-$cssVersion = (string) (filemtime(APP_ROOT . '/public/assets/css/app.css') ?: 1);
-$jsVersion = (string) (filemtime(APP_ROOT . '/public/assets/js/app.js') ?: 1);
+$assetDirectory = APP_ROOT . (defined('MANGROOVES_CLOUD') ? '/assets/' : '/public/assets/');
+$cssVersion = (string) (filemtime($assetDirectory . 'css/app.css') ?: 1);
+$jsVersion = (string) (filemtime($assetDirectory . 'js/app.js') ?: 1);
 
 if ($authUser) {
     try {
+        if (defined('MANGROOVES_CLOUD')) {
+            $unreadNotificationCount = (int) (CloudClient::api('notifications.php', ['page' => 1])['unread'] ?? 0);
+        } else {
         (new \App\Services\NotificationService(Database::connection()))->syncForUser($authUser);
         $unreadStatement = Database::connection()->prepare(
             'SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND read_at IS NULL'
         );
         $unreadStatement->execute(['user_id' => (int) $authUser['id']]);
         $unreadNotificationCount = (int) $unreadStatement->fetchColumn();
+        }
     } catch (Throwable $exception) {
         if (config('debug')) {
             error_log('Unable to load unread notification count: ' . $exception->getMessage());
@@ -45,6 +50,7 @@ $flashes = consume_flashes();
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="ManGROOVES">
     <meta name="csrf-token" content="<?= e(Csrf::token()) ?>">
+    <?php if (defined('MANGROOVES_CLOUD')): ?><meta name="cloud-api-base" content="<?= e(CloudClient::projectUrl() . '/functions/v1/api/') ?>"><?php endif; ?>
     <title><?= e($documentTitle) ?></title>
     <link rel="manifest" href="<?= e(url('manifest.webmanifest')) ?>">
     <link rel="icon" href="<?= e(asset('img/badges/app-icon.svg')) ?>" type="image/svg+xml">
@@ -55,7 +61,7 @@ $flashes = consume_flashes();
     <link href="<?= e(asset('css/app.css') . '?v=' . rawurlencode($cssVersion)) ?>" rel="stylesheet">
     <?= isset($extraHead) ? (string) $extraHead : '' ?>
 </head>
-<body class="<?= e(trim(($isPublicLayout ? 'public-layout ' : 'app-layout ') . $bodyClass)) ?>" data-app-base="<?= e(rtrim(url(), '/') . '/') ?>">
+<body class="<?= e(trim(($isPublicLayout ? 'public-layout ' : 'app-layout ') . $bodyClass)) ?>" data-app-base="<?= e(rtrim(url(), '/') . '/') ?>" <?= defined('MANGROOVES_CLOUD') ? 'data-cloud-host="true"' : '' ?>>
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
 <div class="offline-banner" data-offline-banner role="status" aria-live="polite" hidden>

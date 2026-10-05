@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import 'account_security_screen.dart';
 import 'checklist_screen.dart';
+import 'cloud_admin_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -85,9 +86,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _applyUser(updated);
       widget.onUserChanged(updated);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully.')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Profile updated.')));
       }
     } catch (error) {
       _error = error is ApiException ? error.message : 'Profile update failed.';
@@ -112,6 +112,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
+        if (user['role'] == 'system_admin' &&
+            widget.api.supportsCloudAccounts) ...[
+          ListTile(
+            title: const Text('Expert applications'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => CloudAdminScreen(api: widget.api),
+              ),
+            ),
+          ),
+          ListTile(
+            title: const Text('Certificate signer'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    CloudAdminScreen(api: widget.api, certificates: true),
+              ),
+            ),
+          ),
+        ],
         CircleAvatar(
           radius: 38,
           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -123,7 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 12),
         Text(
-          user['role']?.toString() ?? '',
+          '${user['full_name'] ?? ''} · ${const {'guardian': 'Coastal Guardian', 'expert': 'Expert', 'system_admin': 'Administrator'}[user['role']] ?? ''}',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelLarge,
         ),
@@ -205,7 +227,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         )
                         .toList(),
                     onChanged: (value) => setState(() => _barangayId = value),
-                    validator: user['role'] == 'guardian'
+                    validator: ['guardian', 'expert'].contains(user['role'])
                         ? (value) =>
                               value == null ? 'Select your barangay.' : null
                         : null,

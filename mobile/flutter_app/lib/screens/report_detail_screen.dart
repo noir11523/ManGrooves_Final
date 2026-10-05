@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/display_text.dart';
+import '../shared/retry_view.dart';
 import 'validation_history_screen.dart';
 import 'cluster_timeline_screen.dart';
 
@@ -46,7 +48,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ? Center(
             child: _error == null
                 ? const CircularProgressIndicator()
-                : FilledButton.tonal(onPressed: _load, child: Text(_error!)),
+                : RetryView(message: _error!, onRetry: _load),
           )
         : _content(context),
   );
@@ -82,22 +84,20 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _Pill(_report!['status']?.toString() ?? ''),
+            _Pill(reportStatusLabel(_report!)),
             _Pill(
               _report!['final_health']?.toString() ??
                   _report!['suggested_health']?.toString() ??
                   'Unknown',
             ),
-            if (_report!['needs_attention'] == 1)
-              const _Pill('Needs attention'),
           ],
         ),
         const SizedBox(height: 18),
         _InfoCard(
-          title: 'Field observation',
+          title: 'Visit details',
           rows: {
             'Barangay': _report!['barangay_name'],
-            'Cluster': _report!['cluster_name'] ?? 'New observation site',
+            'Cluster': _report!['cluster_name'] ?? 'New site',
             'Sitio': _report!['sitio_name'],
             'Coordinates': '${_report!['latitude']}, ${_report!['longitude']}',
             'Living mangroves': _report!['observed_alive_count'],
@@ -108,7 +108,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ),
         const SizedBox(height: 12),
         _InfoCard(
-          title: 'Identification',
+          title: 'Species assessment',
           rows: {
             'Species':
                 (_report!['status'] == 'verified'
@@ -126,7 +126,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         Text(
           _report!['health_score'] == null
               ? 'Not scored. Needs review.'
-              : 'System health score: ${_report!['health_score']} / ${_report!['health_max_score']}',
+              : 'Health score: ${_report!['health_score']} / ${_report!['health_max_score']}',
         ),
         const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
         const SizedBox(height: 8),
@@ -141,7 +141,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               .map((item) => Map<String, dynamic>.from(item as Map))
               .map(
                 (item) =>
-                    '${item['label']}${criterion['score_group'] == 'health' ? ' (${item['points']}/2)' : ''}',
+                    '${item['label']}${criterion['score_group'] == 'health' ? ' (${item['points'] == null ? 'Not scored' : '${item['points']}/2'})' : ''}',
               )
               .join(', ');
           return ListTile(
@@ -152,19 +152,21 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           );
         }),
         if (_report!['cluster_id'] != null)
-          TextButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => ClusterTimelineScreen(
-                  api: widget.api,
-                  clusterId: int.parse('${_report!['cluster_id']}'),
+          for (final mode in [0, 1])
+            TextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => ClusterTimelineScreen(
+                    api: widget.api,
+                    clusterId: int.parse('${_report!['cluster_id']}'),
+                    initialTab: mode,
+                  ),
                 ),
               ),
+              icon: const Icon(Icons.timeline),
+              label: Text(mode == 0 ? 'Health history' : 'Growth timeline'),
             ),
-            icon: const Icon(Icons.timeline),
-            label: const Text('Cluster timeline'),
-          ),
         ValidationHistoryCard(report: _report!),
         if ((_report!['expert_feedback']?.toString().trim().isNotEmpty ??
             false)) ...[

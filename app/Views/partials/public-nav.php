@@ -20,9 +20,9 @@
                     </li>
                 <?php endif; ?>
                 <li class="nav-item ms-lg-2">
-                    <button class="btn btn-outline-secondary btn-sm d-none" type="button" data-install-app>
-                        <i class="bi bi-download me-1" aria-hidden="true"></i> Install app
-                    </button>
+                    <a class="btn btn-outline-secondary btn-sm" href="<?= e(defined('MANGROOVES_CLOUD') ? url('downloads/ManGROOVES-Supabase.apk') : 'https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk') ?>" download="ManGROOVES-Supabase.apk">
+                        <i class="bi bi-download me-1" aria-hidden="true"></i> Download Android APK
+                    </a>
                 </li>
             </ul>
         </div>

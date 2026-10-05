@@ -1,0 +1,185 @@
+// Runs the complete HTTP workflow against real local PostgreSQL (PGlite).
+// Auth and Storage are explicit test doubles; hosted-provider testing is separate.
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {Readable} from 'node:stream';
+import {randomUUID} from 'node:crypto';
+import {databaseFixture} from './database-fixture.js';
+import {AppError} from '../functions/api/core/domain.js';
+import {createApi} from '../functions/api/core/api.js';
+const {db,pg}=await databaseFixture();
+const projectId='local-test';
+const accounts=new Map(),sessions=new Map(),images=new Map();
+const codes=new Map();
+const auth={
+ async startSignup(email){let user=[...accounts.values()].find(u=>u.email===email);if(!user){const uid=randomUUID();user={uid,email,disabled:false};accounts.set(uid,user);}codes.set(`email:${email}`,"123456");},
+ async resendSignup(email){codes.set(`email:${email}`,"123456");},
+ async requestRecovery(email){if([...accounts.values()].some(u=>u.email===email))codes.set(`recovery:${email}`,"654321");},
+ async verifyEmail(email,code,type){if(codes.get(`${type}:${email}`)!==code)throw new AppError("That code is invalid or expired.");codes.delete(`${type}:${email}`);const user=[...accounts.values()].find(u=>u.email===email);user.email_verified=true;const token=randomUUID();sessions.set(token,user);return {uid:user.uid,email,token};},
+ async createUser(input){const uid=input.uid??randomUUID();accounts.set(uid,{...input,uid,disabled:false});return {uid};},
+ async deleteUser(uid){accounts.delete(uid);},
+ async getUser(uid){return accounts.get(uid);},
+ async updateUser(uid,input){Object.assign(accounts.get(uid),input);},
+ async revokeRefreshTokens(uid){for(const [token,user] of sessions)if(user.uid===uid)sessions.delete(token);},
+ async verifyIdToken(token){const user=sessions.get(token);if(!user||accounts.get(user.uid)?.disabled)throw new Error('Invalid token');return {...user,email_verified:user.email_verified===true,auth_time:Date.now()/1000};},
+ async signIn(email,password){const user=[...accounts.values()].find(u=>u.email===email&&!u.disabled&&u.password===password);assert.ok(user,'Valid test sign-in');const idToken=randomUUID();sessions.set(idToken,user);return {idToken};}
+};
+const bucket={file:path=>({async save(bytes){images.set(path,bytes);},async delete(){images.delete(path);},async exists(){return [images.has(path)];},async download(){return images.get(path);},createReadStream(){return Readable.from([images.get(path)]);}})};
+const fixture=await readFile(new URL('fixtures/photo.jpg',import.meta.url));
+const reference=JSON.parse(await readFile(new URL('../data/reference.json',import.meta.url),'utf8'));
+for(const [collection,rows] of Object.entries(reference)) for(const row of rows) await db.collection(collection).doc(row.id).set(row);
+const server = createApi({db, auth, bucket, projectId}).listen(0, '127.0.0.1');
+await new Promise(resolve => server.once('listening', resolve));
+const base = `http://127.0.0.1:${server.address().port}/api`;
+if (!/^http:\/\/127\.0\.0\.1:\d+\/api$/.test(base)) throw new Error('Tests may only target the local emulator API.');
+let checks = 0;
+const pass = message => { checks++; console.log(`PASS ${message}`); };
+async function signIn(email,password='testpassword1') {return auth.signIn(email,password);}
+async function account(id, role) {
+  const email = `${role}${id}@example.test`, record = await auth.createUser({uid: `test-${id}`, email, password: 'testpassword1'});
+  const user = {id, uid: record.uid, email, first_name: 'Test', last_name: role, full_name: `Test ${role}`, role, status: 'active', barangay_id: 1, barangay_name: 'Inayawan', phone: null};
+  await db.collection('users').doc(record.uid).set(user);
+  return {...user, token: (await signIn(email)).idToken};
+}
+async function request(route, user, body, expected = 200, binary = false) {
+  const response = await fetch(`${base}/${route}`, {method: body ? 'POST' : 'GET', headers: {
+    ...(user ? {Authorization: `Bearer ${user.token}`} : {}), ...(body && !(body instanceof FormData) ? {'Content-Type': 'application/json'} : {})},
+    body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined});
+  if (binary && response.ok) { assert.equal(response.status, expected); return Buffer.from(await response.arrayBuffer()); }
+  const json = await response.json(); assert.equal(response.status, expected, `${route}: ${JSON.stringify(json)}`); return json;
+}
+const select = (code, option) => reference.criteria.find(c => c.code === code).options.find(o => o.code === option).id;
+const healthy = {leaf_color: [1], leaf_condition: [4], pests: [8], roots: [11], bark_trunk: [15], bio_indicators: [], negative_signs: []};
+let color = 10;
+async function submission(user, changes = {}, photo) {
+  const bytes = photo ?? Buffer.concat([fixture.subarray(0,2), Buffer.from([255,254,0,3,++color]),fixture.subarray(2)]);
+  const fields = {latitude: 10.2833, longitude: 123.8833, location_source: 'gps', location_accuracy: 10, sitio_name: 'Test shoreline',
+    observed_alive_count: 10, root_type: reference.species[0].root_type, leaf_shape: reference.species[0].leaf_shape, bark_texture: reference.species[0].bark_texture,
+    field_confirmation: '1', observations: healthy, checklist_versions: Object.fromEntries(reference.criteria.map(c => [c.id, c.version])), ...changes};
+  const body = new FormData(); body.set('payload', JSON.stringify(fields)); body.set('photo', new Blob([bytes], {type: 'image/jpeg'}), 'field.jpg');
+  return {body, bytes};
+}
+try {
+  const guardian = await account(1, 'guardian'), other = await account(2, 'guardian'), expert = await account(3, 'expert'), admin = await account(4, 'system_admin');
+  const config = await request('configuration.php'); assert.equal(config.backend, 'supabase'); assert.equal(config.barangays.length, 1); pass('public cloud configuration');
+  const publicSites=await request('explore.php');assert.equal(publicSites.summary.guardians,2);assert.equal(publicSites.summary.verified_reports,0);assert.ok(publicSites.species.length>0);
+  assert.ok(publicSites.species.every(s=>Object.keys(s).every(k=>['id','scientific_name','common_name','local_name','family','iucn_code'].includes(k))));assert.equal(publicSites.users,undefined);pass('public homepage totals and species catalog do not expose private account or report records');
+  await request('register.php', null, [], 422); pass('malformed form data is rejected');
+  await request('me.php', null, null, 401); pass('missing authentication rejected');
+  const registration={email:'new@example.test',password:'testpassword1',password_confirmation:'testpassword1',first_name:'New',last_name:'Guardian',barangay_id:1,privacy_consent:true,role:'guardian'};
+  const basic={stage:'account',email:'steps@example.test',first_name:'Step',last_name:'Guardian',password:'testpassword1',password_confirmation:'testpassword1',privacy_consent:true};
+  await request('register.php',null,{...basic,first_name:'   '},422);
+  await request('register.php',null,{...basic,password_confirmation:'different'},422);
+  assert.equal(codes.has(`email:${basic.email}`),false);
+  await request('register.php',null,basic,201);
+  assert.equal(codes.has(`email:${basic.email}`),true);
+  assert.equal((await db.collection('users').where('email','==',basic.email).get()).size,0);
+  const basicProof=await request('verify-email.php',null,{email:basic.email,code:'123456'});
+  await request('complete-registration.php',{token:basicProof.verification_token},basic,422);
+  pass('step one validates account details before email and profile remains incomplete until all details are supplied');
+  await request('register.php',null,{...registration,role:'system_admin'},422);pass('administrator self-registration is rejected');
+  await request('register.php',null,registration,201);
+  await request('send-registration-code.php',null,{email:'not-an-email'},422);
+  await request('send-registration-code.php',null,{email:registration.email});
+  assert.equal((await db.collection('users').where('email','==',registration.email).get()).size,0);
+  pass('email-only code request validates the address and does not create an application profile');
+  await request('verify-email.php',null,{email:registration.email,code:'000000'},422);
+  const proof=await request('verify-email.php',null,{email:registration.email,code:'123456'});
+  await request('verify-email.php',null,{email:registration.email,code:'123456'},422);pass('registration requires a valid one-use email code');
+  await request('complete-registration.php',{token:proof.verification_token},{...registration,email:'another@example.test'},403);
+  await request('complete-registration.php',{token:proof.verification_token},registration,201);
+  const registered=await signIn(registration.email),me=await request('me.php',{token:registered.idToken});assert.equal(me.user.role,'guardian');pass('verified guardian can sign in immediately');
+  const candidate={...registration,email:'expert-applicant@example.test',role:'expert',expert_id_code:' WORK-2026/001 '};
+  for(const expert_id_code of ['', '   ', 'x'.repeat(81), {code:'invalid'}]) await request('register.php',null,{...candidate,expert_id_code},422);
+  assert.equal(codes.has(`email:${candidate.email}`),false);pass('expert ID code is required and validated before sending email');
+  await request('register.php',null,candidate,201);
+  const expertProof=await request('verify-email.php',null,{email:candidate.email,code:'123456'});
+  await request('complete-registration.php',{token:expertProof.verification_token},{...candidate,expert_id_code:''},422);
+  const candidateBody=new FormData();candidateBody.set('payload',JSON.stringify(candidate));
+  const application=await request('complete-registration.php',{token:expertProof.verification_token},candidateBody,201);assert.equal(application.pending_approval,true);
+  assert.equal(application.user.expert_id_code,undefined);assert.equal(images.size,0);
+  assert.equal((await db.collection('users').where('email','==',candidate.email).get()).docs[0].data().expert_id_code,undefined);pass('expert registration accepts a code with no photo and keeps it out of the user profile');
+  const candidateSession=await signIn(candidate.email);await request('me.php',{token:candidateSession.idToken},null,403);pass('expert applicants stay locked until admin approval');
+  const applications=await request('expert-applications.php',admin),applicant=applications.items[0];assert.equal(applicant.id_path,undefined);assert.equal(applicant.id_code,'WORK-2026/001');assert.equal(applicant.has_id_photo,false);
+  await request('expert-applications.php',expert,null,403);await request('expert-applications.php',guardian,null,403);await request(`expert-id.php?uid=${applicant.uid}`,guardian,null,403);
+  await request(`expert-id.php?uid=${applicant.uid}`,admin,null,404);pass('ID codes are private and admin-only');
+  images.set('expert_ids/legacy/id.jpg',fixture);
+  await db.collection('expert_applications').doc('legacy').set({uid:'legacy',status:'approved',id_path:'expert_ids/legacy/id.jpg',created_at:'2020-01-01'});
+  const legacy=(await request('expert-applications.php',admin)).items.find(a=>a.uid==='legacy');assert.equal(legacy.has_id_photo,true);assert.equal(legacy.id_path,undefined);
+  await request('expert-id.php?uid=legacy',admin,null,200,true);await request('expert-id.php?uid=legacy',expert,null,403);pass('previous ID photos remain private and available to administrators');
+  await request('expert-applications.php',admin,{uid:applicant.uid,action:'reject',note:''},422);
+  await request('users.php',admin,{id:applicant.user_id,role:'expert',status:'active'},422);
+  await request('expert-applications.php',admin,{uid:applicant.uid,action:'approve'});
+  const approved={token:(await signIn(candidate.email)).idToken};assert.equal((await request('me.php',approved)).user.role,'expert');await request('report-form.php',approved);pass('approved experts can access reporting');
+  await request('expert-applications.php',admin,{uid:applicant.uid,action:'approve'},409);
+  await request('forgot-password.php',null,{email:registration.email});
+  await request('reset-password.php',null,{email:registration.email,code:'123456',password:'newpassword1',password_confirmation:'newpassword1'},422);
+  await request('reset-password.php',null,{email:registration.email,code:'654321',password:'newpassword1',password_confirmation:'newpassword1'});
+  await request('me.php',{token:registered.idToken},null,401);await signIn(registration.email,'newpassword1');
+  await request('reset-password.php',null,{email:registration.email,code:'654321',password:'newpassword2',password_confirmation:'newpassword2'},422);pass('password recovery requires its own one-use code and revokes sessions');
+  await request('profile.php', guardian, {first_name: 'Test', last_name: 'Guardian', email: 'changed@example.test', barangay_id: 1}, 422); pass('email is immutable');
+  for (const route of ['checklist.php', 'verification.php', 'validation-history.php', 'users.php', 'audit.php', 'export-analytics.php']) await request(route, guardian, null, 403);
+  pass('guardian cannot access staff/admin endpoints');
+  const form = await request('report-form.php', guardian); assert.equal(form.criteria.length, 7); pass('reference forms are available');
+  const preview = await request('report-preview.php', guardian, {observations: healthy, ...reference.species[0], checklist_versions: Object.fromEntries(reference.criteria.map(c => [c.id, c.version]))}); assert.equal(preview.classification.status, 'Healthy'); pass('cloud score preview');
+  await request('report-preview.php', guardian, {observations: healthy, checklist_versions: {}}, 409); pass('preview cannot score unseen checklist changes');
+  const stale = await submission(guardian, {checklist_versions: {}}); await request('submit-report.php', guardian, stale.body, 409); pass('stale checklist submission rejected');
+  const invalidGps = await submission(guardian, {location_accuracy: 180}); await request('submit-report.php', guardian, invalidGps.body, 422); pass('approximate GPS cannot silently become a precise report pin');
+  const first = await submission(guardian), saved = await request('submit-report.php', guardian, first.body, 201), firstId = saved.report.report_id;
+  assert.equal(saved.report.status, 'verified'); assert.ok(saved.report.cluster_id); pass('healthy report auto-verifies and creates a cluster');
+  const repeat = await submission(guardian, {}, first.bytes), repeated = await request('submit-report.php', guardian, repeat.body, 201);
+  assert.equal(repeated.report.report_id, firstId); pass('retry does not create a duplicate report');
+  const conflicting = await submission(guardian, {observed_alive_count: 9}, first.bytes); await request('submit-report.php', guardian, conflicting.body, 409); pass('reused photo with different report data rejected');
+  const image = await request(`photo.php?id=${firstId}`, guardian, null, 200, true); assert.equal(image[0], 255); pass('authorized private photo download');
+  await request(`report.php?id=${firstId}`, other, null, 404); await request(`photo.php?id=${firstId}`, other, null, 404); pass('cross-account private report and photo access denied');
+  const community = await request(`cluster.php?id=${saved.report.cluster_id}`, other); assert.equal(community.timeline[0].can_view_details, false); assert.equal(community.timeline[0].photo_url, null); pass('community timeline omits another guardian’s private photo');
+  const personal = await request('analytics.php?date_from=2026-01-01&date_to=2100-01-01', other); assert.equal(personal.analytics.verification.total, 0); pass('guardian analytics is scoped to the signed-in account');
+  const uncertain = await submission(guardian, {observations: {...healthy, leaf_color: [select('leaf_color', 'unknown')]}});
+  const pending = await request('submit-report.php', guardian, uncertain.body, 201); assert.equal(pending.report.status, 'pending'); pass('Not Sure requires expert review');
+  const notifications = await request('notifications.php', expert); assert.ok(notifications.notifications.some(n => n.report_id === pending.report.report_id)); pass('expert receives pending report notifications');
+  await request('review.php', expert, {report_id: pending.report.report_id, action: 'confirm'}, 422); pass('unknown health cannot be confirmed without correction');
+  await request('review.php', expert, {report_id: pending.report.report_id, action: 'correct', final_health: 'Stressed', final_species_id: 1, rarity_level: 'Common', expert_feedback: 'Check leaves at the next visit.'}); pass('expert corrects and verifies health/species');
+  await request('review.php', admin, {report_id: pending.report.report_id, action: 'confirm'}, 409); pass('review conflict cannot overwrite a completed review');
+  const detail = await request(`report.php?id=${pending.report.report_id}`, guardian); assert.equal(detail.report.verification_history.length, 1); assert.equal(detail.report.final_species_id, 1); pass('validation history and final values persist');
+  const pdf = await request('export-analytics.php', admin, null, 200, true); assert.equal(pdf.subarray(0, 4).toString(), '%PDF'); pass('administrator PDF export');
+  await request('certificate-settings.php',admin,{signer_name:'Sample Coordinator',signer_title:'Program Coordinator'});
+  const badges = await request('badges.php', guardian); assert.equal(badges.badges[0].earned, true); const certificate = await request('certificate.php?badge_id=1', guardian, null, 200, true); assert.equal(certificate.subarray(0, 4).toString(), '%PDF'); pass('earned badge and certificate');
+  const follow = await submission(guardian, {cluster_id: saved.report.cluster_id, parent_report_id: firstId}); const following = await request('submit-report.php', guardian, follow.body, 201); assert.equal(following.report.cluster_id, saved.report.cluster_id); pass('follow-up preserves the original cluster');
+  const unavailable = await submission(guardian, {cluster_id: saved.report.cluster_id, parent_report_id: firstId}); await request('submit-report.php', guardian, unavailable.body, 422); pass('duplicate active follow-up rejected');
+  const criterion = structuredClone(form.criteria[0]); criterion.name = 'Leaf colors'; criterion.options.push({id: -1, kind: 'standard', label: 'Mixed green', points: 1});
+  const savedChecklist = await request('checklist.php', admin, criterion); const fresh = savedChecklist.criteria.find(c => c.id === criterion.id); assert.ok(fresh.options.some(o => o.label === 'Mixed green')); pass('administrator can add and rename choices');
+  await request('checklist.php', admin, criterion, 409); pass('concurrent checklist edit rejected');
+  const photoEdit = new FormData(); photoEdit.set('payload', JSON.stringify(fresh)); photoEdit.set('guide_image', new Blob([first.bytes], {type: 'image/jpeg'}), 'guide.jpg');
+  const withPhoto = await request('checklist.php', admin, photoEdit);
+  const imagePath = withPhoto.criteria.find(c => c.id === criterion.id).guide_image;
+  assert.ok(imagePath.startsWith('../mobile-api/checklist-photo.php?path='));
+  const guide = await request(imagePath.replace('../mobile-api/', ''), null, null, 200, true); assert.equal(guide[0], 255); pass('checklist photo upload and display');
+  const snapshot = await request(`report.php?id=${firstId}`, guardian); assert.equal(snapshot.report.observations[0].name, 'Leaf Color'); pass('past reports preserve original checklist snapshots');
+  const audit = await request('audit.php', admin); assert.ok(audit.items.some(e => e.action === 'admin.checklist_updated')); pass('administrator audit log');
+  await request('users.php', admin, {id: other.id, role: 'guardian', status: 'inactive'});
+  await request('me.php', other, null, 401);
+  assert.equal((await auth.getUser(other.uid)).disabled, true); pass('inactive account loses both sign-in and API access');
+  await request('users.php', admin, {id: other.id, role: 'guardian', status: 'active'});
+  assert.equal((await auth.getUser(other.uid)).disabled, false);
+  const restored = await request('me.php', {...other, token: (await signIn(other.email)).idToken}); assert.equal(restored.user.id, other.id); pass('administrator can restore an inactive or imported disabled account');
+  const newSession = await signIn(guardian.email);
+  await request('account-security.php', {...guardian, token: newSession.idToken}, {action: 'password', new_password: 'newpassword12', new_password_confirmation: 'newpassword12'});
+  await signIn(guardian.email, 'newpassword12'); pass('Supabase password change');
+  const expertReport=await submission(expert,{observations:{...healthy,leaf_color:[select('leaf_color','unknown')]} });
+  // Checklist was edited earlier; obtain the current versions before sending.
+  const currentCriteria=(await request('report-form.php',expert)).criteria;const expertFields=JSON.parse(expertReport.body.get('payload'));expertFields.checklist_versions=Object.fromEntries(currentCriteria.map(c=>[c.id,c.version]));expertReport.body.set('payload',JSON.stringify(expertFields));
+  const own=await request('submit-report.php',expert,expertReport.body,201);await request('review.php',expert,{report_id:own.report.report_id,action:'reject',expert_feedback:'Own report'},403);pass('experts can submit but cannot review their own reports');
+  const attention=await request('reports.php?needs_attention=1',admin);assert.ok(attention.items.every(r=>r.status==='pending'));assert.ok(!attention.items.some(r=>r.id===pending.report.report_id));pass('reviewed reports leave Needs attention everywhere');
+  await request('certificate-settings.php',{...guardian,token:(await signIn(guardian.email,'newpassword12')).idToken},null,403);
+  await request('certificate-settings.php',admin,{signer_name:'Sample Coordinator',signer_title:'Program Coordinator'});
+  const certificateBadges=(await request('badges.php',{...guardian,token:(await signIn(guardian.email,'newpassword12')).idToken})).badges,award=certificateBadges.find(b=>b.earned);assert.ok(award);
+  const guardianSession={...guardian,token:(await signIn(guardian.email,'newpassword12')).idToken};
+  const certificateBytes=await request(`certificate.php?badge_id=${award.id}`,guardianSession,null,200,true);assert.ok(certificateBytes.subarray(0,4).equals(Buffer.from('%PDF')));
+  const share=await request('certificate-link.php',guardianSession,{badge_id:award.id});assert.equal(share.qr.data.length,share.qr.size**2);
+  await request(`certificate.php?badge_id=${award.id}`,{...other,token:(await signIn(other.email)).idToken},null,404);
+  const token=new URL(share.url).searchParams.get('token');await request(`certificate-download.php?token=${token}`,null,null,200,true);
+  await request('certificate-download.php?token=invalid',null,null,404);pass('certificate downloads require ownership or a temporary QR link');
+  console.log(`\n${checks} Supabase integration checks passed.`);
+} finally {
+  await new Promise(resolve => server.close(resolve)); await pg.close();
+}

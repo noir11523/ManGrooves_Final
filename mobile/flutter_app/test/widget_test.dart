@@ -9,6 +9,6 @@ void main() {
 
     expect(find.text('ManGROOVES'), findsOneWidget);
     expect(find.text('Sign in'), findsWidgets);
-    expect(find.text('Create guardian account'), findsOneWidget);
+    expect(find.text('Create account'), findsOneWidget);
   });
 }

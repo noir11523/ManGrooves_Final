@@ -22,10 +22,9 @@ class ApiClient {
   ApiClient({
     String baseUrl = defaultBaseUrl,
     http.Client Function()? probeClientFactory,
-  })
-    : _endpointPolicy = ApiEndpointPolicy(baseUrl),
-      _probeClientFactory = probeClientFactory ?? http.Client.new,
-      _baseUrl = baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+  }) : _endpointPolicy = ApiEndpointPolicy(baseUrl),
+       _probeClientFactory = probeClientFactory ?? http.Client.new,
+       _baseUrl = baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
 
   static const _tokenKey = 'mangrooves_api_token';
   static const _sessionServerKey = 'mangrooves_session_server';
@@ -48,6 +47,58 @@ class ApiClient {
   String get baseUrl => _baseUrl;
   bool get supportsLocalServerSelection => _endpointPolicy.allowsLanDiscovery;
   bool get hasToken => _token != null && _token!.isNotEmpty;
+  bool get supportsCloudAccounts => false;
+  Future<Map<String, dynamic>> approximateArea() async {
+    final response = await http
+        .get(Uri.parse('https://get.geojs.io/v1/ip/geo.json'))
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw const ApiException(
+        'Approximate area unavailable. Search an address or place a pin.',
+      );
+    }
+    final data = jsonDecode(response.body) as Map;
+    final lat = double.tryParse('${data['latitude']}'),
+        lng = double.tryParse('${data['longitude']}');
+    final km = double.tryParse('${data['accuracy']}');
+    if (lat == null ||
+        lng == null ||
+        !lat.isFinite ||
+        !lng.isFinite ||
+        lat.abs() > 85.05112878 ||
+        lng.abs() > 180) {
+      throw const ApiException(
+        'Approximate area unavailable. Search an address or place a pin.',
+      );
+    }
+    return {
+      'latitude': lat,
+      'longitude': lng,
+      'accuracy': km != null && km.isFinite && km > 0 && km <= 20000
+          ? km * 1000
+          : null,
+    };
+  }
+
+  Future<Map<String, dynamic>> cloudRequest(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? query,
+    bool anonymous = false,
+  }) async =>
+      throw const ApiException('Use the Supabase app for this feature.');
+  Future<Map<String, dynamic>> cloudUpload(
+    String path,
+    Map<String, dynamic> input,
+    Map<String, String> files, {
+    String? token,
+  }) async =>
+      throw const ApiException('Use the Supabase app for this feature.');
+  Future<Uint8List> cloudFile(
+    String path, {
+    Map<String, String>? query,
+  }) async =>
+      throw const ApiException('Use the Supabase app for this feature.');
   Map<String, String> get imageHeaders =>
       hasToken ? {'Authorization': 'Bearer $_token'} : const {};
 
@@ -59,7 +110,8 @@ class ApiClient {
       throw ApiException(error.message);
     }
     final result = await _probeConfiguration(
-      candidate, timeout: const Duration(seconds: 10),
+      candidate,
+      timeout: const Duration(seconds: 10),
     );
     if (result == null) {
       throw ApiException(
@@ -113,7 +165,7 @@ class ApiClient {
     throw ApiException(
       _endpointPolicy.allowsLanDiscovery
           ? 'Unable to find the ManGROOVES server. On the sign-in screen, '
-              'tap the sliders icon (Server connection) and enter the laptop\'s current Wi-Fi IP address.'
+                'tap the sliders icon (Server connection) and enter the laptop\'s current Wi-Fi IP address.'
           : 'Unable to reach ManGROOVES. Check your internet connection and try again shortly.',
     );
   }
@@ -409,10 +461,7 @@ class ApiClient {
           final candidate = _endpointPolicy.discoveryUrl(address, _baseUrl);
           if (!tried.add(candidate)) continue;
           probes.add(
-            _probeConfiguration(
-              candidate,
-              timeout: const Duration(seconds: 2),
-            ),
+            _probeConfiguration(candidate, timeout: const Duration(seconds: 2)),
           );
         }
         final results = await Future.wait(probes);

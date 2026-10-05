@@ -21,7 +21,6 @@
                 <ul class="footer-links">
                     <li><a href="<?= e(url('register.php')) ?>">Become a guardian</a></li>
                     <li><a href="<?= e(url('login.php')) ?>">Sign in</a></li>
-                    <li><button class="footer-link-button d-none" type="button" data-install-app>Install the app</button></li>
                 </ul>
             </div>
         </div>

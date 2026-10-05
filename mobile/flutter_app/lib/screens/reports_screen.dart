@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../core/api_client.dart';
+import '../core/display_text.dart';
+import '../shared/retry_view.dart';
 import 'report_detail_screen.dart';
-import 'report_map_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({
@@ -80,25 +81,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_reports == null) {
-      return Center(
-        child: FilledButton.tonal(onPressed: _load, child: Text(_error!)),
-      );
+      return RetryView(message: _error!, onRetry: _load);
     }
     return Column(
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => ReportMapScreen(api: widget.api),
-              ),
-            ),
-            icon: const Icon(Icons.map_outlined),
-            label: const Text('Report map'),
-          ),
-        ),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -140,14 +126,36 @@ class _ReportsScreenState extends State<ReportsScreen> {
             onRefresh: _load,
             child: _reports!.isEmpty
                 ? ListView(
-                    children: const [
-                      SizedBox(height: 120),
-                      Icon(Icons.assignment_outlined, size: 54),
-                      SizedBox(height: 12),
-                      Center(child: Text('No reports found.')),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      const SizedBox(height: 70),
+                      const Icon(Icons.assignment_outlined, size: 54),
+                      const SizedBox(height: 12),
+                      Text(
+                        _status.isNotEmpty || _attention
+                            ? 'No reports match this filter.'
+                            : 'No reports here yet.',
+                        textAlign: TextAlign.center,
+                      ),
+                      if (_status.isNotEmpty || _attention)
+                        TextButton(
+                          onPressed: _loading
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _status = '';
+                                    _attention = false;
+                                    _page = 1;
+                                  });
+                                  _load();
+                                },
+                          child: const Text('Clear status filter'),
+                        ),
                     ],
                   )
                 : ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
                     itemCount: _reports!.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -168,17 +176,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               ),
                             ),
                           ),
-                          title: Row(
+                          title: Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  report['report_code']?.toString() ?? '',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                              Text(
+                                report['report_code']?.toString() ?? '',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              _StatusChip(report['status']?.toString() ?? ''),
+                              _StatusChip(report),
                             ],
                           ),
                           subtitle: Padding(
@@ -189,7 +198,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 Text(
                                   report['cluster_name']?.toString() ??
                                       report['sitio_name']?.toString() ??
-                                      'New observation site',
+                                      'New site',
                                 ),
                                 Text(
                                   '${report['display_health'] ?? 'Unknown'} · ${_formatDate(report['submitted_at'])}',
@@ -243,12 +252,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
 }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip(this.status);
-  final String status;
+  const _StatusChip(this.report);
+  final Map<String, dynamic> report;
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (status) {
+    final color = switch (report['status']) {
       'verified' => Colors.green,
       'rejected' => Colors.red,
       _ => Colors.orange,
@@ -260,7 +269,7 @@ class _StatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        status,
+        reportStatusLabel(report),
         style: TextStyle(
           color: color.shade700,
           fontSize: 12,

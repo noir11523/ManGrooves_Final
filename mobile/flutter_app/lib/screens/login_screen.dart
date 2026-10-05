@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import 'register_screen.dart';
+import 'email_account_screen.dart';
 import 'server_connection_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -34,13 +35,13 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_busy || !_formKey.currentState!.validate()) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final result = await widget.api.login(_email.text, _password.text);
+      final result = await widget.api.login(_email.text.trim(), _password.text);
       if (!mounted) return;
       widget.onAuthenticated(Map<String, dynamic>.from(result['user'] as Map));
     } catch (error) {
@@ -52,7 +53,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _openRegistration() async {
     final user = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(builder: (_) => RegisterScreen(api: widget.api)),
+      MaterialPageRoute(
+        builder: (_) => widget.api.supportsCloudAccounts
+            ? EmailAccountScreen(api: widget.api)
+            : RegisterScreen(api: widget.api),
+      ),
     );
     if (!mounted || user == null) return;
     widget.onAuthenticated(user);
@@ -73,7 +78,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted || connected != true) return;
     setState(() => _error = null);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Connected to ManGROOVES. You can sign in now.')),
+      const SnackBar(
+        content: Text('Connected to ManGROOVES. You can sign in now.'),
+      ),
     );
   }
 
@@ -83,92 +90,157 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 480),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const _BrandHeader(),
-                    const SizedBox(height: 36),
-                    Text(
-                      'Welcome back',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Sign in to monitor and protect your local mangroves.',
-                    ),
-                    const SizedBox(height: 24),
-                    if (_error != null) _ErrorBanner(message: _error!),
-                    TextFormField(
-                      controller: _email,
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
-                      decoration: const InputDecoration(
-                        labelText: 'Email address',
-                        prefixIcon: Icon(Icons.mail_outline),
-                      ),
-                      validator: (value) =>
-                          value == null || !value.contains('@')
-                          ? 'Enter a valid email address.'
-                          : null,
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _password,
-                      obscureText: _hidePassword,
-                      autofillHints: const [AutofillHints.password],
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          onPressed: () =>
-                              setState(() => _hidePassword = !_hidePassword),
-                          icon: Icon(
-                            _hidePassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
+              child: Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                  side: const BorderSide(color: Color(0xFFDDCFB9)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _BrandHeader(),
+                        const SizedBox(height: 28),
+                        Text(
+                          'Sign in',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Welcome back to ManGROOVES.',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        if (_error != null) _ErrorBanner(message: _error!),
+                        TextFormField(
+                          controller: _email,
+                          enabled: !_busy,
+                          autocorrect: false,
+                          textInputAction: TextInputAction.next,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
+                          decoration: const InputDecoration(
+                            labelText: 'Email address',
+                            prefixIcon: Icon(Icons.mail_outline),
                           ),
+                          validator: (value) =>
+                              value == null || !value.contains('@')
+                              ? 'Enter a valid email address.'
+                              : null,
                         ),
-                      ),
-                      validator: (value) => value == null || value.isEmpty
-                          ? 'Enter your password.'
-                          : null,
-                      onFieldSubmitted: (_) => _submit(),
-                    ),
-                    const SizedBox(height: 18),
-                    FilledButton(
-                      onPressed: _busy ? null : _submit,
-                      child: _busy
-                          ? const SizedBox.square(
-                              dimension: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Sign in'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: _busy ? null : _openRegistration,
-                      child: const Text('Create guardian account'),
-                    ),
-                    if (widget.api.supportsLocalServerSelection) ...[
-                      const SizedBox(height: 4),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: IconButton(
-                          onPressed: _busy ? null : _openServerConnection,
-                          tooltip: 'Server connection',
-                          iconSize: 20,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          icon: const Icon(Icons.tune_rounded),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _password,
+                          enabled: !_busy,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          textInputAction: TextInputAction.done,
+                          obscureText: _hidePassword,
+                          autofillHints: const [AutofillHints.password],
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              tooltip: _hidePassword
+                                  ? 'Show password'
+                                  : 'Hide password',
+                              onPressed: _busy
+                                  ? null
+                                  : () => setState(
+                                      () => _hidePassword = !_hidePassword,
+                                    ),
+                              icon: Icon(
+                                _hidePassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                            ),
+                          ),
+                          validator: (value) => value == null || value.isEmpty
+                              ? 'Enter your password.'
+                              : null,
+                          onFieldSubmitted: (_) => _submit(),
                         ),
-                      ),
-                    ],
-                  ],
+                        if (widget.api.supportsCloudAccounts)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => EmailAccountScreen(
+                                          api: widget.api,
+                                          recovery: true,
+                                        ),
+                                      ),
+                                    ),
+                              child: const Text('Forgot password?'),
+                            ),
+                          ),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: _busy ? null : _submit,
+                          child: _busy
+                              ? const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Flexible(
+                                      child: Text(
+                                        'Signing in...',
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : const Text('Sign in'),
+                        ),
+                        const SizedBox(height: 24),
+                        const Divider(),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'New to ManGROOVES?',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton(
+                          onPressed: _busy ? null : _openRegistration,
+                          child: const Text('Create account'),
+                        ),
+                        if (widget.api.supportsLocalServerSelection) ...[
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: IconButton(
+                              onPressed: _busy ? null : _openServerConnection,
+                              tooltip: 'Server connection',
+                              iconSize: 20,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              icon: const Icon(Icons.tune_rounded),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),

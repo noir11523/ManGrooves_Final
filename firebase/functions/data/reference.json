@@ -1,0 +1,644 @@
+{
+  "barangays": [
+    {
+      "id": 1,
+      "name": "Inayawan",
+      "city_municipality": "Cebu City",
+      "province": "Cebu",
+      "country_code": "PH",
+      "center_lat": 10.2833,
+      "center_lng": 123.8833
+    }
+  ],
+  "species": [
+    {
+      "id": 1,
+      "scientific_name": "Avicennia marina",
+      "common_name": "Grey/White Mangrove",
+      "local_name": "Miapi, Bungalon, Api-api",
+      "family": "Avicenniaceae",
+      "iucn_code": "LC",
+      "iucn_label": "Least Concern",
+      "population_trend": "Decreasing",
+      "root_type": "Pneumatophores (pencil-like)",
+      "leaf_shape": "Elliptic",
+      "bark_texture": "Smooth with thin flakes, greenish brown",
+      "provenance": "CCENRO-derived species workbook supplied for the ManGROOVES pilot",
+      "active": 1
+    },
+    {
+      "id": 2,
+      "scientific_name": "Avicennia rumphiana",
+      "common_name": "White Mangrove",
+      "local_name": "Miapi, Bungalon, Api-api",
+      "family": "Avicenniaceae",
+      "iucn_code": "VU",
+      "iucn_label": "Vulnerable",
+      "population_trend": "Decreasing",
+      "root_type": "Pneumatophores (pencil-like projections)",
+      "leaf_shape": "Elliptic",
+      "bark_texture": "Slightly rough, brown",
+      "provenance": "CCENRO-derived species workbook supplied for the ManGROOVES pilot",
+      "active": 1
+    },
+    {
+      "id": 3,
+      "scientific_name": "Lumnitzera racemosa",
+      "common_name": "White-Flowered Black Mangrove",
+      "local_name": "Culasi, Tabao",
+      "family": "Combretaceae",
+      "iucn_code": "LC",
+      "iucn_label": "Least Concern",
+      "population_trend": "Decreasing",
+      "root_type": "Looping (older trees)",
+      "leaf_shape": "Obovate",
+      "bark_texture": "Rough, fibrous, brown with deep fissures",
+      "provenance": "CCENRO-derived species workbook supplied for the ManGROOVES pilot",
+      "active": 1
+    },
+    {
+      "id": 4,
+      "scientific_name": "Nypa fruticans",
+      "common_name": "Mangrove Palm",
+      "local_name": "Nipa, Sapsap",
+      "family": "Palmae",
+      "iucn_code": "LC",
+      "iucn_label": "Least Concern",
+      "population_trend": "Unknown",
+      "root_type": "Creeping rhizomes",
+      "leaf_shape": "Lanceolate (leaflets)",
+      "bark_texture": "N/A (palm)",
+      "provenance": "CCENRO-derived species workbook supplied for the ManGROOVES pilot",
+      "active": 1
+    },
+    {
+      "id": 5,
+      "scientific_name": "Rhizophora apiculata",
+      "common_name": "Tall-stilt Mangrove",
+      "local_name": "Bakhaw, Bakhaw lalaki",
+      "family": "Rhizophoraceae",
+      "iucn_code": "LC",
+      "iucn_label": "Least Concern",
+      "population_trend": "Decreasing",
+      "root_type": "Prop roots (stilt roots)",
+      "leaf_shape": "Elliptic",
+      "bark_texture": "Rough, grayish to brown",
+      "provenance": "CCENRO-derived species workbook supplied for the ManGROOVES pilot",
+      "active": 1
+    },
+    {
+      "id": 6,
+      "scientific_name": "Rhizophora mucronata",
+      "common_name": "Red Mangrove",
+      "local_name": "Bakhaw, Bakhaw babae",
+      "family": "Rhizophoraceae",
+      "iucn_code": "LC",
+      "iucn_label": "Least Concern",
+      "population_trend": "Decreasing",
+      "root_type": "Prop roots",
+      "leaf_shape": "Elliptic (with dark dots)",
+      "bark_texture": "Rough, grayish to brown",
+      "provenance": "CCENRO-derived species workbook supplied for the ManGROOVES pilot",
+      "active": 1
+    },
+    {
+      "id": 7,
+      "scientific_name": "Rhizophora stylosa",
+      "common_name": "Red Mangrove",
+      "local_name": "Bakhaw, Bakhaw bato",
+      "family": "Rhizophoraceae",
+      "iucn_code": "LC",
+      "iucn_label": "Least Concern",
+      "population_trend": "Decreasing",
+      "root_type": "Prop roots",
+      "leaf_shape": "Elliptic (waxy, leaves point upward)",
+      "bark_texture": "Rough, grayish to brown",
+      "provenance": "CCENRO-derived species workbook supplied for the ManGROOVES pilot",
+      "active": 1
+    }
+  ],
+  "criteria": [
+    {
+      "id": 1,
+      "code": "leaf_color",
+      "name": "Leaf Color",
+      "question_text": "What color are the leaves?",
+      "selection_mode": "single",
+      "score_group": "health",
+      "guide_image": "img/guides/leaf-color.png",
+      "display_order": 1,
+      "active": 1,
+      "version": "reference-v1",
+      "options": [
+        {
+          "id": 1,
+          "criteria_id": 1,
+          "code": "green",
+          "label": "Green",
+          "points": 2,
+          "display_order": 1,
+          "image_path": null
+        },
+        {
+          "id": 2,
+          "criteria_id": 1,
+          "code": "light_yellow_green",
+          "label": "Light / Yellow-Green",
+          "points": 1,
+          "display_order": 2,
+          "image_path": null
+        },
+        {
+          "id": 3,
+          "criteria_id": 1,
+          "code": "brown_yellow_brown",
+          "label": "Brown / Yellow-Brown",
+          "points": 0,
+          "display_order": 3,
+          "image_path": null
+        },
+        {
+          "id": 27,
+          "code": "all_of_the_above",
+          "label": "All of the above",
+          "points": 0,
+          "display_order": 1001,
+          "image_path": null
+        },
+        {
+          "id": 28,
+          "code": "unknown",
+          "label": "Not Sure",
+          "points": 0,
+          "display_order": 1002,
+          "image_path": null
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "code": "leaf_condition",
+      "name": "Leaf Condition",
+      "question_text": "How do the leaves look?",
+      "selection_mode": "single",
+      "score_group": "context",
+      "guide_image": "img/guides/leaf-condition.png",
+      "display_order": 2,
+      "active": 1,
+      "version": "reference-v1",
+      "options": [
+        {
+          "id": 4,
+          "criteria_id": 2,
+          "code": "smooth_healthy",
+          "label": "Smooth & Healthy",
+          "points": 2,
+          "display_order": 1,
+          "image_path": null
+        },
+        {
+          "id": 5,
+          "criteria_id": 2,
+          "code": "waxy_curled",
+          "label": "Waxy / Curled / Pointing Up",
+          "points": 1,
+          "display_order": 2,
+          "image_path": null
+        },
+        {
+          "id": 6,
+          "criteria_id": 2,
+          "code": "damaged_spots",
+          "label": "Damaged / Holes / Dark Spots",
+          "points": 0,
+          "display_order": 3,
+          "image_path": null
+        },
+        {
+          "id": 7,
+          "criteria_id": 2,
+          "code": "brittle_dry",
+          "label": "Brittle / Dry",
+          "points": 0,
+          "display_order": 4,
+          "image_path": null
+        },
+        {
+          "id": 29,
+          "code": "all_of_the_above",
+          "label": "All of the above",
+          "points": 0,
+          "display_order": 1001,
+          "image_path": null
+        },
+        {
+          "id": 30,
+          "code": "unknown",
+          "label": "Not Sure",
+          "points": 0,
+          "display_order": 1002,
+          "image_path": null
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "code": "pests",
+      "name": "Pests",
+      "question_text": "Are there signs of pests?",
+      "selection_mode": "single",
+      "score_group": "health",
+      "guide_image": "img/guides/pests.png",
+      "display_order": 3,
+      "active": 1,
+      "version": "reference-v1",
+      "options": [
+        {
+          "id": 8,
+          "criteria_id": 3,
+          "code": "none_visible",
+          "label": "None Visible",
+          "points": 2,
+          "display_order": 1,
+          "image_path": null
+        },
+        {
+          "id": 9,
+          "criteria_id": 3,
+          "code": "few_holes",
+          "label": "Few Holes / Bites",
+          "points": 1,
+          "display_order": 2,
+          "image_path": null
+        },
+        {
+          "id": 10,
+          "criteria_id": 3,
+          "code": "many_holes",
+          "label": "Many Holes / Webbing",
+          "points": 0,
+          "display_order": 3,
+          "image_path": null
+        },
+        {
+          "id": 31,
+          "code": "all_of_the_above",
+          "label": "All of the above",
+          "points": 0,
+          "display_order": 1001,
+          "image_path": null
+        },
+        {
+          "id": 32,
+          "code": "unknown",
+          "label": "Not Sure",
+          "points": 0,
+          "display_order": 1002,
+          "image_path": null
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "code": "roots",
+      "name": "Roots",
+      "question_text": "How stable do the roots look?",
+      "selection_mode": "single",
+      "score_group": "health",
+      "guide_image": "img/guides/roots.png",
+      "display_order": 4,
+      "active": 1,
+      "version": "reference-v1",
+      "options": [
+        {
+          "id": 11,
+          "criteria_id": 4,
+          "code": "firm_intact",
+          "label": "Firm & Intact",
+          "points": 2,
+          "display_order": 1,
+          "image_path": null
+        },
+        {
+          "id": 12,
+          "criteria_id": 4,
+          "code": "loose_damage",
+          "label": "Loose / Some Damage",
+          "points": 1,
+          "display_order": 2,
+          "image_path": null
+        },
+        {
+          "id": 13,
+          "criteria_id": 4,
+          "code": "exposed_erosion",
+          "label": "Exposed / Erosion Visible",
+          "points": 0,
+          "display_order": 3,
+          "image_path": null
+        },
+        {
+          "id": 14,
+          "criteria_id": 4,
+          "code": "dead_rotten",
+          "label": "Dead / Rotten",
+          "points": 0,
+          "display_order": 4,
+          "image_path": null
+        },
+        {
+          "id": 33,
+          "code": "all_of_the_above",
+          "label": "All of the above",
+          "points": 0,
+          "display_order": 1001,
+          "image_path": null
+        },
+        {
+          "id": 34,
+          "code": "unknown",
+          "label": "Not Sure",
+          "points": 0,
+          "display_order": 1002,
+          "image_path": null
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "code": "bark_trunk",
+      "name": "Bark / Trunk",
+      "question_text": "How does the bark or trunk look?",
+      "selection_mode": "single",
+      "score_group": "context",
+      "guide_image": "img/guides/bark.png",
+      "display_order": 5,
+      "active": 1,
+      "version": "reference-v1",
+      "options": [
+        {
+          "id": 15,
+          "criteria_id": 5,
+          "code": "intact_smooth",
+          "label": "Intact / Smooth",
+          "points": 2,
+          "display_order": 1,
+          "image_path": null
+        },
+        {
+          "id": 16,
+          "criteria_id": 5,
+          "code": "peeling_cracks",
+          "label": "Slightly Peeling / Cracks",
+          "points": 1,
+          "display_order": 2,
+          "image_path": null
+        },
+        {
+          "id": 17,
+          "criteria_id": 5,
+          "code": "deep_fissures",
+          "label": "Deep Cracks / Fissures",
+          "points": 0,
+          "display_order": 3,
+          "image_path": null
+        },
+        {
+          "id": 18,
+          "criteria_id": 5,
+          "code": "missing_damage",
+          "label": "Missing / Large Damage",
+          "points": 0,
+          "display_order": 4,
+          "image_path": null
+        },
+        {
+          "id": 35,
+          "code": "all_of_the_above",
+          "label": "All of the above",
+          "points": 0,
+          "display_order": 1001,
+          "image_path": null
+        },
+        {
+          "id": 36,
+          "code": "unknown",
+          "label": "Not Sure",
+          "points": 0,
+          "display_order": 1002,
+          "image_path": null
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "code": "bio_indicators",
+      "name": "Bio-Indicators",
+      "question_text": "What animals did you see?",
+      "selection_mode": "multiple",
+      "score_group": "environment",
+      "guide_image": "img/guides/bio-indicators.png",
+      "display_order": 6,
+      "active": 1,
+      "version": "reference-v1",
+      "options": [
+        {
+          "id": 19,
+          "criteria_id": 6,
+          "code": "crabs",
+          "label": "Crabs (Tambasakan)",
+          "points": 1,
+          "display_order": 1,
+          "image_path": null
+        },
+        {
+          "id": 20,
+          "criteria_id": 6,
+          "code": "birds",
+          "label": "Birds (Herons / Egrets)",
+          "points": 1,
+          "display_order": 2,
+          "image_path": null
+        },
+        {
+          "id": 21,
+          "criteria_id": 6,
+          "code": "small_fish",
+          "label": "Small Fish (Juveniles)",
+          "points": 1,
+          "display_order": 3,
+          "image_path": null
+        },
+        {
+          "id": 22,
+          "criteria_id": 6,
+          "code": "snails",
+          "label": "Snails / Shells",
+          "points": 1,
+          "display_order": 4,
+          "image_path": null
+        },
+        {
+          "id": 23,
+          "criteria_id": 6,
+          "code": "pollinators",
+          "label": "Butterflies / Bees",
+          "points": 1,
+          "display_order": 5,
+          "image_path": null
+        },
+        {
+          "id": 37,
+          "code": "none_of_the_above",
+          "label": "None of the above",
+          "points": 0,
+          "display_order": 1000,
+          "image_path": null
+        },
+        {
+          "id": 38,
+          "code": "all_of_the_above",
+          "label": "All of the above",
+          "points": 0,
+          "display_order": 1001,
+          "image_path": null
+        },
+        {
+          "id": 39,
+          "code": "unknown",
+          "label": "Not Sure",
+          "points": 0,
+          "display_order": 1002,
+          "image_path": null
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "code": "negative_signs",
+      "name": "Negative Signs",
+      "question_text": "What negative signs did you see?",
+      "selection_mode": "multiple",
+      "score_group": "environment",
+      "guide_image": "img/guides/negative-signs.png",
+      "display_order": 7,
+      "active": 1,
+      "version": "reference-v1",
+      "options": [
+        {
+          "id": 24,
+          "criteria_id": 7,
+          "code": "mosquitoes",
+          "label": "Many Mosquitoes",
+          "points": -1,
+          "display_order": 1,
+          "image_path": null
+        },
+        {
+          "id": 25,
+          "criteria_id": 7,
+          "code": "trash",
+          "label": "Trash / Plastic Visible",
+          "points": -1,
+          "display_order": 2,
+          "image_path": null
+        },
+        {
+          "id": 26,
+          "criteria_id": 7,
+          "code": "no_animals",
+          "label": "No Animals at All",
+          "points": -1,
+          "display_order": 3,
+          "image_path": null
+        },
+        {
+          "id": 40,
+          "code": "none_of_the_above",
+          "label": "None of the above",
+          "points": 0,
+          "display_order": 1000,
+          "image_path": null
+        },
+        {
+          "id": 41,
+          "code": "all_of_the_above",
+          "label": "All of the above",
+          "points": 0,
+          "display_order": 1001,
+          "image_path": null
+        },
+        {
+          "id": 42,
+          "code": "unknown",
+          "label": "Not Sure",
+          "points": 0,
+          "display_order": 1002,
+          "image_path": null
+        }
+      ]
+    }
+  ],
+  "badges": [
+    {
+      "id": 1,
+      "code": "first_report",
+      "badge_name": "First Report",
+      "metric": "verified_reports",
+      "target_value": 1,
+      "description": "Submitted your first verified report!",
+      "image_path": "img/badges/first-report.svg",
+      "active": 1
+    },
+    {
+      "id": 2,
+      "code": "bronze_guardian",
+      "badge_name": "Bronze Guardian",
+      "metric": "verified_reports",
+      "target_value": 5,
+      "description": "Submitted 5 verified reports!",
+      "image_path": "img/badges/bronze.svg",
+      "active": 1
+    },
+    {
+      "id": 3,
+      "code": "silver_guardian",
+      "badge_name": "Silver Guardian",
+      "metric": "verified_reports",
+      "target_value": 15,
+      "description": "Submitted 15 verified reports!",
+      "image_path": "img/badges/silver.svg",
+      "active": 1
+    },
+    {
+      "id": 4,
+      "code": "gold_guardian",
+      "badge_name": "Gold Guardian",
+      "metric": "verified_reports",
+      "target_value": 30,
+      "description": "Submitted 30 verified reports!",
+      "image_path": "img/badges/gold.svg",
+      "active": 1
+    },
+    {
+      "id": 5,
+      "code": "followup_hero",
+      "badge_name": "Follow-up Hero",
+      "metric": "verified_followups",
+      "target_value": 20,
+      "description": "Submitted 20 verified follow-up reports!",
+      "image_path": "img/badges/followup.svg",
+      "active": 1
+    },
+    {
+      "id": 6,
+      "code": "species_spotter",
+      "badge_name": "Species Spotter",
+      "metric": "distinct_species",
+      "target_value": 10,
+      "description": "Reported 10 different verified species!",
+      "image_path": "img/badges/species.svg",
+      "active": 1
+    }
+  ]
+}

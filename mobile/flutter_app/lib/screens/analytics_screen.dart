@@ -123,7 +123,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
           Text(
-            personal ? 'My analytics' : 'Conservation analytics',
+            personal ? 'My analytics' : 'Community analytics',
             style: Theme.of(context).textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
@@ -165,7 +165,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ),
               _AnalyticsStat('Verified', '${verification['verified'] ?? 0}'),
               _AnalyticsStat(
-                'High risk',
+                'Needs review',
                 '${_analytics!['high_risk_total'] ?? 0}',
               ),
             ],

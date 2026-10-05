@@ -1,6 +1,24 @@
+> **Live PHP website: [ManGROOVES on Vercel](https://mangrooves-php.vercel.app).** The original PHP layout uses the same Supabase project as the APK. GitHub is connected; publish prepared updates with the [Vercel PHP guide](docs/VERCEL_PHP.md). The [older static website](https://mangrooves-4236e.web.app) remains available. Gmail SMTP and code templates are configured, and the live send request passed; [inbox verification](docs/SMTP_SETUP.md) is pending. The Firebase backend sections below are rollback documentation.
+
 # ManGROOVES
 
+**[Download the Android APK](https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk).** Open the link on your Android phone to download the app. The website and APK use the same Supabase accounts and data. Verified guardians go directly to their dashboard after finishing registration; expert applications still need admin approval.
+
+Unfinished reports save on the current device, including the photo, checklist and current step. Location-name suggestions select a pin that continues into the map step. See the [draft and location notes](docs/VERCEL_PHP.md#report-drafts-and-locations) for recovery behavior and GPS limitations.
+
 ManGROOVES is a responsive community mangrove monitoring and environmental decision-support application for the CCENRO pilot site in Barangay Inayawan, Cebu City.
+
+## Cloud setup
+
+### Run the same website locally
+
+From this project folder, run `scripts\start.cmd`, then open **http://127.0.0.1:8086**. The launcher rebuilds the PHP website from the same source used for Vercel and connects to the same Supabase accounts and data. Apache and MySQL are not needed. Keep the terminal open; press Ctrl+C to stop. See the [local setup guide](docs/VERCEL_PHP.md#local-preview) for first-time tool installation and APK preparation. The old XAMPP `/mangrooves_v2/public` address is the legacy MySQL site; use port 8086 for the current Supabase version.
+
+New Flutter builds use Supabase by default. The website and mobile app share Supabase Auth, PostgreSQL, private photo storage, and the hosted Edge API. After deployment, they work over mobile data or any Wi-Fi without a laptop server or changing IP addresses.
+
+Follow [Supabase setup, data migration, deployment, and APK build](docs/SUPABASE_MIGRATION.md). The existing 18 accounts and 19 reports were imported on 2026-10-03. The Firebase source and [rollback guide](docs/FIREBASE_MIGRATION.md) remain available. The PHP/MySQL instructions below apply to the legacy installation. Supabase PDFs use pdf-lib; the legacy installation uses FPDF.
+
+The Supabase clients include email-code registration and password recovery, private expert ID code applications with administrator approval, and report submission for approved experts. Registration has three steps: account details, six-digit email verification, and profile details. Back preserves entered details; changing the email requires a new code. The live email-code send request passed after the SMTP password update; inbox receipt and code entry still need confirmation. Health history and Growth timeline now open separately. Certificates use an administrator-selected signer with a temporary download QR beside the certificate; no QR appears inside the PDF.
 
 It includes guardian field reporting, GPS/manual map location, private photo evidence, illustrated health observations, ranked species suggestions, expert verification and feedback, automatic clusters, follow-up timelines, notifications, badges and printable certificates, interactive maps, analytics, printable official reports, user/species/badge administration, and audit logs.
 
@@ -12,13 +30,13 @@ Both report forms use the same barangay/cluster coordinates. Selected clusters m
 
 Web and Flutter reports now use Site, Health, Details, and Review steps. The review shows the latest photo and answers with Edit buttons; the final confirmation sends the report. Follow-up fields appear only when linking a previous report. Dashboard totals open matching report lists, and the cluster health map appears below Latest reports for guardians, experts, and administrators. Flutter includes status filters, report pagination, and Back controls.
 
-The Report map is available on the web Dashboard and in Flutter Reports; the redundant web My reports shortcut is removed. It shows submitted report coordinates with health/status filters and pagination. Guardians see their own reports; staff can inspect all reports. The web Clusters menu opens on hover, click, or keyboard, with Analytics, Health history, and Growth timeline links. Flutter offers the same destinations in Analytics and timelines and cluster marker menus. Timelines contain verified visits and observed living-mangrove counts; other guardians' photos, coordinates, and feedback stay private. Staff can browse Validation history, including automatic Healthy verification, and inspect before/after health and species decisions. Flutter previews use the server classifier and show each of the three scored answers. Incomplete or tied species trait matches remain unresolved.
+The Report map opens from the Dashboard on web and Flutter. Find a location suggests addresses and landmarks; selecting one centers a blue pin without changing report coordinates. Report health/status filters and the app's report pagination remain available. Guardians see their own reports; staff can inspect all reports. The web Clusters menu opens on hover, click, or keyboard, with Analytics, Health history, and Growth timeline links. Flutter offers the same destinations in Analytics and timelines and cluster marker menus. Timelines contain verified visits and observed living-mangrove counts; other guardians' photos, coordinates, and feedback stay private. Staff can browse Validation history, including automatic Healthy verification, and inspect before/after health and species decisions. Flutter previews use the server classifier and show each of the three scored answers. Incomplete or tied species trait matches remain unresolved.
 
 Administrators can add or delete choices, rename every choice (including automatic choices), and edit questions, points, and guide/choice photos under **Health checklist** (web sidebar or app Account). The server applies the same settings to web and Flutter. Each health criterion keeps a 0-2 point range, for a maximum of 6; saved report scores and answer snapshots do not change. Unknown answers are unscored and require review. None of the above adds 0 to optional groups; All of the above uses the lowest score (0) for a health check and totals regular choices in context and environmental groups. Leaf Condition and Bark/Trunk now include All of the above. Deleting hides choices from new reports; past answers remain intact. Undo is available before saving, and automatic answer types can be added again. Not Sure is excluded from aggregates.
 
 Existing installations need `C:\xampp\php\php.exe scripts\migrate-checklist.php` before using this version. This additive migration preserves reports. Uploaded checklist pictures are stored in `public/assets/img/checklist/`; include that directory with site backups and hosting transfers. Reference imports preserve administrator checklist edits.
 
-## Quick start on this computer
+## Legacy PHP/MySQL quick start
 
 1. Open XAMPP Control Panel and make sure MySQL is running. Apache is optional when using the included PHP development server.
 2. Open PowerShell in `C:\mangrooves_v2`.
@@ -31,7 +49,7 @@ Existing installations need `C:\xampp\php\php.exe scripts\migrate-checklist.php`
 4. Start the application:
 
    ```powershell
-   .\scripts\start.cmd
+   .\scripts\start.cmd -Backend legacy
    ```
 
 5. Open <http://127.0.0.1:8085> (or consistently use `localhost`).

@@ -1,0 +1,8 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Report and checklist photos are served by the API after authorization.
+    // No public download tokens are created for report photos.
+    match /{path=**} { allow read, write: if false; }
+  }
+}

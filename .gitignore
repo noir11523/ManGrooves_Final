@@ -16,3 +16,37 @@
 /dist/
 
 /public/assets/img/checklist/
+
+# Firebase build output, local emulators, exports, and credentials
+**/node_modules/
+/.firebase/
+**/firebase-debug.log*
+**/firestore-debug.log*
+**/ui-debug.log*
+/firebase/web/dist/
+/firebase/.env*
+/firebase/functions/.env*
+!/firebase/functions/.env.example
+/firebase/migration-data/
+/firebase/emulator-data/
+/firebase/*service-account*.json
+/firebase/*credentials*.json
+/mobile/flutter_app/firebase-config.json
+
+# Supabase configuration, private snapshots, tools and build output
+/supabase/.temp/
+/supabase/.branches/
+/supabase/.env*
+/supabase/client-config.json
+/supabase/migration-data/
+/supabase/web/dist/
+/mobile/flutter_app/supabase-config.json
+
+/.npm-cache/
+
+# Vercel packages and local encrypted-session key
+/vercel/dist/
+/vercel/.env*
+!/vercel/.env.example
+/vercel/.vercel/
+/vercel/.local-key

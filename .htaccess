@@ -2,7 +2,7 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteRule ^(?:app|config|database|docs|scripts|storage|tests|analytics|backups)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:app|config|database|docs|scripts|storage|tests|analytics|backups|firebase|supabase|vercel|mobile)(?:/|$) - [F,L,NC]
 </IfModule>
 
 <FilesMatch "(^\.|\.(?:env|ini|log|sql|md|ps1|cmd)$)">

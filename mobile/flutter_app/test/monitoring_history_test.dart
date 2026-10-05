@@ -176,7 +176,7 @@ void main() {
       await _tap(tester, find.byTooltip('MG-1: Stressed'));
       expect(find.text('Health is a system suggestion.'), findsOneWidget);
       await _tap(tester, find.text('View report'));
-      expect(find.text('System health score: 4 / 6'), findsOneWidget);
+      expect(find.text('Health score: 4 / 6'), findsOneWidget);
       await tester.tap(find.byType(BackButton));
       await tester.pumpAndSettle();
       tester
@@ -201,14 +201,27 @@ void main() {
     },
   );
   testWidgets(
-    'health and growth tabs keep chronology and redact private report links',
+    'health and growth pages stay separate and redact private report links',
     (tester) async {
       await _phone(tester, ClusterTimelineScreen(api: _Api(), clusterId: 1));
       expect(find.text('Community observation'), findsOneWidget);
-      expect(find.text('View MG-2'), findsOneWidget);
-      expect(find.text('View MG-1'), findsNothing);
-      await tester.tap(find.text('Growth timeline'));
+      expect(find.text('View Report #2'), findsOneWidget);
+      expect(find.text('View Report #1'), findsNothing);
+      expect(find.text('Growth timeline'), findsNothing);
+      expect(find.byType(TabBar), findsNothing);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ClusterTimelineScreen(
+            key: const ValueKey('growth'),
+            api: _Api(),
+            clusterId: 1,
+            initialTab: 1,
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
+      expect(find.text('Health history'), findsNothing);
+      expect(find.byType(TabBar), findsNothing);
       expect(find.text('10 living mangroves'), findsOneWidget);
       expect(find.text('+2 since last visit'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -224,7 +237,7 @@ void main() {
           body: ListView(children: [ValidationHistoryCard(report: report)]),
         ),
       );
-      expect(find.text('correct · Expert'), findsOneWidget);
+      expect(find.text('Corrected · Expert'), findsOneWidget);
       expect(find.textContaining('Species one → Species two'), findsOneWidget);
       expect(find.textContaining('Roots are stable.'), findsOneWidget);
     },

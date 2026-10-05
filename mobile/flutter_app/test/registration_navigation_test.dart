@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:mangrooves_mobile/app.dart';
 import 'package:mangrooves_mobile/core/api_client.dart';
 import 'package:mangrooves_mobile/screens/home_shell.dart';
@@ -73,7 +74,7 @@ Future<void> _fillRegistration(
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(ManGroovesApp(api: api));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Create guardian account'));
+  await tester.tap(find.text('Create account'));
   await tester.pumpAndSettle();
   await tester.enterText(_field('First name'), 'Test');
   await tester.enterText(_field('Last name'), 'Guardian');
@@ -91,6 +92,7 @@ Future<void> _fillRegistration(
 }
 
 void main() {
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets('registration opens dashboard and removes the form route', (
     tester,
   ) async {
@@ -111,7 +113,7 @@ void main() {
 
     expect(find.byType(HomeShell), findsOneWidget);
     expect(find.text('Dashboard'), findsOneWidget);
-    expect(find.text('Hello, Test'), findsOneWidget);
+    expect(find.text('Hi, Test!'), findsOneWidget);
     expect(find.byType(RegisterScreen, skipOffstage: false), findsNothing);
     expect(
       Navigator.of(tester.element(find.byType(HomeShell))).canPop(),

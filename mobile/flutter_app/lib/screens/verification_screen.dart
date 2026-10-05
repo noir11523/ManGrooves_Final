@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../shared/retry_view.dart';
 import 'validation_history_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
@@ -43,7 +44,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     } catch (error) {
       _error = error is ApiException
           ? error.message
-          : 'Unable to load the verification queue.';
+          : 'Could not load reports. Try again.';
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -54,9 +55,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_data == null) {
-      return Center(
-        child: FilledButton.tonal(onPressed: _load, child: Text(_error!)),
-      );
+      return RetryView(message: _error!, onRetry: _load);
     }
     final summary = Map<String, dynamic>.from(_data!['summary'] as Map);
     final pages = (_data!['pages'] as num?)?.toInt() ?? 1;
@@ -76,11 +75,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
           if (_error != null)
             TextButton(onPressed: _load, child: Text('$_error Retry')),
           Text(
-            'Expert verification',
+            'Review reports',
             style: Theme.of(context).textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const Text('Check the photo, answers and suggested result.'),
+          const Text('Check the photo and answers, then choose your decision.'),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -91,7 +90,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ),
               ),
               icon: const Icon(Icons.history),
-              label: const Text('Validation history'),
+              label: const Text('Review history'),
             ),
           ),
           const SizedBox(height: 16),
@@ -109,7 +108,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(22),
-                child: Text('The verification queue is clear.'),
+                child: Text('No reports waiting for review.'),
               ),
             )
           else
@@ -193,7 +192,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
   String? _health;
   int? _speciesId;
   String _rarity = 'Unassigned';
-  bool _needsAttention = false;
+
   bool _busy = false;
   String? _error;
 
@@ -273,7 +272,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
         'final_health': _health,
         'final_species_id': _speciesId,
         'rarity_level': _rarity,
-        'needs_attention': _needsAttention ? '1' : '0',
+
         'expert_feedback': _feedback.text,
       });
       if (!mounted) return;
@@ -454,13 +453,11 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                       : (value) =>
                             setState(() => _rarity = value ?? 'Unassigned'),
                 ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Needs conservation attention'),
-                  value: _needsAttention,
-                  onChanged: _busy
-                      ? null
-                      : (value) => setState(() => _needsAttention = value),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'Saving this review removes the Needs attention tag.',
+                  ),
                 ),
                 TextField(
                   controller: _feedback,

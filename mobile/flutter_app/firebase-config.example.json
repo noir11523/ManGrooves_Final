@@ -1,0 +1,5 @@
+{
+  "BACKEND": "firebase",
+  "FIREBASE_PROJECT_ID": "replace-with-your-project-id",
+  "FIREBASE_API_KEY": "replace-with-your-firebase-web-api-key"
+}

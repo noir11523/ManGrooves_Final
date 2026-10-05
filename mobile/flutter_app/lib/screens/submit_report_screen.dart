@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../core/api_client.dart';
 import '../core/report_location.dart';
+import '../core/report_draft_store.dart';
 import 'location_picker_screen.dart';
 
 class SubmitReportScreen extends StatefulWidget {
@@ -19,6 +21,8 @@ class SubmitReportScreen extends StatefulWidget {
     this.initialParentReportId,
     this.initialClusterId,
     this.active = true,
+    this.draftOwner,
+    this.draftStore,
   });
 
   final ApiClient api;
@@ -27,12 +31,15 @@ class SubmitReportScreen extends StatefulWidget {
   final int? initialParentReportId;
   final int? initialClusterId;
   final bool active;
+  final String? draftOwner;
+  final ReportDraftStore? draftStore;
 
   @override
   State<SubmitReportScreen> createState() => SubmitReportScreenState();
 }
 
-class SubmitReportScreenState extends State<SubmitReportScreen> {
+class SubmitReportScreenState extends State<SubmitReportScreen>
+    with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _sitio = TextEditingController();
   final _aliveCount = TextEditingController();
@@ -53,6 +60,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
   String? _error;
   bool _busy = false;
   bool _gettingLocation = false;
+  bool _gettingArea = false;
+  Timer? _placeTimer;
+  int _placeRequest = 0;
+  int _locationRequest = 0;
+  List<Map<String, dynamic>> _placeSuggestions = [];
+  String? _placeMessage;
+  String? _selectedPlaceLabel;
   double? _gpsProgressAccuracy;
   Position? _approximatePosition;
   StreamSubscription<Position>? _gpsSubscription;
@@ -68,10 +82,158 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
   bool _previewBusy = false;
   bool _followup = false;
   int _parentRequest = 0;
+  late final ReportDraftStore _draftStore;
+  bool _draftReady = false;
+  bool _clearingDraft = false;
+  bool _pickingPhoto = false;
+  String? _lastDraft;
+  final _draftStatus = ValueNotifier<String>('');
+  String? get _draftScope => widget.draftOwner == null
+      ? null
+      : '${widget.api.baseUrl}:${widget.draftOwner}';
+
+  Map<String, dynamic> _draftValues() => {
+    'sitio_name': _sitio.text,
+    'selected_place_label': _selectedPlaceLabel,
+    'observed_alive_count': _aliveCount.text,
+    'guardian_remarks': _remarks.text,
+    'root_type': _rootType,
+    'leaf_shape': _leafShape,
+    'bark_texture': _barkTexture,
+    'cluster_id': _clusterId,
+    'parent_report_id': _parentReportId,
+    'followup': _followup,
+    'step': _step,
+    'photo_path': _photo?.path,
+    'picking_photo': _pickingPhoto,
+    'location': _location?.fields,
+    'form': _form,
+    'previous_reports': _previousReports,
+    'observations': {
+      for (final e in _observations.entries) e.key: List<int>.from(e.value),
+    },
+  };
+
+  Future<void> _saveDraft() async {
+    final scope = _draftScope;
+    if (!_draftReady || _clearingDraft || scope == null) return;
+    if (_photo == null &&
+        !_pickingPhoto &&
+        _location == null &&
+        _sitio.text.isEmpty &&
+        _aliveCount.text.isEmpty &&
+        _remarks.text.isEmpty &&
+        _clusterId == null &&
+        _rootType == null &&
+        _leafShape == null &&
+        _barkTexture == null &&
+        _observations.values.every((answers) => answers.isEmpty)) {
+      return;
+    }
+    final snapshot = _draftValues(), encoded = jsonEncode(_draftValues());
+    if (encoded == _lastDraft) return;
+    _lastDraft = encoded;
+    try {
+      await _draftStore.save(scope, snapshot);
+      if (_photo?.path == snapshot['photo_path'] &&
+          _draftStore.photoPath(scope) != null) {
+        _photo = XFile(_draftStore.photoPath(scope)!);
+      }
+      if (mounted &&
+          encoded == _lastDraft &&
+          _draftStatus.value.startsWith('Could not save your progress.')) {
+        _draftStatus.value = '';
+      }
+    } catch (_) {
+      _lastDraft = null;
+      if (mounted) _draftStatus.value = 'Could not save your progress. Keep the app open and check device storage.';
+    }
+  }
+
+  void _draftEdited() {
+    unawaited(_saveDraft());
+  }
+
+  Future<void> _restoreDraft() async {
+    if (_draftScope == null) return;
+    try {
+      final draft = await _draftStore.load(_draftScope!);
+      if (draft == null || !mounted) return;
+      _sitio.text = draft['sitio_name']?.toString() ?? '';
+      _selectedPlaceLabel = draft['selected_place_label'] as String?;
+      _aliveCount.text = draft['observed_alive_count']?.toString() ?? '';
+      _remarks.text = draft['guardian_remarks']?.toString() ?? '';
+      _rootType = draft['root_type'] as String?;
+      _leafShape = draft['leaf_shape'] as String?;
+      _barkTexture = draft['bark_texture'] as String?;
+      _clusterId = draft['cluster_id'] as int?;
+      _parentReportId = draft['parent_report_id'] as int?;
+      _followup = draft['followup'] == true;
+      _previousReports = (draft['previous_reports'] as List? ?? [])
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+      _step = (draft['step'] as int? ?? 0).clamp(0, 3);
+      for (final entry in (draft['observations'] as Map? ?? {}).entries) {
+        _observations['${entry.key}'] = List<int>.from(entry.value as List);
+      }
+      if (draft['photo_path'] != null) _photo = XFile('${draft['photo_path']}');
+      final point = draft['location'] as Map?;
+      final lat = double.tryParse('${point?['latitude']}'),
+          lng = double.tryParse('${point?['longitude']}');
+      if (lat != null &&
+          lng != null &&
+          lat.isFinite &&
+          lng.isFinite &&
+          lat.abs() <= 85.05112878 &&
+          lng.abs() <= 180) {
+        final accuracy = double.tryParse('${point?['location_accuracy']}');
+        _location =
+            point?['location_source'] == 'gps' &&
+                accuracy != null &&
+                accuracy.isFinite &&
+                accuracy >= 0
+            ? ReportLocation.gps(
+                latitude: lat,
+                longitude: lng,
+                accuracy: accuracy,
+              )
+            : ReportLocation.manual(latitude: lat, longitude: lng);
+      }
+      if (draft['form'] is Map) {
+        _form = Map<String, dynamic>.from(draft['form'] as Map);
+      }
+      _draftStatus.value = '';
+      if (draft['missing_photo'] == true) {
+        _step = 0;
+        _draftStatus.value =
+            'Details restored. Please choose your field photo again.';
+      }
+      _confirmed = false;
+      if (draft['picking_photo'] == true && Platform.isAndroid) {
+        final lost = await _picker.retrieveLostData();
+        if (lost.files?.isNotEmpty == true) _photo = lost.files!.first;
+      }
+    } catch (_) {
+      _draftStatus.value = 'Could not restore the draft. Check device storage.';
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      _draftEdited();
+      _cancelGps();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _draftStore = widget.draftStore ?? ReportDraftStore();
+    WidgetsBinding.instance.addObserver(this);
+    for (final controller in [_sitio, _aliveCount, _remarks]) {
+      controller.addListener(_draftEdited);
+    }
     _clusterId = widget.initialClusterId;
     _parentReportId = widget.initialParentReportId;
     _followup = _parentReportId != null;
@@ -80,17 +242,43 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
 
   @override
   void dispose() {
+    _draftEdited();
+    _placeTimer?.cancel();
+    _placeRequest++;
+    WidgetsBinding.instance.removeObserver(this);
     _previewTimer?.cancel();
     _cancelGps();
     _sitio.dispose();
     _aliveCount.dispose();
     _remarks.dispose();
+    _draftStatus.dispose();
     super.dispose();
   }
 
   Future<void> _loadForm() async {
+    if (!_draftReady) await _restoreDraft();
+    if (!mounted) return;
+    final previousVersions = {
+      for (final c in _criteria) '${c['id']}': c['version'],
+    };
     try {
       _form = await widget.api.reportForm();
+      if (!mounted) return;
+      for (final c in _criteria) {
+        final options = (c['options'] as List).map((o) => o['id']).toSet();
+        _observations['${c['code']}']?.removeWhere(
+          (id) => !options.contains(id),
+        );
+        if (previousVersions.isNotEmpty &&
+            previousVersions['${c['id']}'] != c['version'] &&
+            _step > 0) {
+          _step = 1;
+          _draftStatus.value = 'Draft restored. The checklist changed; check your answers again.';
+        }
+      }
+      if (!_traits('root_type').contains(_rootType)) _rootType = null;
+      if (!_traits('leaf_shape').contains(_leafShape)) _leafShape = null;
+      if (!_traits('bark_texture').contains(_barkTexture)) _barkTexture = null;
       final clusterExists = _clusters.any((item) => item['id'] == _clusterId);
       if (!clusterExists) {
         _clusterId = null;
@@ -104,11 +292,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
       }
       _error = null;
       if (mounted) unawaited(_tryAutoCapture());
+      if (_step == 3) await _fetchPreview();
     } catch (error) {
       _error = error is ApiException
           ? error.message
           : 'Unable to load the field checklist.';
     }
+    _draftReady = true;
     if (mounted) setState(() {});
   }
 
@@ -130,14 +320,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
       _parentReportId = reports.any((item) => item['id'] == preferredParentId)
           ? preferredParentId
           : null;
-      _followup = _parentReportId != null;
+      _followup = _followup || _parentReportId != null;
     } catch (error) {
       if (!mounted || request != _parentRequest || _clusterId != clusterId) {
         return;
       }
-      _followup = false;
-      _previousReports = [];
-      _parentReportId = null;
       _error = error is ApiException
           ? error.message
           : 'Unable to load follow-up reports.';
@@ -155,9 +342,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
       _previousReports = [];
     });
     if (clusterId != null) await _loadPreviousReports(clusterId);
+    await _saveDraft();
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
+    _pickingPhoto = true;
+    await _saveDraft();
     try {
       final image = await _picker.pickImage(
         source: source,
@@ -173,11 +363,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
           () => _error = 'Camera or photo access was not available. Check app permissions.',
         );
       }
+    } finally {
+      _pickingPhoto = false;
+      await _saveDraft();
     }
   }
 
   Future<void> _captureLocation() async {
     if (_gettingLocation) return;
+    final request = ++_locationRequest;
     setState(() {
       _gettingLocation = true;
       _gpsProgressAccuracy = null;
@@ -198,13 +392,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
           'Allow location access or place a pin on the map.',
         );
       }
-      if (!mounted || !widget.active) {
-        if (mounted) setState(() => _gettingLocation = false);
+      if (!mounted || !widget.active || request != _locationRequest) {
+        if (mounted && request == _locationRequest) {
+          setState(() => _gettingLocation = false);
+        }
         return;
       }
       final position = await _findAccurateGps(_maxGpsAccuracy);
-      if (!mounted || !widget.active) {
-        if (mounted) setState(() => _gettingLocation = false);
+      if (!mounted || !widget.active || request != _locationRequest) {
+        if (mounted && request == _locationRequest) {
+          setState(() => _gettingLocation = false);
+        }
         return;
       }
       _location = ReportLocation.gps(
@@ -212,8 +410,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
         longitude: position.longitude,
         accuracy: position.accuracy,
       );
+      _selectedPlaceLabel = null;
       _approximatePosition = null;
+      await _fillNearbyAddress(_location!);
     } catch (error) {
+      if (request != _locationRequest) return;
       _error = error is ApiException
           ? error.message
           : 'Could not capture GPS. Try again or choose a location on the map.';
@@ -223,6 +424,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
         _gettingLocation = false;
         _gpsProgressAccuracy = null;
       });
+      await _saveDraft();
     }
   }
 
@@ -255,6 +457,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
   }
 
   void _cancelGps() {
+    _locationRequest++;
+    _gettingLocation = false;
+    _gpsProgressAccuracy = null;
     _gpsDeadline?.cancel();
     unawaited(_gpsSubscription?.cancel());
     if (_gpsResult != null && !_gpsResult!.isCompleted) {
@@ -277,45 +482,58 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
     StreamSubscription<Position>? subscription;
     Position? best;
     Timer? deadline;
+    Timer? fallbackTimer;
+    bool fallbackRequested = false;
 
-    subscription =
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 0,
-          ),
-        ).listen(
-          (position) {
-            if (!position.accuracy.isFinite || position.accuracy < 0) return;
-            final age = DateTime.now().difference(position.timestamp);
-            if (age.inSeconds > 30 ||
-                age.inSeconds < -5 ||
-                !position.latitude.isFinite ||
-                !position.longitude.isFinite ||
-                position.latitude.abs() > 85.05112878 ||
-                position.longitude.abs() > 180) {
-              return;
-            }
-            if (best == null || position.accuracy < best!.accuracy) {
-              best = position;
-              if (mounted) {
-                setState(() => _gpsProgressAccuracy = position.accuracy);
-                if (position.accuracy > maxAccuracy) {
-                  _approximatePosition = position;
-                }
-              }
-            }
-            if (position.accuracy <= maxAccuracy && !result.isCompleted) {
-              result.complete(position);
-            }
-          },
-          onError: (Object error) {
-            if (!result.isCompleted) result.completeError(error);
-          },
-        );
+    void receive(Position position) {
+      if (result.isCompleted || !mounted || !widget.active) return;
+      if (!position.accuracy.isFinite || position.accuracy < 0) return;
+      final age = DateTime.now().difference(position.timestamp);
+      if (age.inSeconds > 30 ||
+          age.inSeconds < -5 ||
+          !position.latitude.isFinite ||
+          !position.longitude.isFinite ||
+          position.latitude.abs() > 85.05112878 ||
+          position.longitude.abs() > 180) {
+        return;
+      }
+      if (best == null || position.accuracy < best!.accuracy) {
+        best = position;
+        setState(() => _gpsProgressAccuracy = position.accuracy);
+        if (position.accuracy > maxAccuracy) _approximatePosition = position;
+      }
+      if (position.accuracy <= (maxAccuracy < 20 ? maxAccuracy : 20)) {
+        result.complete(position);
+      }
+    }
+
+    void fallback() {
+      if (fallbackRequested || result.isCompleted) return;
+      fallbackRequested = true;
+      Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      ).then(receive).catchError((Object _) {
+        /* Keep the main GPS stream and map fallback available. */
+      });
+    }
+
+    subscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 0,
+      ),
+    ).listen(receive, onError: (Object error) => fallback());
     _gpsSubscription = subscription;
+    fallbackTimer = Timer(const Duration(seconds: 8), fallback);
     deadline = Timer(const Duration(seconds: 30), () {
       if (result.isCompleted) return;
+      if (best != null && best!.accuracy <= maxAccuracy) {
+        result.complete(best);
+        return;
+      }
       final bestAccuracy = best?.accuracy.round();
       result.completeError(
         ApiException(
@@ -331,10 +549,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
       return await result.future;
     } finally {
       deadline.cancel();
+      fallbackTimer.cancel();
       await subscription.cancel();
-      _gpsSubscription = null;
-      _gpsResult = null;
-      _gpsDeadline = null;
+      if (_gpsResult == result) {
+        _gpsSubscription = null;
+        _gpsResult = null;
+        _gpsDeadline = null;
+      }
     }
   }
 
@@ -352,7 +573,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
     return LatLng(latitude, longitude);
   }
 
-  Future<void> _chooseManualLocation() async {
+  Future<void> _chooseManualLocation({
+    LatLng? areaCenter,
+    double? areaAccuracy,
+  }) async {
     if (_approximatePosition != null &&
         DateTime.now().difference(_approximatePosition!.timestamp).inMinutes >=
             5) {
@@ -367,9 +591,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
     final location = await Navigator.of(context).push<ReportLocation>(
       MaterialPageRoute(
         builder: (_) => LocationPickerScreen(
+          api: widget.api,
+          initialName: _sitio.text,
           // The fallback centers the map only. It never selects a report pin.
           initialCenter:
               _location?.point ??
+              areaCenter ??
               (_approximatePosition == null
                   ? null
                   : LatLng(
@@ -380,13 +607,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
               barangayCenter ??
               const LatLng(10.2833, 123.8833),
           initialLocation: _location,
-          approximateCenter: _approximatePosition == null
-              ? null
-              : LatLng(
-                  _approximatePosition!.latitude,
-                  _approximatePosition!.longitude,
-                ),
-          approximateAccuracy: _approximatePosition?.accuracy,
+          approximateCenter:
+              areaCenter ??
+              (_approximatePosition == null
+                  ? null
+                  : LatLng(
+                      _approximatePosition!.latitude,
+                      _approximatePosition!.longitude,
+                    )),
+          approximateAccuracy: areaAccuracy ?? _approximatePosition?.accuracy,
           barangayCenter: barangayCenter,
           maxDistanceMeters: double.tryParse(
             settings?['max_distance_meters']?.toString() ?? '',
@@ -397,8 +626,135 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
     if (location == null || !mounted) return;
     setState(() {
       _location = location;
+      _selectedPlaceLabel = null;
       _error = null;
     });
+    await _fillNearbyAddress(location);
+    await _saveDraft();
+  }
+
+  Future<void> _findApproximateArea() async {
+    if (_gettingArea || _gettingLocation) return;
+    setState(() => _gettingArea = true);
+    try {
+      final area = await widget.api.approximateArea();
+      if (!mounted || !widget.active) return;
+      await _chooseManualLocation(
+        areaCenter: LatLng(
+          area['latitude'] as double,
+          area['longitude'] as double,
+        ),
+        areaAccuracy: area['accuracy'] as double?,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'Area unavailable. Search an address or choose your spot on the map.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _gettingArea = false);
+    }
+  }
+
+  Future<void> _fillNearbyAddress(ReportLocation point) async {
+    if (!widget.api.supportsCloudAccounts || _sitio.text.trim().isNotEmpty) {
+      return;
+    }
+    try {
+      final result = await widget.api.cloudRequest(
+        'places.php',
+        query: {
+          'latitude': '${point.latitude}',
+          'longitude': '${point.longitude}',
+        },
+      );
+      if (!mounted || _location != point || _sitio.text.trim().isNotEmpty) {
+        return;
+      }
+      final places = result['places'] as List? ?? [];
+      if (places.isNotEmpty) {
+        final name = '${places.first['label']}';
+        _sitio.text = name.length > 120 ? name.substring(0, 120) : name;
+      }
+    } catch (_) {
+      /* Missing address labels do not change the selected pin. */
+    }
+  }
+
+  void _searchLocationName(String value) {
+    _placeTimer?.cancel();
+    final request = ++_placeRequest;
+    setState(() {
+      _placeSuggestions = [];
+      _placeMessage = null;
+      if (_selectedPlaceLabel != null && value.trim() != _selectedPlaceLabel) {
+        _selectedPlaceLabel = null;
+        _location = null;
+      }
+    });
+    _draftEdited();
+    if (!widget.api.supportsCloudAccounts || value.trim().length < 3) return;
+    _placeTimer = Timer(const Duration(milliseconds: 700), () async {
+      if (mounted) setState(() => _placeMessage = 'Finding places...');
+      try {
+        final response = await widget.api.cloudRequest(
+          'places.php',
+          query: {'q': value.trim()},
+        );
+        if (!mounted || request != _placeRequest) return;
+        setState(() {
+          _placeSuggestions = (response['places'] as List? ?? [])
+              .map((p) => Map<String, dynamic>.from(p as Map))
+              .toList();
+          _placeMessage = _placeSuggestions.isEmpty
+              ? 'No matching places. Keep your landmark and choose the pin on the map.'
+              : 'Choose your location below.';
+        });
+      } catch (_) {
+        if (mounted && request == _placeRequest) {
+          setState(
+            () => _placeMessage = 'Search unavailable. Keep your landmark and choose the pin on the map.',
+          );
+        }
+      }
+    });
+  }
+
+  void _selectPlace(Map<String, dynamic> place) {
+    final latitude = double.tryParse('${place['latitude']}'),
+        longitude = double.tryParse('${place['longitude']}');
+    if (latitude == null ||
+        longitude == null ||
+        !latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude.abs() > 85.05112878 ||
+        longitude.abs() > 180) {
+      return;
+    }
+    _cancelGps();
+    _placeTimer?.cancel();
+    _placeRequest++;
+    final label = '${place['label']}';
+    setState(() {
+      _location = ReportLocation.manual(
+        latitude: latitude,
+        longitude: longitude,
+      );
+      _gettingLocation = false;
+      _gpsProgressAccuracy = null;
+      _approximatePosition = null;
+      _selectedPlaceLabel = label.length > 120
+          ? label.substring(0, 120)
+          : label;
+      _sitio.text = _selectedPlaceLabel!;
+      _placeSuggestions = [];
+      _placeMessage =
+          'Location selected. Check its pin using Adjust pin on map.';
+      _error = null;
+    });
+    FocusScope.of(context).unfocus();
+    _draftEdited();
   }
 
   void _nextFromSite() {
@@ -433,6 +789,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
       _error = null;
       _step = 1;
     });
+    _draftEdited();
   }
 
   void _nextFromHealth() async {
@@ -450,6 +807,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
       _error = null;
       _step = 2;
     });
+    _draftEdited();
   }
 
   void goBack() {
@@ -467,6 +825,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
       _confirmed = false;
       _error = null;
     });
+    _draftEdited();
   }
 
   void _review() async {
@@ -484,6 +843,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
       _confirmed = false;
       _error = null;
     });
+    _draftEdited();
   }
 
   Future<void> _submit() async {
@@ -518,6 +878,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
       _error = null;
     });
     try {
+      await _saveDraft();
+      // A resumed draft must use a current server assessment before submission.
+      if (!await _fetchPreview()) return;
       final fields = <String, String>{
         ..._location!.fields,
         'sitio_name': _sitio.text,
@@ -537,6 +900,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
         observations: _observations,
         photoPath: _photo!.path,
       );
+      _clearingDraft = true;
+      if (_draftScope != null) await _draftStore.clear(_draftScope!);
       if (!mounted) return;
       final report = Map<String, dynamic>.from(response['report'] as Map);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -549,6 +914,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
         ),
       );
       _reset();
+      _lastDraft = null;
+      _draftStatus.value = '';
       widget.onSubmitted();
     } catch (error) {
       if (mounted) {
@@ -559,11 +926,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
         );
       }
     } finally {
+      _clearingDraft = false;
       if (mounted) setState(() => _busy = false);
     }
   }
 
   void _reset() {
+    _placeTimer?.cancel();
+    _placeRequest++;
+    _placeSuggestions = [];
+    _placeMessage = null;
+    _selectedPlaceLabel = null;
     _previewTimer?.cancel();
     _previewRequest++;
     _preview = null;
@@ -624,6 +997,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
     }
     return Form(
       key: _formKey,
+      onChanged: _draftEdited,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -638,11 +1012,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
                       ?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const Text('Add details, review, then submit.'),
-                if (widget.onExit != null)
-                  TextButton.icon(
-                    onPressed: _busy ? null : widget.onExit,
-                    icon: const Icon(Icons.close),
-                    label: const Text('Back to dashboard'),
+                if (_draftScope != null)
+                  ValueListenableBuilder<String>(
+                    valueListenable: _draftStatus,
+                    builder: (_, text, _) => text.isEmpty
+                        ? const SizedBox.shrink()
+                        : Text(
+                            text,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                   ),
                 if (_error != null) ...[
                   const SizedBox(height: 10),
@@ -776,7 +1154,21 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
               ),
             ),
             if (_gettingLocation)
-              TextButton(onPressed: _cancelGps, child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => setState(_cancelGps),
+                child: const Text('Cancel'),
+              ),
+            TextButton.icon(
+              onPressed: _gettingLocation || _gettingArea || _busy
+                  ? null
+                  : _findApproximateArea,
+              icon: const Icon(Icons.near_me_outlined),
+              label: Text(
+                _gettingArea
+                    ? 'Finding approximate area...'
+                    : 'Find approximate area',
+              ),
+            ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               key: const ValueKey('manual-location'),
@@ -811,12 +1203,28 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
             const SizedBox(height: 12),
             TextFormField(
               controller: _sitio,
+              onChanged: _searchLocationName,
               decoration: const InputDecoration(
                 labelText: 'Sitio or location name',
+                helperText: 'Choose a place or enter a landmark.',
+                helperMaxLines: 2,
               ),
               validator: (value) => value == null || value.trim().isEmpty
                   ? 'Enter the sitio or location name.'
                   : null,
+            ),
+            if (_placeMessage != null)
+              Text(
+                _placeMessage!,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ..._placeSuggestions.map(
+              (place) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.place_outlined),
+                title: Text('${place['label']}'),
+                onTap: () => _selectPlace(place),
+              ),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
@@ -847,10 +1255,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('This is a follow-up'),
                 value: _followup,
-                onChanged: (value) => setState(() {
-                  _followup = value;
-                  if (!value) _parentReportId = null;
-                }),
+                onChanged: (value) {
+                  setState(() {
+                    _followup = value;
+                    if (!value) _parentReportId = null;
+                  });
+                  _draftEdited();
+                },
               ),
             if (_followup) ...[
               const SizedBox(height: 12),
@@ -1297,6 +1708,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
   }
 
   void _queuePreview() {
+    _draftEdited();
     _previewTimer?.cancel();
     _previewRequest++;
     setState(() {
@@ -1355,7 +1767,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
     final health = _preview?['classification'] as Map?;
     final species = (_preview?['species'] as Map?)?['best'] as Map?;
     return _Section(
-      title: 'Suggested result',
+      title: 'Health check',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1382,6 +1794,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen> {
             const Text(
               'Unknown answers need review. Other choices add context.',
               style: TextStyle(fontSize: 12),
+            ),
+            const Text(
+              'Species assessment',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
             if (_rootType != null && _leafShape != null && _barkTexture != null)
               Text(

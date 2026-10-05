@@ -1,0 +1,23 @@
+{
+  "name": "mangrooves-firebase-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:web": "node scripts/build-web.js",
+    "test": "node --test functions/test/*.test.js web/test/*.test.js",
+    "test:emulators": "firebase emulators:exec --config ../firebase.json --project demo-mangrooves --only auth,firestore,storage \"node functions/test/integration.mjs\"",
+    "test:hosting": "firebase emulators:exec --config ../firebase.json --project demo-mangrooves --only auth,firestore,storage,functions,hosting \"node functions/test/integration.mjs --hosting\"",
+    "test:migration": "firebase emulators:exec --config ../firebase.json --project demo-mangrooves --only auth,firestore,storage \"node functions/test/migration-integration.mjs\""
+  },
+  "dependencies": {
+    "chart.js": "^4.4.7",
+    "firebase": "^12.19.0",
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "firebase-tools": "^15.32.1",
+    "jsdom": "^30.1.1"
+  },
+  "overrides": {"@grpc/grpc-js": "^1.14.5", "gaxios": {"uuid": "^11.1.1"}}
+}

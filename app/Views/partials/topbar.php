@@ -12,6 +12,16 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
         <h1><?= e($displayTitle) ?></h1>
     </div>
     <div class="topbar-actions ms-auto">
+        <?php if ($mobileMoreItems): ?>
+        <div class="dropdown d-lg-none">
+            <button class="icon-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open menu"><i class="bi bi-list" aria-hidden="true"></i></button>
+            <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="max-height:75vh;overflow:auto">
+                <?php foreach ($mobileMoreItems as $entry): ?>
+                    <li><a class="dropdown-item" href="<?= e(url($entry[1])) ?>"><?= e($entry[0]) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php endif; ?>
         <div class="dropdown d-lg-none">
             <button class="icon-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Analytics and timelines"><i class="bi bi-bar-chart" aria-hidden="true"></i></button>
             <ul class="dropdown-menu dropdown-menu-end shadow border-0">
@@ -22,10 +32,10 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
         </div>
         <a class="icon-button position-relative" href="<?= e(url('notifications.php')) ?>" aria-label="Notifications<?= $unreadNotificationCount ? ', ' . $unreadNotificationCount . ' unread' : '' ?>">
             <i class="bi bi-bell" aria-hidden="true"></i>
-            <?php if ($unreadNotificationCount > 0): ?><span class="notification-dot" aria-hidden="true"></span><?php endif; ?>
+            <?php if ($unreadNotificationCount > 0): ?><span class="notification-count" aria-hidden="true"><?= e((string) min($unreadNotificationCount, 99)) ?><?= $unreadNotificationCount > 99 ? '+' : '' ?></span><?php endif; ?>
         </a>
         <div class="dropdown">
-            <button class="user-menu" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <button class="user-menu" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account menu">
                 <span class="user-avatar user-avatar-sm" aria-hidden="true"><?= e(mb_strtoupper(mb_substr((string) $authUser['full_name'], 0, 1))) ?></span>
                 <span class="d-none d-sm-block text-start">
                     <strong><?= e((string) $authUser['full_name']) ?></strong>
@@ -35,7 +45,6 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow border-0">
                 <li><a class="dropdown-item" href="<?= e(url('settings.php')) ?>"><i class="bi bi-person-gear me-2" aria-hidden="true"></i>Profile settings</a></li>
-                <li><button class="dropdown-item d-none" type="button" data-install-app><i class="bi bi-download me-2" aria-hidden="true"></i>Install app</button></li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
                     <form method="post" action="<?= e(url('logout.php')) ?>">

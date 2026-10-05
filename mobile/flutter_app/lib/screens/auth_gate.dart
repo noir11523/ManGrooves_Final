@@ -16,6 +16,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   bool _loading = true;
   Map<String, dynamic>? _user;
+  String? _connectionError;
 
   @override
   void initState() {
@@ -24,6 +25,10 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _restoreSession() async {
+    setState(() {
+      _loading = true;
+      _connectionError = null;
+    });
     if (!widget.api.hasToken) {
       setState(() => _loading = false);
       return;
@@ -31,8 +36,13 @@ class _AuthGateState extends State<AuthGate> {
     try {
       final response = await widget.api.me();
       _user = Map<String, dynamic>.from(response['user'] as Map);
-    } catch (_) {
-      await widget.api.clearSession();
+    } catch (error) {
+      if (error is ApiException && [401, 403].contains(error.statusCode)) {
+        await widget.api.clearSession();
+      } else {
+        _connectionError =
+            'Could not connect. Check your internet connection and try again.';
+      }
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -59,6 +69,39 @@ class _AuthGateState extends State<AuthGate> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_connectionError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('ManGROOVES')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_connectionError!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _restoreSession,
+                  child: const Text('Try again'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await widget.api.clearSession();
+                    if (mounted) {
+                      setState(() {
+                        _connectionError = null;
+                        _user = null;
+                      });
+                    }
+                  },
+                  child: const Text('Sign in with another account'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
     if (_user == null) {
       return LoginScreen(api: widget.api, onAuthenticated: _authenticated);

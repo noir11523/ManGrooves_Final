@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:mangrooves_mobile/core/api_client.dart';
 import 'package:mangrooves_mobile/screens/home_shell.dart';
 
@@ -76,6 +77,7 @@ class _Api extends ApiClient {
 }
 
 void main() {
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   for (final role in ['guardian', 'expert', 'system_admin']) {
     testWidgets(
       '$role small-phone shell has usable back and menu controls and fresh tabs',
@@ -85,13 +87,22 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
         final api = _Api(role);
+        var signOuts = 0;
         await tester.pumpWidget(
           MaterialApp(
-            home: HomeShell(api: api, user: api.user, onSignedOut: () async {}),
+            home: HomeShell(
+              api: api,
+              user: api.user,
+              onSignedOut: () async {
+                signOuts++;
+              },
+            ),
           ),
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
+        expect(find.text('Report map'), findsOneWidget);
+        expect(find.byTooltip('Notifications'), findsOneWidget);
         await tester.tap(find.byTooltip('Analytics and timelines'));
         await tester.pumpAndSettle();
         expect(find.byType(PopupMenuItem<String>).first, findsOneWidget);
@@ -109,7 +120,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           find.text(
-            role == 'guardian' ? 'My analytics' : 'Conservation analytics',
+            role == 'guardian' ? 'My analytics' : 'Community analytics',
           ),
           findsOneWidget,
         );
@@ -133,7 +144,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Growth timeline'));
         await tester.pumpAndSettle();
-        expect(find.text('Growth timelines'), findsOneWidget);
+        expect(find.text('Growth timeline'), findsOneWidget);
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Notifications'));
@@ -143,7 +154,7 @@ void main() {
         for (final label
             in role == 'guardian'
                 ? ['Reports', 'Observe', 'Badges', 'Account']
-                : ['Reports', 'Verify', 'Analytics', 'Account']) {
+                : ['Reports', 'Review', 'Analytics', 'Account']) {
           await tester.tap(
             find.descendant(
               of: find.byType(NavigationBar),
@@ -152,6 +163,20 @@ void main() {
           );
           await tester.pumpAndSettle();
           expect(find.byType(BackButton), findsOneWidget);
+          if (label == 'Reports') {
+            expect(find.text('Report map'), findsNothing);
+          }
+          if (label == 'Observe') {
+            expect(find.text('Back to dashboard'), findsNothing);
+          }
+          if (label == 'Account') {
+            await tester.scrollUntilVisible(
+              find.text('Sign out'),
+              400,
+              scrollable: find.byType(Scrollable).first,
+            );
+            expect(find.text('Sign out'), findsOneWidget);
+          }
           expect(
             tester.takeException(),
             isNull,
@@ -176,7 +201,7 @@ void main() {
         if (role != 'guardian') {
           final analyticsLoads = api.analyticsLoads,
               verificationLoads = api.verificationLoads;
-          for (final label in ['Analytics', 'Verify']) {
+          for (final label in ['Analytics', 'Review']) {
             await tester.tap(
               find.descendant(
                 of: find.byType(NavigationBar),
@@ -188,6 +213,25 @@ void main() {
           expect(api.analyticsLoads, greaterThan(analyticsLoads));
           expect(api.verificationLoads, greaterThan(verificationLoads));
         }
+        await tester.tap(
+          find.descendant(
+            of: find.byType(NavigationBar),
+            matching: find.text('Account'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Sign out'),
+          400,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.text('Sign out'));
+        await tester.pumpAndSettle();
+        expect(
+          signOuts,
+          1,
+          reason: '$role keeps a working Sign out in Account',
+        );
       },
     );
   }

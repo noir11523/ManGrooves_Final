@@ -21,9 +21,9 @@ $statCards = [
 <section class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
     <div>
         <p class="text-uppercase text-success fw-semibold small mb-1"><?= $isGuardian ? 'Guardian workspace' : ($role === 'expert' ? 'Expert workspace' : 'System administration') ?></p>
-        <h1 class="h2 mb-1">Welcome, <?= e(explode(' ', trim((string) $user['full_name']))[0] ?: $user['full_name']) ?></h1>
+        <h1 class="h2 mb-1">Hi, <?= e($user['first_name'] ?? explode(' ', trim((string) $user['full_name']))[0] ?: $user['full_name']) ?>!</h1>
         <p class="text-body-secondary mb-0">
-            <?= $isGuardian ? 'Monitor your community’s mangroves and keep follow-ups on schedule.' : 'Review community evidence and track the condition of monitored clusters.' ?>
+            Your latest mangrove updates.
         </p>
     </div>
 
@@ -88,9 +88,9 @@ $statCards = [
                     <a class="list-group-item list-group-item-action py-3" href="<?= e(url('reports.php?id=' . $report['id'])) ?>">
                         <div class="d-flex justify-content-between gap-2">
                             <strong><?= e($report['report_code']) ?></strong>
-                            <span class="badge <?= e(report_status_class((string) $report['status'])) ?>"><?= e(ucfirst((string) $report['status'])) ?></span>
+                            <span class="badge <?= e(report_status_class((string) $report['status'])) ?>"><?= e($report['status'] === 'pending' && !empty($report['needs_attention']) ? 'Needs attention' : ucfirst((string) $report['status'])) ?></span>
                         </div>
-                        <div class="small text-body-secondary mt-1"><?= e($report['cluster_name'] ?: $report['species_name'] ?: 'New observation site') ?></div>
+                        <div class="small text-body-secondary mt-1"><?= e(($report['cluster_name'] ?? '') ?: ($report['species_name'] ?? '') ?: 'New observation site') ?></div>
                         <div class="small mt-1"><span class="badge <?= e(health_class((string) $report['display_health'])) ?>"><?= e($report['display_health']) ?></span> · <?= e(format_datetime((string) $report['submitted_at'], 'M j, Y')) ?></div>
                     </a>
                 <?php endforeach; ?>

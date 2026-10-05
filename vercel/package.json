@@ -1,0 +1,16 @@
+{
+  "name": "mangrooves-php-vercel",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "preview": "node preview.mjs",
+    "publish": "node publish.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "postcss": "8.5.28",
+    "vercel": "62.2.0"
+  }
+}

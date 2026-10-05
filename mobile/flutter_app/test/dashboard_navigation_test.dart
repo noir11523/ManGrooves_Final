@@ -60,7 +60,7 @@ void main() {
         await tester.tap(find.text('Verified'));
         await tester.pumpAndSettle();
         expect(api.status, 'verified');
-        expect(find.text('No reports found.'), findsOneWidget);
+        expect(find.text('No reports match this filter.'), findsOneWidget);
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Needs attention'));

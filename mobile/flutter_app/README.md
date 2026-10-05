@@ -1,13 +1,24 @@
+> **Current cloud backend: Supabase Free.** The [PHP website is live](https://mangrooves-php.vercel.app), and the database/API are deployed with existing data imported. Gmail SMTP is configured and a live code-send request succeeded; receiving and entering a real inbox code still needs confirmation. Follow the [Supabase setup guide](../../docs/SUPABASE_MIGRATION.md). The Firebase backend sections below are rollback documentation.
+
 # ManGROOVES Flutter client
 
-This is the native Android/iOS client for the ManGROOVES PHP and MariaDB
-system. Guardians can register, monitor sites, submit GPS or manual-pin photo observations,
-link follow-ups, view reports and badges, and edit their profile. Experts and
-administrators can verify reports and view role-appropriate analytics. Experts
+New builds use Supabase by default. Follow the [Supabase migration guide](../../docs/SUPABASE_MIGRATION.md), fill in `supabase-config.json`, deploy the API, and run `build-apk.cmd`. The APK connects through the internet; users do not enter server IPs or share the laptop's Wi-Fi.
+
+**[Download the Android APK](https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk).** The website's Download Android APK links download this file directly. The build script writes version and SHA-256 metadata, which the website packaging checks before publishing.
+
+Supabase Auth uses HTTPS with secure refresh-token storage. The shared Edge API handles reports, scoring, private photos, and role-specific analytics. Firebase and PHP remain explicit rollback choices (`-Backend firebase` / `-Backend legacy`) with separate sessions.
+
+Navigation keeps one Notifications button in the top bar and one Sign out under Account. Report map opens from the dashboard. The report form uses the app-bar Back button instead of a second exit button, while drafts save automatically. Analytics, Health history and Growth timeline keep their existing positions. The website uses the same account labels, with Profile settings and Sign out in its top-right menu.
+
+In **Report map**, **Find a location** offers address and landmark suggestions. Selecting one centers the map and adds a blue search pin without changing report coordinates or filtering out reports. Loaded report locations can also be selected. Status, Health and page controls retain the chosen location. The map remains available while reports load, when no reports match, or after a report request fails; retry controls explain report and tile failures.
+
+Guardians can register, monitor sites, submit GPS or manual-pin photo observations,
+link follow-ups, view reports and badges, and edit their profile. Approved experts can also submit reports. New experts verify their email and apply with a private work/professional ID code for admin approval. Experts and
+administrators can verify other users' reports and view role-appropriate analytics. Experts
 receive health summaries and high-risk results; computed survival metrics remain
 restricted to system administrators.
 
-## Server configuration
+## Legacy server configuration
 
 Local pilot builds include a small sliders icon below the sign-in buttons,
 with the tooltip **Server connection**. Tapping it opens a dismissible popup;
@@ -27,7 +38,7 @@ Build for a different local computer address from the repository root:
 
 ```powershell
 .\mobile\flutter_app\build-apk.ps1 `
-  -ApiBaseUrl 'http://YOUR-PC-IP/mangrooves_v2/public/mobile-api'
+  -Backend legacy -ApiBaseUrl 'http://YOUR-PC-IP/mangrooves_v2/public/mobile-api'
 ```
 
 For production Android and iPhone builds, use the public HTTPS endpoint:
@@ -70,10 +81,18 @@ steps.
 
 ## Registration and report location
 
-Successful registration returns the new authenticated user to the sign-in route,
-which opens the dashboard after the registration route closes. Errors preserve
-the form entries. Regression tests cover successful navigation, rejected
-registration, and invalid email validation.
+Unfinished reports save quietly for each account on this phone, including the step, answers and a durable copy of the selected photo. Reopening **Observe / Submit report** restores progress without a prompt or draft controls. Failed submissions keep the draft; successful submission clears it. Storage errors still show an inline notice. Drafts are local and do not transfer between devices or survive clearing app data. Cached form data lets an existing draft reopen during a connection problem; previewing and submitting still require the online API. The entered location name also carries into the map search field.
+
+The location-name field suggests places as you type. Choosing one selects its map pin and cancels GPS so later readings cannot replace it. **Find approximate area** centers the map from the network area and still requires a manual pin. Exact GPS coordinates are never inferred from an approximate network address. Nearby addresses are suggested only if the location name is empty.
+
+The Supabase registration screen matches the PHP website: **Account details → Verify email → Complete profile**. Continue sends a six-digit email code after the name, email, passwords, and privacy consent are valid. Verify code unlocks role, barangay, optional phone, and the expert ID code. Guardians finish immediately; experts submit an application for administrator approval. Back preserves typed details, Change email clears its verification, and resending has a one-minute pause. Sign-in has a single password toggle, a full-width primary button, and clear Forgot password/Create account actions.
+
+After a verified guardian finishes registration, the app signs in automatically
+and opens the dashboard without asking for credentials again. If that sign-in
+request fails, Continue to dashboard retries it without creating another account.
+Expert applicants remain pending until approved. Regression tests cover the full
+registration-to-dashboard transition, retry, rejected registration, and invalid
+email validation.
 
 The Site step offers **Choose location on map** and **Find my location**.
 The map opens near the account's barangay or selected cluster. Guardians must
@@ -92,7 +111,8 @@ to the selected section without clearing answers. The summary refreshes with
 the latest edits, and a final confirmation is required to send the report.
 Follow-up choices stay hidden until **This is a follow-up** is enabled.
 Back controls return to the previous step or dashboard; leaving the report tab
-keeps the in-memory draft until sign-out or app restart.
+keeps the saved draft on this phone. Reopening the report form with the same
+account restores it after an app restart as well.
 
 Guardian, expert, and administrator dashboards show the cluster health map
 below Latest reports. Tapping report totals opens the corresponding status
@@ -127,3 +147,5 @@ It does not download maps in bulk. Map tiles require internet unless cached;
 known-coordinate entry remains available without tiles. Before scaling beyond
 the pilot, review the [OSM tile policy](https://operations.osmfoundation.org/policies/tiles/)
 and use an appropriate tile service for the expected traffic.
+
+Expert registration uses a typed **Expert ID code** (work or professional ID number), with no photo upload. The email code verifies the email address; administrator approval is still required for expert access. Administrators can read the ID code in **Expert applications**. Older applications with private ID photos remain available for review.

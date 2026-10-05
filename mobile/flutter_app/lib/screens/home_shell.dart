@@ -67,8 +67,8 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final titles = _guardian
-        ? ['Dashboard', 'Reports', 'New report', 'Badges', 'Account']
-        : ['Dashboard', 'Reports', 'Verify', 'Analytics', 'Account'];
+        ? ['Dashboard', 'Reports', 'Submit a report', 'Badges', 'Account']
+        : ['Dashboard', 'Reports', 'Review reports', 'Analytics', 'Account'];
     final pages = _guardian
         ? <Widget>[
             DashboardScreen(
@@ -84,6 +84,7 @@ class _HomeShellState extends State<HomeShell> {
             SubmitReportScreen(
               key: _submissionKey,
               api: widget.api,
+              draftOwner: '${_user['uid'] ?? _user['id']}',
               initialParentReportId: _followUpReportId,
               active: _index == 2,
               onExit: () => setState(() => _index = 0),
@@ -193,6 +194,29 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
         body: IndexedStack(index: _index, children: pages),
+        floatingActionButton: _user['role'] == 'expert' && _index == 1
+            ? FloatingActionButton.extended(
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: const Text('Submit report'),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (context) => Scaffold(
+                      appBar: AppBar(title: const Text('Submit a report')),
+                      body: SubmitReportScreen(
+                        api: widget.api,
+                        draftOwner: '${_user['uid'] ?? _user['id']}',
+                        onSubmitted: () {
+                          Navigator.pop(context);
+                          setState(() => _reportsVersion++);
+                        },
+                        onExit: () => Navigator.pop(context),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : null,
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: (value) => setState(() => _index = value),
@@ -223,7 +247,7 @@ class _HomeShellState extends State<HomeShell> {
               const NavigationDestination(
                 icon: Icon(Icons.fact_check_outlined),
                 selectedIcon: Icon(Icons.fact_check),
-                label: 'Verify',
+                label: 'Review',
               ),
             if (!_guardian)
               const NavigationDestination(

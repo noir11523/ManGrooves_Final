@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/display_text.dart';
 import 'report_detail_screen.dart';
 
 class ValidationHistoryScreen extends StatefulWidget {
@@ -51,7 +52,7 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
     final page = (_data?['page'] as num?)?.toInt() ?? 1,
         pages = (_data?['pages'] as num?)?.toInt() ?? 1;
     return Scaffold(
-      appBar: AppBar(title: const Text('Validation history')),
+      appBar: AppBar(title: const Text('Review history')),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -64,13 +65,15 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
                 child: Text('$_error Retry'),
               ),
             if (!_loading && _error == null && items.isEmpty)
-              const Text('No decisions yet.'),
+              const Text('No reviews yet.'),
             for (final item in items)
               Card(
                 child: ListTile(
-                  title: Text('${item['report_code']} · ${item['action']}'),
+                  title: Text(
+                    '${item['report_code']} · ${reviewActionLabel(item['action'])}',
+                  ),
                   subtitle: Text(
-                    '${item['reviewer']} · ${item['created_at']}\n${item['status']} · ${item['health'] ?? 'No confirmed health'}',
+                    '${item['verifier_name'] ?? item['reviewer'] ?? 'Automatic check'} · ${item['created_at']}\n${statusLabel(item['new_status'] ?? item['status'])} · ${item['new_health'] ?? item['health'] ?? 'Not confirmed'}',
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   isThreeLine: true,
@@ -121,7 +124,7 @@ class ValidationHistoryCard extends StatelessWidget {
     final history = (report['verification_history'] as List? ?? []).cast<Map>();
     return Card(
       child: ExpansionTile(
-        title: const Text('Validation history'),
+        title: const Text('Review history'),
         initiallyExpanded: true,
         children: [
           if (history.isEmpty)
@@ -137,9 +140,11 @@ class ValidationHistoryCard extends StatelessWidget {
             ),
           for (final event in history)
             ListTile(
-              title: Text('${event['action']} · ${event['verifier_name']}'),
+              title: Text(
+                '${reviewActionLabel(event['action'])} · ${event['verifier_name'] ?? 'Automatic check'}',
+              ),
               subtitle: Text(
-                '${event['created_at']}\n${event['previous_status']} → ${event['new_status']}\nHealth: ${event['previous_health'] ?? 'Unknown'} → ${event['new_health'] ?? 'Not confirmed'}\nSpecies: ${event['previous_species_name'] ?? 'Unassigned'} → ${event['new_species_name'] ?? 'Unassigned'}${event['comment'] == null ? '' : '\n${event['comment']}'}',
+                '${event['created_at']}\n${statusLabel(event['previous_status'])} → ${statusLabel(event['new_status'])}\nHealth: ${event['previous_health'] ?? 'Unknown'} → ${event['new_health'] ?? 'Not confirmed'}\nSpecies: ${event['previous_species_name'] ?? 'Unassigned'} → ${event['new_species_name'] ?? 'Unassigned'}${event['comment'] == null ? '' : '\n${event['comment']}'}',
               ),
             ),
         ],

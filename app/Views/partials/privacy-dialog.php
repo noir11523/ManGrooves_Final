@@ -5,7 +5,7 @@
     </div>
     <div class="privacy-dialog-body" tabindex="0" aria-label="Privacy notice text">
         <p>ManGROOVES collects only the information needed to coordinate community mangrove monitoring, verify field evidence, and support conservation decisions.</p>
-        <?php require APP_ROOT . '/app/Views/partials/privacy-content.php'; ?>
+        <?php require APP_ROOT . (defined('MANGROOVES_CLOUD') ? '/app/Views/cloud/privacy-content.php' : '/app/Views/partials/privacy-content.php'); ?>
     </div>
     <div class="privacy-dialog-footer">
         <button class="btn btn-primary" type="button" data-close-privacy>OK</button>

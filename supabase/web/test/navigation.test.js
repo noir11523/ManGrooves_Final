@@ -1,0 +1,36 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {JSDOM} from 'jsdom';
+import {bindMenu} from '../src/navigation.js';
+
+test('mobile menu supports closing, keyboard focus, navigation and desktop resize', () => {
+  const dom = new JSDOM(`<div class="shell"><aside id="site-menu"><button class="menu-close">Close menu</button><a href="#reports">Reports</a><a href="#profile">Profile</a></aside><button class="menu-backdrop" hidden></button><div class="shell-main"><button class="mobile-menu" aria-expanded="false">Menu</button></div></div>`);
+  globalThis.window = dom.window; globalThis.document = dom.window.document;
+  let resize, removed = false;
+  const viewport = {matches:true,addEventListener(_, fn){resize=fn;},removeEventListener(){removed=true;}};
+  window.matchMedia = () => viewport;
+  const root = document.querySelector('.shell'), menu = document.querySelector('#site-menu');
+  const button = document.querySelector('.mobile-menu'), close = document.querySelector('.menu-close');
+  const dispose = bindMenu(root);
+  button.click();
+  assert.equal(document.activeElement, close);
+  assert.equal(button.getAttribute('aria-expanded'), 'true');
+  assert.equal(menu.getAttribute('aria-modal'), 'true');
+  assert.equal(document.querySelector('.shell-main').inert, true);
+  const last = menu.querySelector('a:last-child'); last.focus();
+  last.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true}));
+  assert.equal(document.activeElement, close);
+  close.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Tab',shiftKey:true,bubbles:true,cancelable:true}));
+  assert.equal(document.activeElement, last);
+  last.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  assert.equal(document.activeElement, button);
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  assert.equal(document.querySelector('.shell-main').inert, false);
+  button.click(); document.querySelector('.menu-backdrop').click();
+  assert.equal(root.classList.contains('menu-open'), false);
+  button.click(); menu.querySelector('a').click();
+  assert.equal(root.classList.contains('menu-open'), false);
+  button.click(); viewport.matches = false; resize();
+  assert.equal(document.querySelector('.shell-main').inert, false);
+  dispose(); assert.ok(removed); dom.window.close();
+});

@@ -1,5 +1,7 @@
 # Setup guide
 
+For the current Supabase website matching Vercel, follow [Local preview](VERCEL_PHP.md#local-preview). After the initial setup, run `scripts\start.cmd` and open **http://127.0.0.1:8086**. It uses the same accounts and data as the published site. The sections below describe the legacy PHP/MySQL installation.
+
 ## Option A: included PHP server (recommended for development)
 
 ### 1. Start MySQL
@@ -49,7 +51,7 @@ The default installer imports `database/schema.sql` and the development-only `da
 ### 4. Start the site
 
 ```powershell
-.\scripts\start.cmd
+.\scripts\start.cmd -Backend legacy
 ```
 
 Visit <http://127.0.0.1:8085>. Keep the PowerShell window open while using the site; press `Ctrl+C` to stop it. An empty local `APP_URL` keeps redirects on whichever host (`127.0.0.1` or `localhost`) you chose; do not alternate hosts during one session.

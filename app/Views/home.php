@@ -14,6 +14,9 @@
                         <a class="btn btn-primary btn-lg rounded-pill" href="<?= e(url('dashboard.php')) ?>">
                             Go to your dashboard <i class="bi bi-arrow-right ms-2" aria-hidden="true"></i>
                         </a>
+                    <?php elseif (defined('MANGROOVES_CLOUD')): ?>
+                        <a class="btn btn-primary btn-lg rounded-pill" href="<?= e(url('register.php')) ?>">Become a guardian <i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></a>
+                        <a class="btn btn-outline-light btn-lg rounded-pill" href="<?= e(url('login.php')) ?>">Sign in</a>
                     <?php else: ?>
                         <button class="btn btn-primary btn-lg rounded-pill" type="button" data-bs-toggle="modal" data-bs-target="#authModal" data-auth-tab="register">
                             Become a guardian <i class="bi bi-arrow-right ms-2" aria-hidden="true"></i>
@@ -32,6 +35,7 @@
     <a class="hero-scroll" href="#about" aria-label="Learn more about ManGROOVES"><i class="bi bi-chevron-down" aria-hidden="true"></i></a>
 </section>
 
+<?php if (!defined('MANGROOVES_CLOUD') || ($cloudStatsAvailable ?? false)): ?>
 <section class="impact-strip" aria-label="ManGROOVES impact">
     <div class="container">
         <div class="row g-0">
@@ -50,6 +54,7 @@
         </div>
     </div>
 </section>
+<?php endif; ?>
 
 <section class="section-padding" id="about">
     <div class="container">
@@ -166,6 +171,8 @@
             </div>
             <?php if ($authUser): ?>
                 <a class="btn btn-light btn-lg rounded-pill" href="<?= e(url($authUser['role'] === 'guardian' ? 'submit-report.php' : 'dashboard.php')) ?>">Continue to ManGROOVES</a>
+            <?php elseif (defined('MANGROOVES_CLOUD')): ?>
+                <a class="btn btn-light btn-lg rounded-pill" href="<?= e(url('register.php')) ?>">Create a free account</a>
             <?php else: ?>
                 <button class="btn btn-light btn-lg rounded-pill" type="button" data-bs-toggle="modal" data-bs-target="#authModal" data-auth-tab="register">Create a free account</button>
             <?php endif; ?>
@@ -173,6 +180,6 @@
     </div>
 </section>
 
-<?php if (!$authUser): ?>
+<?php if (!$authUser && !defined('MANGROOVES_CLOUD')): ?>
     <?php require APP_ROOT . '/app/Views/partials/auth-modal.php'; ?>
 <?php endif; ?>

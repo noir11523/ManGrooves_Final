@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:mangrooves_mobile/core/api_client.dart';
 import 'package:mangrooves_mobile/core/report_location.dart';
 import 'package:mangrooves_mobile/screens/location_picker_screen.dart';
 
@@ -23,11 +24,33 @@ Finder _field(String label) => find.byWidgetPredicate(
   (widget) => widget is TextField && widget.decoration?.labelText == label,
 );
 
+class _PlaceApi extends ApiClient {
+  @override
+  bool get supportsCloudAccounts => true;
+  @override
+  Future<Map<String, dynamic>> cloudRequest(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? query,
+    bool anonymous = false,
+  }) async => {
+    'places': [
+      {
+        'label': 'Test seaside landmark',
+        'latitude': 10.284,
+        'longitude': 123.884,
+      },
+    ],
+  };
+}
+
 Future<void> _openPicker(
   WidgetTester tester, {
   ReportLocation? initial,
+  String initialName = '',
   LatLng? approximateCenter,
   double? approximateAccuracy,
+  ApiClient? api,
   required void Function(ReportLocation?) onResult,
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -44,10 +67,12 @@ Future<void> _openPicker(
                 await Navigator.of(context).push<ReportLocation>(
                   MaterialPageRoute(
                     builder: (_) => LocationPickerScreen(
+                      api: api,
                       initialCenter: const LatLng(10.2833, 123.8833),
                       barangayCenter: const LatLng(10.2833, 123.8833),
                       maxDistanceMeters: 5000,
                       initialLocation: initial,
+                      initialName: initialName,
                       approximateCenter: approximateCenter,
                       approximateAccuracy: approximateAccuracy,
                       tileProvider: _MemoryTiles(),
@@ -68,6 +93,29 @@ Future<void> _openPicker(
 
 void main() {
   testWidgets(
+    'choosing an address moves the pin and returns a manual observation location',
+    (tester) async {
+      ReportLocation? result;
+      await _openPicker(
+        tester,
+        api: _PlaceApi(),
+        onResult: (value) => result = value,
+      );
+      await tester.enterText(_field('Find an address or landmark'), 'seaside');
+      await tester.pump(const Duration(milliseconds: 750));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Test seaside landmark'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-location')));
+      await tester.pumpAndSettle();
+      expect(result?.latitude, 10.284);
+      expect(result?.longitude, 123.884);
+      expect(result?.source, 'manual');
+      expect(result?.accuracy, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'accurate GPS shows its uncertainty circle and keeps GPS when unchanged',
     (tester) async {
       ReportLocation? result;
@@ -79,9 +127,18 @@ void main() {
       await _openPicker(
         tester,
         initial: fix,
+        initialName: 'Coastal landmark',
+        api: _PlaceApi(),
         onResult: (value) => result = value,
       );
       expect(find.byType(CircleLayer), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(_field('Find an address or landmark'))
+            .controller!
+            .text,
+        'Coastal landmark',
+      );
       expect(
         tester
             .widget<CircleLayer>(find.byType(CircleLayer))

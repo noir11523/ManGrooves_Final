@@ -1,0 +1,5 @@
+{
+  "BACKEND": "supabase",
+  "SUPABASE_URL": "https://YOUR_PROJECT_REF.supabase.co",
+  "SUPABASE_PUBLISHABLE_KEY": "YOUR_PUBLISHABLE_KEY"
+}

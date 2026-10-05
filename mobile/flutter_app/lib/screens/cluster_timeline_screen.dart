@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 import '../core/api_client.dart';
 import 'cluster_health_map.dart';
@@ -48,171 +49,226 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cluster = _data?['cluster'] as Map? ?? {};
-    final entries = (_data?['timeline'] as List? ?? [])
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
+    final growth = widget.initialTab == 1,
+        cluster = _data?['cluster'] as Map? ?? {};
+    final entries =
+        (_data?['timeline'] as List? ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList()
+          ..sort(
+            (a, b) => '${a['submitted_at']}'.compareTo('${b['submitted_at']}'),
+          );
     final counts = entries
-        .where((item) => item['observed_alive_count'] != null)
+        .where((e) => e['observed_alive_count'] != null)
         .toList();
-    final maxCount = counts.fold<double>(1, (current, item) {
-      final value = double.tryParse('${item['observed_alive_count']}') ?? 0;
-      return value > current ? value : current;
-    });
-    return DefaultTabController(
-      length: 2,
-      initialIndex: widget.initialTab,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text('${cluster['name'] ?? 'Cluster timeline'}'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Health history'),
-              Tab(text: 'Growth timeline'),
+    final shown = growth ? counts : entries.reversed.toList();
+    final maximum = counts.fold<double>(
+      1,
+      (v, e) => (e['observed_alive_count'] as num).toDouble() > v
+          ? (e['observed_alive_count'] as num).toDouble()
+          : v,
+    );
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(growth ? 'Growth timeline' : 'Health history'),
+      ),
+      body: _data == null
+          ? Center(
+              child: _error == null
+                  ? const CircularProgressIndicator()
+                  : TextButton(onPressed: _load, child: Text('$_error Retry')),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  Text(
+                    '${cluster['name'] ?? 'Mangrove site'}',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    growth
+                        ? 'Living mangroves counted each visit. Changes may reflect a different area, not tree height.'
+                        : 'Verified health results at this site, newest first.',
+                  ),
+                  const SizedBox(height: 20),
+                  if (shown.isEmpty)
+                    const Text('No verified visits yet.')
+                  else
+                    VisitChart(
+                      entries: growth ? counts : entries,
+                      growth: growth,
+                    ),
+                  const SizedBox(height: 20),
+                  for (int i = 0; i < shown.length; i++)
+                    if (growth)
+                      _GrowthVisit(
+                        entry: shown[i],
+                        previous: i == 0 ? null : shown[i - 1],
+                        maximum: maximum,
+                      )
+                    else
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${shown[i]['submitted_at']}'.split(' ').first,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${shown[i]['health']}',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: ClusterHealthMap.healthColor(
+                                    '${shown[i]['health']}',
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '${shown[i]['species_name'] ?? 'Species not confirmed'}',
+                              ),
+                              if (shown[i]['expert_feedback'] != null)
+                                Text('${shown[i]['expert_feedback']}'),
+                              if (shown[i]['can_view_details'] == true)
+                                TextButton(
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => ReportDetailScreen(
+                                        api: widget.api,
+                                        reportId: int.parse(
+                                          '${shown[i]['id']}',
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text('View Report #${shown[i]['id']}'),
+                                )
+                              else
+                                const Text('Community observation'),
+                            ],
+                          ),
+                        ),
+                      ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+class VisitChart extends StatelessWidget {
+  const VisitChart({super.key, required this.entries, required this.growth});
+  final List<Map<String, dynamic>> entries;
+  final bool growth;
+  @override
+  Widget build(BuildContext context) {
+    const levels = {'At Risk': 0.0, 'Stressed': 1.0, 'Healthy': 2.0};
+    final spots = <FlSpot>[
+      for (int i = 0; i < entries.length; i++)
+        growth
+            ? FlSpot(
+                i.toDouble(),
+                (entries[i]['observed_alive_count'] as num).toDouble(),
+              )
+            : levels.containsKey(entries[i]['health'])
+            ? FlSpot(i.toDouble(), levels[entries[i]['health']]!)
+            : FlSpot.nullSpot,
+    ];
+    return Semantics(
+      label: growth
+          ? 'Living mangroves by visit. Values are listed below.'
+          : 'Health by visit. Results are listed below.',
+      child: SizedBox(
+        height: 245,
+        child: LineChart(
+          LineChartData(
+            minY: 0,
+            maxY: growth ? null : 2,
+            minX: 0,
+            maxX: entries.length == 1 ? 1 : (entries.length - 1).toDouble(),
+            titlesData: FlTitlesData(
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  interval: entries.length > 5
+                      ? (entries.length / 4).ceilToDouble()
+                      : 1,
+                  reservedSize: 32,
+                  getTitlesWidget: (value, meta) {
+                    final i = value.round();
+                    if (i < 0 || i >= entries.length) {
+                      return const SizedBox.shrink();
+                    }
+                    return SideTitleWidget(
+                      meta: meta,
+                      child: Text(
+                        '${entries[i]['submitted_at']}'
+                            .split(' ')
+                            .first
+                            .substring(5),
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: growth ? 42 : 65,
+                  interval: growth ? null : 1,
+                  getTitlesWidget: (value, meta) => Text(
+                    growth
+                        ? value.toInt().toString()
+                        : {0: 'At Risk', 1: 'Stressed', 2: 'Healthy'}[value
+                                  .toInt()] ??
+                              '',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
+            ),
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipItems: (points) => points
+                    .map(
+                      (p) => LineTooltipItem(
+                        growth
+                            ? '${p.y.toInt()} living mangroves'
+                            : {0: 'At Risk', 1: 'Stressed', 2: 'Healthy'}[p.y
+                                      .toInt()] ??
+                                  'Not sure',
+                        const TextStyle(color: Colors.white),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            lineBarsData: [
+              LineChartBarData(
+                spots: spots,
+                isCurved: false,
+                isStepLineChart: !growth,
+                color: Theme.of(context).colorScheme.primary,
+                barWidth: 3,
+                dotData: const FlDotData(show: true),
+              ),
             ],
           ),
         ),
-        body: _data == null
-            ? Center(
-                child: _error == null
-                    ? const CircularProgressIndicator()
-                    : TextButton(
-                        onPressed: _load,
-                        child: Text('$_error Retry'),
-                      ),
-              )
-            : TabBarView(
-                children: [
-                  RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        Text(
-                          '${entries.length} verified visits',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const Text(
-                          'Newest visits first. Tap a report for details.',
-                        ),
-                        if (entries.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Text('No verified visits yet.'),
-                          ),
-                        for (final entry in entries.reversed)
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.eco,
-                                        color: ClusterHealthMap.healthColor(
-                                          '${entry['health']}',
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          '${entry['health']}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      Text(
-                                        '${entry['submitted_at']}'
-                                            .split(' ')
-                                            .first,
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '${entry['species_name'] ?? 'Species unassigned'}',
-                                  ),
-                                  Text(
-                                    'Living mangroves: ${entry['observed_alive_count'] ?? 'Not counted'}',
-                                  ),
-                                  if (entry['parent_report_id'] != null)
-                                    const Text('Follow-up visit'),
-                                  if (entry['photo_url'] != null)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 10,
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image.network(
-                                          widget.api
-                                              .resolve('${entry['photo_url']}')
-                                              .toString(),
-                                          headers: widget.api.imageHeaders,
-                                          height: 150,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) =>
-                                              const SizedBox.shrink(),
-                                        ),
-                                      ),
-                                    ),
-                                  if (entry['expert_feedback'] != null)
-                                    Text('${entry['expert_feedback']}'),
-                                  if (entry['can_view_details'] == true)
-                                    TextButton(
-                                      onPressed: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => ReportDetailScreen(
-                                            api: widget.api,
-                                            reportId: int.parse(
-                                              '${entry['id']}',
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'View ${entry['report_code']}',
-                                      ),
-                                    )
-                                  else
-                                    const Text(
-                                      'Community observation',
-                                      style: TextStyle(color: Colors.black54),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Text(
-                        'Living mangroves over time',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const Text(
-                        'Counts from verified visits, oldest first. Changes can reflect a different area counted.',
-                      ),
-                      const SizedBox(height: 16),
-                      if (counts.isEmpty) const Text('No verified counts yet.'),
-                      for (int index = 0; index < counts.length; index++)
-                        _GrowthVisit(
-                          entry: counts[index],
-                          previous: index == 0 ? null : counts[index - 1],
-                          maximum: maxCount,
-                        ),
-                    ],
-                  ),
-                ],
-              ),
       ),
     );
   }
@@ -317,7 +373,7 @@ class _ClustersScreenState extends State<ClustersScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(
-        widget.initialTab == 1 ? 'Growth timelines' : 'Health history',
+        widget.initialTab == 1 ? 'Growth timeline' : 'Health history',
       ),
     ),
     body: RefreshIndicator(

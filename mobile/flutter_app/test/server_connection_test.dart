@@ -42,7 +42,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.checkedAddress, '192.168.213.53');
     expect(find.byType(BottomSheet), findsNothing);
-    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Welcome back to ManGROOVES.'), findsOneWidget);
     expect(find.text('Connected to ManGROOVES. You can sign in now.'), findsOneWidget);
   });
 }

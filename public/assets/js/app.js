@@ -176,7 +176,7 @@
         setInstallVisibility(false);
     });
 
-    if ('serviceWorker' in navigator && (window.isSecureContext || location.hostname === 'localhost')) {
+    if (!document.body.dataset.cloudHost && 'serviceWorker' in navigator && (window.isSecureContext || location.hostname === 'localhost')) {
         window.addEventListener('load', () => {
             const appBase = document.body.dataset.appBase || document.baseURI;
             navigator.serviceWorker.register(new URL('service-worker.js', appBase).href).catch(() => {
