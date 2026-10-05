@@ -17,7 +17,7 @@
                     <li class="nav-item"><a class="nav-link" href="#for-experts">For experts</a></li>
                     <?php if (!$authUser): ?>
                         <li class="nav-item"><a class="nav-link" href="<?= e(url('login.php')) ?>">Sign in</a></li>
-                        <li class="nav-item"><a class="btn btn-primary home-nav-join" href="<?= e(url('register.php')) ?>">Become a Coastal Guardian</a></li>
+                        <li class="nav-item"><a class="btn btn-primary home-nav-join" href="<?= e(url('register.php')) ?>">Register</a></li>
                     <?php endif; ?>
                 <?php endif; ?>
                 <?php if ($authUser): ?>
