@@ -42,6 +42,7 @@ export class Database {
   constructor(client) { this.client=client; }
   async rpc(name,args) { const {data,error}=await this.client.rpc(name,args); if(error) throw error; return data; }
   collection(name) { return new Query(this,name); }
+  publicSummary() { return this.rpc('app_public_summary',{}); }
   batch() { return new Transaction(this); }
   async read(ref,tx) {
     const query=ref instanceof Query;

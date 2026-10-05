@@ -4,6 +4,23 @@
     const root = document.documentElement;
     root.classList.add('js');
 
+    // The introduction renders first; only public totals load in the background.
+    const homeStats = document.querySelector('[data-home-stats]');
+    if (homeStats) {
+        fetch('/cloud-api.php?route=explore.php&summary_only=1', {
+            credentials: 'same-origin', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20000)
+        }).then(async (response) => {
+            const data = await response.json();
+            if (!response.ok || !data.ok) throw new Error('Totals unavailable');
+            const fields = [...homeStats.querySelectorAll('[data-stat]')];
+            if (fields.some((field) => !Number.isSafeInteger(data.summary?.[field.dataset.stat]) || data.summary[field.dataset.stat] < 0)) throw new Error('Invalid totals');
+            fields.forEach((field) => { field.textContent = data.summary[field.dataset.stat].toLocaleString(); });
+            homeStats.querySelector('[data-stats-status]').textContent = 'Community totals updated.';
+        }).catch(() => {
+            homeStats.querySelector('[data-stats-status]').textContent = 'Community totals are unavailable right now.';
+        }).finally(() => { homeStats.setAttribute('aria-busy', 'false'); });
+    }
+
     const privacyNotice = document.getElementById('privacyNotice');
     let privacyTrigger = null;
     document.querySelectorAll('[data-privacy-notice]').forEach((link) => {

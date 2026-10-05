@@ -24,10 +24,7 @@ final class CloudRouter
             json_response($data);
         }
         if ($path === '/' || $path === '/index.php') {
-            $stats = [];
-            try { $data = CloudClient::api('explore.php', anonymous: true); $stats = $data['summary'] ?? []; }
-            catch (CloudError $ignored) { /* The public introduction remains available during an API outage. */ }
-            render('home', ['pageTitle' => 'ManGROOVES', 'bodyClass' => 'home-page', 'stats' => $stats, 'cloudStatsAvailable' => isset($stats['verified_reports']), 'authUser' => Auth::user()]);
+            render('home', ['pageTitle' => 'ManGROOVES', 'bodyClass' => 'home-page', 'stats' => [], 'authUser' => Auth::user()]);
             return;
         }
         if ($path === '/privacy.php') {
@@ -100,7 +97,9 @@ final class CloudRouter
             if (!in_array($route, $post ? self::WRITE : self::READ, true)) throw new CloudError('Page not found.', 404);
             if ($post) Csrf::validateOrFail();
             $anonymous = in_array($route, self::PUBLIC_API, true);
-            if (!$anonymous && !Auth::check()) throw new CloudError('Sign in to continue.', 401);
+            // The API checks the current account, revocation and role on every request.
+            // Do not make a second me.php round trip before that authoritative check.
+            if (!$anonymous && empty($_SESSION['access_token'])) throw new CloudError('Sign in to continue.', 401);
             $query = $_GET; unset($query['route']);
             $proof = $route === 'complete-registration.php' ? scalar_string($_SERVER['HTTP_X_REGISTRATION_PROOF'] ?? '') : null;
             if ($proof !== null && (strlen($proof) > 8000 || $proof === '' || preg_match('/[\r\n]/', $proof))) throw new CloudError('Verify your email again.', 401);

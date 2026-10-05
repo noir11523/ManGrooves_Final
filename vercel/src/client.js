@@ -17,7 +17,20 @@ export function apiUrl(path) {
   if(!url.href.startsWith(project)) throw new Error('Invalid file link.');
   return url.href;
 }
-export async function api(path,{body,query,anonymous=false,blob=false,token}={}) {
+const pendingReads = new Map();
+let pendingToken;
+function uploadSession() {
+  if (!pendingToken) pendingToken = session({action:'token'}).finally(() => { pendingToken = null; });
+  return pendingToken;
+}
+export function api(path,options={}) {
+  // Share simultaneous identical reads only; never cache writes or stale permissions.
+  if (options.body || options.blob) return performApi(path,options);
+  const key=JSON.stringify([path,Object.entries(options.query??{}).sort(([a],[b])=>a.localeCompare(b)),options.token??null]);
+  if (!pendingReads.has(key)) pendingReads.set(key,performApi(path,options).finally(()=>pendingReads.delete(key)));
+  return pendingReads.get(key);
+}
+async function performApi(path,{body,query,anonymous=false,blob=false,token}={}) {
   const parsed=new URL(path,'https://api.invalid/');
   if(parsed.origin!=='https://api.invalid' || !/^\/[a-z-]+\.php$/.test(parsed.pathname)) throw new Error('Invalid request.');
   const params=new URLSearchParams(parsed.search);
@@ -25,7 +38,7 @@ export async function api(path,{body,query,anonymous=false,blob=false,token}={})
   const direct=blob || body instanceof FormData;
   let url,headers={Accept:blob?'*/*':'application/json'};
   if(direct) {
-    const auth=await session({action:'token'});
+    const auth=await uploadSession();
     url=new URL(parsed.pathname.slice(1),auth.base);url.search=params.toString();
     headers.Authorization=`Bearer ${auth.access_token}`;
   } else {

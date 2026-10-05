@@ -24,6 +24,8 @@ final class CloudClient
         $key = (string) getenv('SUPABASE_PUBLISHABLE_KEY');
         if ($key === '' || str_starts_with($key, 'sb_secret_')) throw new RuntimeException('Set the public Supabase key.');
         $headers = ['Accept: application/json', 'apikey: ' . $key];
+        // Run database-heavy API work beside this project's Seoul database.
+        if (str_starts_with($path, 'functions/v1/')) $headers[] = 'x-region: ap-northeast-2';
         if ($token !== null) $headers[] = 'Authorization: Bearer ' . $token;
         $handle = curl_init(self::projectUrl() . '/' . $path);
         $options = [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_TIMEOUT => 45, CURLOPT_FOLLOWLOCATION => false];

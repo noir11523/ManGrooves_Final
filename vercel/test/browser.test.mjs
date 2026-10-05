@@ -15,6 +15,26 @@ const bundle=await build({entryPoints:[fileURLToPath(new URL('../../supabase/web
 }}]});
 const {renderEmbedded}=await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const node=document.getElementById('cloud-content'),$=s=>document.querySelector(s);
+test('simultaneous reads share one request; subsequent reads and writes remain fresh',async()=>{
+ let calls=0,release;
+ globalThis.fetch=async()=>{calls++;await new Promise(resolve=>{release=resolve;});return new Response(JSON.stringify({ok:true,items:[]}));};
+ const a=client.api('reports.php',{query:{page:1,q:'coast'}}),b=client.api('reports.php',{query:{q:'coast',page:1}});
+ assert.equal(calls,1);release();await Promise.all([a,b]);
+ const c=client.api('reports.php',{query:{page:1,q:'coast'}});assert.equal(calls,2);release();await c;
+});
+test('homepage stays usable while totals load and handles unavailable totals',async()=>{
+ const source=await (await import('node:fs/promises')).readFile(new URL('../../public/assets/js/app.js',import.meta.url),'utf8');
+ for(const failed of [false,true]){
+  const home=new JSDOM('<h1>Protect mangroves</h1><section data-home-stats aria-busy="true"><strong data-stat="guardians">—</strong><p data-stats-status></p></section>',{url:'https://mangrooves.example/',runScripts:'outside-only'});
+  home.window.matchMedia=()=>({matches:true,addEventListener(){}});home.window.AbortSignal=AbortSignal;
+  let resolve;home.window.fetch=()=>new Promise(r=>{resolve=r;});
+  home.window.eval(source);assert.equal(home.window.document.querySelector('h1').textContent,'Protect mangroves');assert.equal(home.window.document.querySelector('strong').textContent,'—');
+  resolve(new Response(JSON.stringify(failed?{ok:false}:{ok:true,summary:{guardians:7}}),{status:failed?503:200}));
+  await new Promise(r=>setTimeout(r,10));
+  assert.equal(home.window.document.querySelector('strong').textContent,failed?'—':'7');assert.equal(home.window.document.querySelector('section').getAttribute('aria-busy'),'false');
+  assert.match(home.window.document.querySelector('p').textContent,failed?/unavailable/:/updated/);home.window.close();
+ }
+});
 test('successful web sign-in opens the dashboard automatically',async()=>{
  const original=Object.getOwnPropertyDescriptor(globalThis,'location');let destination;
  Object.defineProperty(globalThis,'location',{value:{assign:path=>destination=path},configurable:true});

@@ -1,5 +1,17 @@
 # ManGROOVES PHP website on Vercel
 
+## Loading improvements — October 5, 2026
+
+The PHP function now uses Vercel `icn1` (Seoul), matching the existing Supabase database's `ap-northeast-2` region. PHP API requests include `x-region: ap-northeast-2` so database-heavy Edge Function work runs there too. If the database moves, update both `vercel/build.mjs` and `app/Cloud/Client.php` together.
+
+The public homepage renders without a statistics API request. Its community totals load afterward through the existing `explore.php?summary_only=1` endpoint. It shows a dash while loading and a brief unavailable message on failure; it never substitutes made-up counts. The legacy MySQL homepage retains its server-rendered totals.
+
+Migration `202610050001_public_summary.sql` adds a read-only, service-role-only aggregate function. It returns four totals in one database call instead of transferring full private report and account records. Apply pending migrations with `node supabase/node_modules/supabase/dist/supabase.js db push --linked` before deploying the updated API. Existing records and API response contracts are preserved.
+
+Protected PHP JSON requests no longer make an extra `me.php` request before the actual endpoint. The API still checks token validity, revocation, current account status and permissions on every protected request; PHP page access checks and CSRF remain in place. Simultaneous identical browser reads and upload-token requests share their pending request, without caching completed private results. Public pages do not load unused notification badges.
+
+Observed initial homepage response times in three live checks changed from 2,666–3,401 ms before the update to 141–257 ms afterward. These measure HTML response time, not full image loading or a guarantee for every connection. PHP execution headers confirmed `icn1`; Supabase regional invocation is also checked separately. Localhost uses the same PHP package, and the existing APK remains compatible with the unchanged API contracts.
+
 **Published October 3, 2026:** https://mangrooves-php.vercel.app . Vercel project: `clements-projects-5174d0c3/mangrooves-php`.
 
 **Updated October 4, 2026:** registration now follows Account details → Verify email → Complete profile. Sign-in has a single password visibility control, clearer Back/Forgot password/Create account actions, and a full-width primary button. The PHP website and Flutter use the same labels and account rules. Experts enter an ID code after email verification and wait for admin approval. The new web assets, public pages, and a validation-only request through the live PHP proxy were checked successfully. No test account or email was created by that check.

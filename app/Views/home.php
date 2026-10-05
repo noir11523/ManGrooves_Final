@@ -119,19 +119,17 @@
     </div>
 </section>
 
-<?php if (!defined('MANGROOVES_CLOUD') || ($cloudStatsAvailable ?? false)): ?>
-<section class="impact-strip" aria-labelledby="impact-title">
+<section class="impact-strip" aria-labelledby="impact-title" <?= defined('MANGROOVES_CLOUD') ? 'data-home-stats aria-busy="true"' : '' ?>>
     <div class="container">
         <div class="home-impact-heading"><h2 id="impact-title">Our community, in action.</h2><span>From the ManGROOVES record</span></div>
         <div class="row g-0">
-            <div class="col-6 col-lg-3 impact-stat"><i class="bi bi-patch-check" aria-hidden="true"></i><strong><?= e(number_format((int) ($stats['verified_reports'] ?? 0))) ?></strong><span>Verified observations</span></div>
-            <div class="col-6 col-lg-3 impact-stat"><i class="bi bi-geo-alt" aria-hidden="true"></i><strong><?= e(number_format((int) ($stats['clusters'] ?? 0))) ?></strong><span>Monitored locations</span></div>
-            <div class="col-6 col-lg-3 impact-stat"><i class="bi bi-tree" aria-hidden="true"></i><strong><?= e(number_format((int) ($stats['species'] ?? 0))) ?></strong><span>Mangrove species</span></div>
-            <div class="col-6 col-lg-3 impact-stat"><i class="bi bi-people" aria-hidden="true"></i><strong><?= e(number_format((int) ($stats['guardians'] ?? 0))) ?></strong><span>Coastal Guardians</span></div>
+            <?php foreach (['verified_reports' => ['patch-check', 'Verified observations'], 'clusters' => ['geo-alt', 'Monitored locations'], 'species' => ['tree', 'Mangrove species'], 'guardians' => ['people', 'Coastal Guardians']] as $key => [$icon, $label]): ?>
+            <div class="col-6 col-lg-3 impact-stat"><i class="bi bi-<?= e($icon) ?>" aria-hidden="true"></i><strong data-stat="<?= e($key) ?>"><?= defined('MANGROOVES_CLOUD') ? '—' : e(number_format((int) ($stats[$key] ?? 0))) ?></strong><span><?= e($label) ?></span></div>
+            <?php endforeach; ?>
         </div>
+        <?php if (defined('MANGROOVES_CLOUD')): ?><p class="small mb-0 mt-2" data-stats-status role="status">Loading community totals…</p><noscript><p class="small">Enable JavaScript to see community totals.</p></noscript><?php endif; ?>
     </div>
 </section>
-<?php endif; ?>
 
 <section class="section-padding home-explore-section" id="explore" aria-labelledby="explore-title">
     <div class="container home-explore-grid">

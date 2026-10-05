@@ -48,11 +48,18 @@ export function createApi({db, auth, bucket, projectId}) {
           app_name: 'ManGROOVES', barangays: await service.rows('barangays'), upload_max_mb: 5, max_gps_accuracy_meters: 100});
       }
       if (route === 'explore.php' && req.method === 'GET') {
-        const clusters = (await service.rows('clusters')).filter(c => c.verified_count > 0).map(c => ({id: c.id, name: c.name,
+        // Database adapters can return safe aggregates without reading private payloads.
+        const summary = async () => {
+          if (db.publicSummary) return db.publicSummary();
+          const [reports,clusters,species,users]=await Promise.all(['reports','clusters','species','users'].map(name=>service.rows(name)));
+          return {verified_reports:reports.filter(r=>r.status==='verified').length,clusters:clusters.filter(c=>c.verified_count>0).length,species:species.filter(s=>Number(s.active)!==0).length,guardians:users.filter(u=>u.role==='guardian'&&u.status==='active').length};
+        };
+        if (req.query.summary_only === '1') return send(res, {summary: await summary()});
+        const [totals,sites,species]=await Promise.all([summary(),service.rows('clusters'),service.rows('species')]);
+        const clusters = sites.filter(c => c.verified_count > 0).map(c => ({id: c.id, name: c.name,
           latitude: c.center_lat, longitude: c.center_lng, latest_health: c.latest_health, barangay_name: c.barangay_name, verified_count: c.verified_count, species_id:c.species_id??null}));
-        const [reports,species,users]=await Promise.all([service.rows('reports'),service.rows('species'),service.rows('users')]);
         const catalog=species.filter(s=>Number(s.active)!==0).map(s=>({id:s.id,scientific_name:s.scientific_name,common_name:s.common_name,local_name:s.local_name,family:s.family,iucn_code:s.iucn_code}));
-        return send(res, {clusters,species:catalog,summary:{verified_reports:reports.filter(r=>r.status==='verified').length,clusters:clusters.length,species:catalog.length,guardians:users.filter(u=>u.role==='guardian'&&u.status==='active').length}});
+        return send(res, {clusters,species:catalog,summary:totals});
       }
       if (route === 'checklist-photo.php' && req.method === 'GET') {
         const imagePath = String(req.query.path ?? '');

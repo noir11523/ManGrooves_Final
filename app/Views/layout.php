@@ -16,7 +16,8 @@ $assetDirectory = APP_ROOT . (defined('MANGROOVES_CLOUD') ? '/assets/' : '/publi
 $cssVersion = (string) (filemtime($assetDirectory . 'css/app.css') ?: 1);
 $jsVersion = (string) (filemtime($assetDirectory . 'js/app.js') ?: 1);
 
-if ($authUser) {
+// Public navigation has no notification badge, so it needs no notification read.
+if ($authUser && !$isPublicLayout) {
     try {
         if (defined('MANGROOVES_CLOUD')) {
             $unreadNotificationCount = (int) (CloudClient::api('notifications.php', ['page' => 1])['unread'] ?? 0);

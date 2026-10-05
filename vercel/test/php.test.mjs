@@ -9,6 +9,7 @@ import {JSDOM} from '../../supabase/node_modules/jsdom/lib/api.js';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 let php,mock,origin,logs='',disabled=false,expired=false;
+const calls=[];
 const users={guardian:{id:1,uid:'g',role:'guardian',first_name:'Clement',last_name:'Guardian',full_name:'Clement Guardian',email:'guardian@example.test',status:'active'},expert:{id:2,uid:'e',role:'expert',first_name:'Test',full_name:'Test Expert',email:'expert@example.test',status:'active'},admin:{id:3,uid:'a',role:'system_admin',first_name:'Test',full_name:'Test Admin',email:'admin@example.test',status:'active'}};
 const listen=server=>new Promise(resolve=>server.listen(0,'127.0.0.1',()=>resolve(server.address().port)));
 before(async()=>{
@@ -21,6 +22,7 @@ before(async()=>{
       return send({access_token:`user-${role}`,refresh_token:`refresh-${role}`,expires_in:expired?1:3600});
     }
     const endpoint=new URL(req.url,'http://localhost').pathname.split('/').at(-1),role=req.headers.authorization?.replace('Bearer user-','');
+    calls.push({endpoint,region:req.headers['x-region']});
     if(endpoint==='explore.php')return send({ok:true,clusters:[],summary:{verified_reports:12,clusters:3,species:5,guardians:7}});
     if(endpoint==='configuration.php')return send({ok:true,barangays:[{id:1,name:'Coastal site'}]});
     if(endpoint==='complete-registration.php')return send({ok:req.headers.authorization==='Bearer proof',pending_approval:true});
@@ -50,8 +52,9 @@ async function browser(){
   }};
 }
 async function login(role='guardian'){const b=await browser();await b.request('/login.php');const result=await b.request('/cloud-session.php',{action:'login',email:`${role}@example.test`,password:'Example123'});return {b,result};}
-test('original PHP home renders real counts and links to email registration',async()=>{
-  const b=await browser(),{res,text}=await b.request('/index.php');assert.equal(res.status,200);assert.match(text,/Protect mangroves/);assert.match(text,/href="\/register.php"/);assert.doesNotMatch(text,/id="authModal"/);assert.match(text,/<strong>12<\/strong>/);assert.match(res.headers.get('cache-control'),/no-store/);
+test('PHP home renders before any API call and loads real counts separately',async()=>{
+  const b=await browser(),start=calls.length,{res,text}=await b.request('/index.php');assert.equal(res.status,200);assert.match(text,/Protect mangroves/);assert.match(text,/href="\/register.php"/);assert.doesNotMatch(text,/id="authModal"/);assert.match(text,/data-home-stats/);assert.equal(calls.length,start);assert.match(res.headers.get('cache-control'),/no-store/);
+  const totals=await b.request('/cloud-api.php?route=explore.php&summary_only=1');assert.equal(totals.data.summary.verified_reports,12);assert.equal(calls.at(-1).region,'ap-northeast-2');
   const dom=new JSDOM(text),doc=dom.window.document;
   assert.equal(doc.querySelectorAll('h1').length,1);
   assert.match(doc.querySelector('.home-role-guardian').textContent,/No professional experience needed/);
@@ -65,6 +68,14 @@ test('original PHP home renders real counts and links to email registration',asy
   }
   for(const route of routes)assert.equal((await fetch(origin+route,{method:'HEAD'})).status,200,route);
   dom.window.close();
+});
+test('private JSON reads use one authoritative API call and still reject disabled accounts',async()=>{
+  const {b}=await login();const start=calls.length;
+  assert.equal((await b.request('/cloud-api.php?route=reports.php')).res.status,200);
+  assert.deepEqual(calls.slice(start).map(c=>c.endpoint),['reports.php']);
+  disabled=true;
+  try { assert.equal((await b.request('/cloud-api.php?route=reports.php')).res.status,403); }
+  finally { disabled=false; }
 });
 test('map security policy allows the actual tile provider',async()=>{
   const b=await browser(),{res}=await b.request('/login.php');

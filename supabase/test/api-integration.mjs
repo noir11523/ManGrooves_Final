@@ -64,6 +64,12 @@ try {
   const config = await request('configuration.php'); assert.equal(config.backend, 'supabase'); assert.equal(config.barangays.length, 1); pass('public cloud configuration');
   const publicSites=await request('explore.php');assert.equal(publicSites.summary.guardians,2);assert.equal(publicSites.summary.verified_reports,0);assert.ok(publicSites.species.length>0);
   assert.ok(publicSites.species.every(s=>Object.keys(s).every(k=>['id','scientific_name','common_name','local_name','family','iucn_code'].includes(k))));assert.equal(publicSites.users,undefined);pass('public homepage totals and species catalog do not expose private account or report records');
+  const read=db.read.bind(db),collections=[];db.read=(ref,...args)=>{collections.push(ref.collection);return read(ref,...args);};
+  const counts=await request('explore.php?summary_only=1');db.read=read;
+  assert.deepEqual(collections,['meta']); // No account/report payloads are fetched to compute totals.
+  assert.deepEqual(counts.summary,publicSites.summary);assert.deepEqual(Object.keys(counts).sort(),['ok','summary']);
+  const grants=await pg.query("select has_function_privilege('anon','public.app_public_summary()','execute') as anon, has_function_privilege('authenticated','public.app_public_summary()','execute') as authenticated, has_function_privilege('service_role','public.app_public_summary()','execute') as trusted");
+  assert.deepEqual(grants.rows[0],{anon:false,authenticated:false,trusted:true});pass('summary-only API returns real database aggregates with service-role-only access');
   await request('register.php', null, [], 422); pass('malformed form data is rejected');
   await request('me.php', null, null, 401); pass('missing authentication rejected');
   const registration={email:'new@example.test',password:'testpassword1',password_confirmation:'testpassword1',first_name:'New',last_name:'Guardian',barangay_id:1,privacy_consent:true,role:'guardian'};

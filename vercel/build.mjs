@@ -52,7 +52,7 @@ tree.walkRules(rule=>{
 });
 await writeFile(cssFile,tree.toString()+`\n.cloud-panel{font-family:inherit;background:transparent;min-width:0;--green:#2d5a27;--border:#ddcfb9;--muted:#5f6b61}.cloud-panel .row{margin:0;--bs-gutter-x:0}.cloud-panel .row>*{width:auto;max-width:100%;margin-top:0}.cloud-panel .row>*:not(.card):not(.option-editor){padding:0}.cloud-panel .card{display:block}.cloud-panel .page-head h1{font-size:1.7rem}.cloud-public{padding:24px max(16px,5vw)}.cloud-public>.auth{max-width:580px}.cloud-panel .leaflet-control a{padding:0}.cloud-panel .leaflet-popup-content p{margin:12px 0}.cloud-panel .actions>button{min-height:44px}.cloud-panel [hidden]{display:none!important}@media(max-width:700px){.cloud-panel .auth{margin:0 auto}.cloud-panel .page-head{gap:8px}}\n`);
 await writeFile(path.join(out,'vercel.json'),JSON.stringify({
-  $schema:'https://openapi.vercel.sh/vercel.json',framework:null,buildCommand:null,installCommand:null,outputDirectory:'.',
+  $schema:'https://openapi.vercel.sh/vercel.json',regions:['icn1'],framework:null,buildCommand:null,installCommand:null,outputDirectory:'.',
   functions:{'api/index.php':{runtime:'vercel-php@0.9.0',maxDuration:60,excludeFiles:'downloads/**'}},
   routes:[
     {src:'/downloads/ManGROOVES-Supabase\\.apk',dest:'/downloads/'+apkName,headers:{'Content-Type':'application/vnd.android.package-archive','Content-Disposition':'attachment; filename="'+apkName+'"','X-Content-Type-Options':'nosniff','Cache-Control':'public, max-age=0, must-revalidate'}},
