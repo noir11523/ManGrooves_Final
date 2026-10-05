@@ -200,8 +200,14 @@ class ApiClient {
   Future<Map<String, dynamic>> reportForm() => _get('report-form.php');
   Future<Map<String, dynamic>> badges() => _get('badges.php');
   Future<Map<String, dynamic>> profile() => _get('profile.php');
-  Future<Map<String, dynamic>> verification({int page = 1}) =>
-      _get('verification.php', query: {'page': '$page'});
+  Future<Map<String, dynamic>> verification({
+    int page = 1,
+    String query = '',
+    String health = '',
+  }) => _get(
+    'verification.php',
+    query: {'page': '$page', 'q': query, 'health': health},
+  );
   Future<Map<String, dynamic>> analytics() => _get('analytics.php');
   Future<Uint8List> analyticsPdf() => _withConnectionRecovery(() async {
     final response = await http
@@ -265,10 +271,14 @@ class ApiClient {
     String status = '',
     bool needsAttention = false,
     int? clusterId,
+    String query = '',
+    String health = '',
   }) => _get(
     'reports.php',
     query: {
       'page': '$page',
+      'q': query,
+      'health': health,
       if (status.isNotEmpty) 'status': status,
       if (needsAttention) 'needs_attention': '1',
       if (clusterId != null) 'cluster_id': '$clusterId',
@@ -293,8 +303,14 @@ class ApiClient {
   }) => _get('clusters.php', query: {'q': query, 'health': health});
   Future<Map<String, dynamic>> cluster(int id) =>
       _get('cluster.php', query: {'id': '$id'});
-  Future<Map<String, dynamic>> validationHistory({int page = 1}) =>
-      _get('validation-history.php', query: {'page': '$page'});
+  Future<Map<String, dynamic>> validationHistory({
+    int page = 1,
+    String query = '',
+    String action = '',
+  }) => _get(
+    'validation-history.php',
+    query: {'page': '$page', 'q': query, 'action': action},
+  );
   Future<Map<String, dynamic>> reportPreview(Map<String, dynamic> input) =>
       _postJson('report-preview.php', input);
 

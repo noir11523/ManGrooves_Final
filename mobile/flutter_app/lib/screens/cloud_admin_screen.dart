@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
 import '../core/display_text.dart';
+import '../shared/list_filters.dart';
 
 class CloudAdminScreen extends StatefulWidget {
   const CloudAdminScreen({
@@ -21,6 +22,16 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
   List<Map<String, dynamic>>? _items;
   String? _error, _signature;
   bool _busy = false, _hasSignature = false, _removeSignature = false;
+  String _query = '', _status = '';
+  List<Map<String, dynamic>> get _filteredItems => (_items ?? [])
+      .where(
+        (item) =>
+            '${item['full_name']} ${item['email']}'.toLowerCase().contains(
+              _query.toLowerCase(),
+            ) &&
+            (_status.isEmpty || item['status'] == _status),
+      )
+      .toList();
   @override
   void initState() {
     super.initState();
@@ -274,12 +285,32 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
             ),
           ] else if (_items != null) ...[
             const Text('Check the ID code before approving expert access.'),
-            if (_items!.isEmpty)
-              const Padding(
+            ListFilters(
+              hint: 'Applicant name or email',
+              filterLabel: 'Status',
+              options: const {
+                '': 'All applications',
+                'pending': 'Pending',
+                'approved': 'Approved',
+                'rejected': 'Declined',
+              },
+              busy: _busy,
+              onApply: (query, status) => setState(() {
+                _query = query;
+                _status = status;
+              }),
+            ),
+            Text('${_filteredItems.length} results'),
+            if (_filteredItems.isEmpty)
+              Padding(
                 padding: EdgeInsets.all(24),
-                child: Text('No expert applications yet.'),
+                child: Text(
+                  _query.isNotEmpty || _status.isNotEmpty
+                      ? 'No applications match.'
+                      : 'No expert applications yet.',
+                ),
               ),
-            for (final item in _items!)
+            for (final item in _filteredItems)
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),

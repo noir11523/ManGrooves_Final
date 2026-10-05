@@ -110,8 +110,14 @@ class FirebaseApiClient extends ApiClient {
   @override
   Future<Map<String, dynamic>> checklist() => _request('checklist.php');
   @override
-  Future<Map<String, dynamic>> verification({int page = 1}) =>
-      _request('verification.php', query: {'page': '$page'});
+  Future<Map<String, dynamic>> verification({
+    int page = 1,
+    String query = '',
+    String health = '',
+  }) => _request(
+    'verification.php',
+    query: {'page': '$page', 'q': query, 'health': health},
+  );
   @override
   Future<Map<String, dynamic>> analytics() => _request('analytics.php');
   @override
@@ -138,10 +144,14 @@ class FirebaseApiClient extends ApiClient {
     String status = '',
     bool needsAttention = false,
     int? clusterId,
+    String query = '',
+    String health = '',
   }) => _request(
     'reports.php',
     query: {
       'page': '$page',
+      'q': query,
+      'health': health,
       'status': status,
       if (needsAttention) 'needs_attention': '1',
       if (clusterId != null) 'cluster_id': '$clusterId',
@@ -169,8 +179,14 @@ class FirebaseApiClient extends ApiClient {
   Future<Map<String, dynamic>> cluster(int id) =>
       _request('cluster.php', query: {'id': '$id'});
   @override
-  Future<Map<String, dynamic>> validationHistory({int page = 1}) =>
-      _request('validation-history.php', query: {'page': '$page'});
+  Future<Map<String, dynamic>> validationHistory({
+    int page = 1,
+    String query = '',
+    String action = '',
+  }) => _request(
+    'validation-history.php',
+    query: {'page': '$page', 'q': query, 'action': action},
+  );
   @override
   Future<Map<String, dynamic>> reportPreview(Map<String, dynamic> input) async {
     final data = await _request(

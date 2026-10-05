@@ -9,7 +9,7 @@ export function reportList(rows, query = {}) {
     && (!query.health || displayHealth(r) === query.health)
     && (!query.cluster_id || r.cluster_id === Number(query.cluster_id))
     && (query.needs_attention !== '1' || needsReview(r))
-    && (!query.q || `${r.report_code} ${r.cluster_name ?? ''} ${r.sitio_name} ${r.barangay_name}`.toLowerCase().includes(String(query.q).toLowerCase())))
+    && (!String(query.q ?? '').trim() || `${reportLabel(r)} ${r.report_code ?? ''} ${r.cluster_name ?? ''} ${r.sitio_name} ${r.barangay_name}`.toLowerCase().includes(String(query.q).trim().toLowerCase())))
     .sort(newest).map(r => ({id: r.id, report_code: reportLabel(r), cluster_id: r.cluster_id,
       cluster_name: r.cluster_name, barangay_name: r.barangay_name, sitio_name: r.sitio_name,
       latitude: r.latitude, longitude: r.longitude, status: r.status, display_health: displayHealth(r),

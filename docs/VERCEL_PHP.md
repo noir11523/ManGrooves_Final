@@ -75,6 +75,26 @@ Do not deploy the repository root as a static website. Only `vercel/dist` is the
 
 **Android download:** `https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk`. The public navigation and signed-in sidebar use this direct file link. The profile dropdown contains Profile settings and Sign out. After a verified guardian finishes registration, the web and app sign in automatically and open the dashboard. If opening the session fails, Continue to dashboard retries with the entered credentials without submitting registration again. Expert applicants remain pending until approved.
 
+## Search and filters
+
+Use **Apply** to search or combine filters, and **Clear** to return to the full list. Searches ignore letter case and extra spaces. Users, audit logs, and review history are filtered before pagination; page links retain the selected filters. Changing a search starts on the first page.
+
+| Web section | Search | Filters |
+| --- | --- | --- |
+| Users | Name, email, barangay | Role, account status |
+| Review reports | Site, report number | Suggested or final health |
+| Review history | Report number, reviewer | Decision |
+| Audit log | Actor, action, record number | Record type |
+| Species catalog | Scientific, common, local name | Active or archived |
+| Manage badges | Badge name, description | Active or archived |
+| Expert applications | Applicant name, email | Pending, approved, declined |
+| Health history / Growth timeline | Cluster name, code, barangay | Latest health |
+| Health checklist | Checklist name, question | Search only |
+
+Existing report and report-map filters remain available. Analytics already has date filters. Certificate signer is a single settings form and does not need list controls. Pending or declined expert accounts link to Expert applications instead of displaying editable Active/Inactive controls.
+
+The APK includes matching search controls on its existing Reports, Review reports, Review history, Expert applications, Health checklist, and cluster screens. Filters remain active during pagination and refresh. Report search scrolls with the list on short phones, including when the keyboard is open. Web checklist and catalog searches hide records in place so they retain unsaved edits and selected photos.
+
 ## How the connection works
 
 | Part | Where it runs |
@@ -92,9 +112,11 @@ The frontend receives no service-role key. `APP_KEY` stays on the PHP server. Ke
 
 ## Checks and remaining setup
 
-As of October 5, 2026, the PHP package builds and all 18 PHP/browser tests, 49 shared web/backend tests, and 51 API workflow checks pass. Flutter analysis is clean; 76 Flutter tests pass, with one optional local-server test skipped. The map checks use real Leaflet and Flutter map controllers to verify landmark suggestions, exact camera coordinates, filters, pagination, late responses, clearing the search and recovery after errors. A PHP security-policy check verifies that the configured map tile provider is allowed. Existing checks cover account registration/recovery, role permissions, expert approval, report drafts/photos, review, certificates and GPS handling. APK 2.0.0+29 was built and its Android version code 29 verified. The web and app bottom navigation now use Submit; wider navigation keeps Submit report. The 18 PHP/browser and 76 Flutter tests passed again for this wording update. All 16 browser GPS helper tests passed in the preceding release for the unchanged helper. No connected browser or physical phone was available for a live signed-in visual check or real GPS test. Gmail accepted a code-send request on October 3; inbox receipt and code entry remain unconfirmed.
+As of October 5, 2026, all 18 PHP/browser tests, 52 shared web/backend tests, and 54 API workflow checks pass. Flutter analysis is clean; 80 Flutter tests pass, with one optional local-server test skipped. APK 2.0.0+31 was built and Android version code 31 verified. Search checks cover combined role/status filters, records beyond the first page, preserved page filters, clearing, pending expert approval, and unsaved catalog edits. Mobile checks cover search, pagination, refresh, large text, and a 320×568 phone with the keyboard open. Headless Chrome checked Users, Species, Badges, Audit, and Expert applications at 320, 390, 768, and 1440 pixels using sample records: 20 layouts, no page overflow, working filter/clear controls, and no JavaScript errors.
 
-The update and shared Supabase API were published on October 5. Vercel deployment: `mangrooves-ktenjydm1-clements-projects-5174d0c3.vercel.app`, served at https://mangrooves-php.vercel.app. Live checks verified public pages, exact versioned JavaScript/CSS, map tile permissions, removal of draft controls, upload CORS, and APK headers. A live Parkmall/Mandaue search returned suggestions and the tile provider returned an image successfully. Downloading the full public APK produced the same SHA-256 as the tested release: `485544498CBB14FBAD0EBF8266DBF46DC8704B7504C624DC9C1165EC4F4DF1D9` (58,483,302 bytes).
+Existing tests still cover account registration/recovery, role permissions, expert approval, report drafts/photos, reviews, certificates, map search and GPS handling. No physical phone GPS capture or real signed-in production workflow was performed for this update. Gmail accepted a code-send request on October 3; inbox receipt and code entry remain unconfirmed.
+
+The search/filter update and shared Supabase API were published on October 5. Vercel deployment: `mangrooves-ikrjx0i33-clements-projects-5174d0c3.vercel.app`, served at https://mangrooves-php.vercel.app. Live checks verified public pages, exact versioned JavaScript/CSS, search controls, protected Users/Audit/Review history routes, upload CORS, and APK headers. Anonymous list API calls return 401 without account records. Downloading the full public APK produced the same SHA-256 as the tested 2.0.0+31 release: `C2E987F6E105B271B06E32A7EB7EA0C3D2B4957EA19B9B4D9A2B4618F04170FF` (58,630,758 bytes).
 
 Localhost at `http://127.0.0.1:8086` was started using the updated default launcher. Read-only checks verified the same JavaScript/CSS, Supabase project, registration/recovery pages, protected map route, private-file protection and APK release. Upload CORS allows both localhost and 127.0.0.1 on port 8086. No production accounts or reports were created during these checks.
 

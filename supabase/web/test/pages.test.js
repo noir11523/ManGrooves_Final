@@ -17,6 +17,21 @@ await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].te
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const $=s=>document.querySelector(s);
 
+test('review queue and history expose filters and retain them on later pages',async()=>{
+ for(const [route,path,key,value] of [['verification','verification.php','health','Unknown'],['history','validation-history.php','action','correct']]){
+  history.replaceState(null,'',`#${route}?q=coast&${key}=${value}`);
+  globalThis.testApi=async endpoint=>{
+   if(endpoint==='me.php')return {user:{id:2,role:'expert',full_name:'Test Expert'}};
+   assert.equal(endpoint,path);return {page:1,pages:2,total:21,items:[]};
+  };
+  await globalThis.restoreTestAccount({id:'expert'});await tick();
+  assert.equal($('#retry'),null);assert.equal($('.list-filters [name=q]').value,'coast');
+  assert.equal($(`.list-filters [name=${key}]`).value,value);
+  assert.match($('.pagination a').href,/q=coast/);assert.match($('.pagination a').href,new RegExp(`${key}=${value}`));
+  assert.match($('.empty').textContent,/match/);
+ }
+});
+
 test('report filters use one status control and one tag, and clear stale attention when changed',async()=>{
  history.replaceState(null,'','#reports?needs_attention=1');
  const calls=[];

@@ -1,16 +1,23 @@
 import {api,friendly} from './client.js';
 import {$,$$,esc,errorBox,field,formValues,showError,toast,confirm,privatePhoto,displayLabel} from './ui.js';
+import {listFilters,bindListFilters,filterLocalList,matchesSearch} from './list-filters.js';
 
-export async function expertApplicationsPage(node){
+export async function expertApplicationsPage(node,query={}){
   const {items}=await api('expert-applications.php');if(!node.isConnected)return;
   node.innerHTML=`<div class="page-head"><h1>Expert applications</h1><a href="#users">Back to users</a></div><p>Check the applicant's ID code before approving expert access.</p><div class="list">${items.map(a=>`<article class="card" data-uid="${esc(a.uid)}"><h2>${esc(a.full_name)}</h2><p>${esc(a.email)} · ${esc(displayLabel(a.status))}</p>${a.id_code?`<dl class="summary"><dt>Expert ID code</dt><dd class="id-code">${esc(a.id_code)}</dd></dl>`:''}${a.has_id_photo?`<button class="outline id-photo" data-uid="${esc(a.uid)}" aria-expanded="false">View previous ID photo</button><img hidden class="guide" alt="Applicant's private ID">`:''}${a.status==='pending'?`<form class="application">${errorBox}${field('note','Note or reason','','text','maxlength="1000"')}<div class="actions"><button name="action" value="approve">Approve expert</button><button class="outline" name="action" value="reject">Decline</button></div></form>`:`<p>${esc(a.note??'')}${a.reviewer_name?` · Reviewed by ${esc(a.reviewer_name)}`:''}</p>`}</article>`).join('')||'<p class="empty">No expert applications yet.</p>'}</div>`;
+  node.querySelector('.list').insertAdjacentHTML('beforebegin',listFilters(query,[['status','Status',[['','All applications'],['pending','Pending'],['approved','Approved'],['rejected','Declined']]]],'Applicant name or email'));
+  node.insertAdjacentHTML('beforeend','<p class="empty filter-empty" hidden>No applications match.</p>');
+  const rows=[...node.querySelectorAll('article[data-uid]')].map(element=>[element,items.find(item=>item.uid===element.dataset.uid)]);
+  node.querySelector('.list > .empty')?.remove();
+  const apply=()=>filterLocalList(node,query,rows,(item,q)=>matchesSearch([item.full_name,item.email],q)&&(!q.status||item.status===q.status));
+  bindListFilters(node,query,apply);apply();
   $$('.id-photo').forEach(button=>button.onclick=async()=>{const img=button.nextElementSibling;img.hidden=!img.hidden;button.setAttribute('aria-expanded',String(!img.hidden));button.textContent=img.hidden?'View previous ID photo':'Hide ID photo';if(!img.hidden)await privatePhoto(img,`expert-id.php?uid=${encodeURIComponent(button.dataset.uid)}`);});
   $$('.application').forEach(form=>form.onsubmit=async event=>{
     event.preventDefault();const button=event.submitter;if(button.disabled)return;
     const action=button.value,values=formValues(form);
     if(action==='reject'&&!values.note.trim()){showError(form.querySelector('.error'),'Add a reason for declining.');return;}
     if(!await confirm(action==='approve'?'Approve this expert?':'Decline this application?',action==='approve'?'They can submit reports and review other users’ reports.':'They will not have expert access.'))return;
-    button.disabled=true;try{const result=await api('expert-applications.php',{body:{...values,action,uid:form.closest('[data-uid]').dataset.uid}});toast(result.message);await expertApplicationsPage(node);}catch(e){showError(form.querySelector('.error'),friendly(e));}finally{button.disabled=false;}
+    button.disabled=true;try{const result=await api('expert-applications.php',{body:{...values,action,uid:form.closest('[data-uid]').dataset.uid}});toast(result.message);await expertApplicationsPage(node,query);}catch(e){showError(form.querySelector('.error'),friendly(e));}finally{button.disabled=false;}
   });
 }
 export async function certificateSettingsPage(node){

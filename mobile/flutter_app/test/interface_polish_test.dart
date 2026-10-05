@@ -28,7 +28,11 @@ class _Api extends ApiClient {
   }
 
   @override
-  Future<Map<String, dynamic>> validationHistory({int page = 1}) async => {
+  Future<Map<String, dynamic>> validationHistory({
+    int page = 1,
+    String query = '',
+    String action = '',
+  }) async => {
     'items': [
       {
         'report_id': 23,

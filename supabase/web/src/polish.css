@@ -19,6 +19,8 @@ body { line-height: 1.5; }
 .steps span.active { font-weight: 700; }
 .filters { padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: #edf2e9; }
 .filters .button { white-space: nowrap; }
+.audit-log-table table { min-width: 640px; overflow-wrap: normal; }
+.audit-log-table th { white-space: nowrap; }
 .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 50%; }
 .icon-button:hover { background: #edf2e9; }
 .topbar .avatar { flex-shrink: 0; }

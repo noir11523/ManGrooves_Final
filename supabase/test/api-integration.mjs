@@ -179,6 +179,28 @@ try {
   await request(`certificate.php?badge_id=${award.id}`,{...other,token:(await signIn(other.email)).idToken},null,404);
   const token=new URL(share.url).searchParams.get('token');await request(`certificate-download.php?token=${token}`,null,null,200,true);
   await request('certificate-download.php?token=invalid',null,null,404);pass('certificate downloads require ownership or a temporary QR link');
+  // More than one page proves filtering happens before pagination.
+  for (let id=100;id<125;id++) await account(id,'guardian');
+  await db.collection('users').doc('test-124').update({full_name:'Zulu Search Target',status:'inactive'});
+  const allUsers=await request('users.php',admin);assert.ok(allUsers.pages>1);
+  const foundUser=await request('users.php?q=%20zULu%20&role=guardian&status=inactive&page=9',admin);
+  assert.equal(foundUser.total,1);assert.equal(foundUser.page,1);assert.equal(foundUser.items[0].id,124);
+  assert.equal((await request('users.php?q=zulu&role=expert',admin)).total,0);
+  await request('users.php?q=zulu',expert,null,403);await request('audit.php?q=Test',expert,null,403);
+  pass('user search covers every page, combines name/role/status filters and preserves administrator-only access');
+  const filteredAudit=await request('audit.php?q=%20CHECKLIST_UPDATED%20&entity_type=criteria',admin);
+  assert.ok(filteredAudit.total>0);assert.ok(filteredAudit.items.every(r=>r.action==='admin.checklist_updated'&&r.entity_type==='criteria'));
+  assert.equal((await request('audit.php?q=checklist_updated&entity_type=user',admin)).total,0);
+  pass('audit search combines case-insensitive action search with record filters');
+  const filteredHistory=await request(`validation-history.php?q=${encodeURIComponent(`Report #${pending.report.report_id}`)}&action=correct`,expert);
+  assert.equal(filteredHistory.total,1);assert.equal(filteredHistory.items[0].verifier_name,expert.full_name);
+  assert.equal((await request('validation-history.php?q=not-a-reviewer',expert)).total,0);
+  await request('validation-history.php?q=Test',guardianSession,null,403);
+  const searchedReport=await request(`reports.php?q=${encodeURIComponent(`Report #${own.report.report_id}`)}&health=Unknown`,admin);
+  assert.equal(searchedReport.total,1);assert.equal(searchedReport.items[0].id,own.report.report_id);
+  const ownReviewQueue=await request(`verification.php?q=${encodeURIComponent(`Report #${own.report.report_id}`)}`,expert);
+  assert.equal(ownReviewQueue.total,0);
+  pass('report numbers and review decisions are searchable while guardian privacy and expert self-review restrictions hold');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../core/api_client.dart';
+import '../shared/list_filters.dart';
 import 'cluster_health_map.dart';
 import 'report_detail_screen.dart';
 
@@ -332,7 +333,7 @@ class ClustersScreen extends StatefulWidget {
 class _ClustersScreenState extends State<ClustersScreen> {
   List<Map<String, dynamic>>? _items;
   String? _error;
-  final _search = TextEditingController();
+  String _query = '', _health = '';
   int _generation = 0;
   @override
   void initState() {
@@ -340,16 +341,10 @@ class _ClustersScreenState extends State<ClustersScreen> {
     _load();
   }
 
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
   Future<void> _load() async {
     final generation = ++_generation;
     try {
-      final result = await widget.api.clusters(query: _search.text.trim());
+      final result = await widget.api.clusters(query: _query, health: _health);
       if (mounted && generation == _generation) {
         setState(() {
           _items = (result['clusters'] as List)
@@ -381,18 +376,23 @@ class _ClustersScreenState extends State<ClustersScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(
-            controller: _search,
-            onSubmitted: (_) => _load(),
-            decoration: InputDecoration(
-              labelText: 'Find a cluster',
-              suffixIcon: IconButton(
-                onPressed: _load,
-                tooltip: 'Search',
-                icon: const Icon(Icons.search),
-              ),
-            ),
+          ListFilters(
+            hint: 'Cluster name, code, or barangay',
+            filterLabel: 'Health',
+            options: const {
+              '': 'All health',
+              'Healthy': 'Healthy',
+              'Stressed': 'Stressed',
+              'At Risk': 'At Risk',
+              'Unknown': 'Unknown',
+            },
+            onApply: (query, health) {
+              _query = query;
+              _health = health;
+              _load();
+            },
           ),
+          if (_items != null) Text('${_items!.length} results'),
           const SizedBox(height: 12),
           if (_error != null)
             TextButton(onPressed: _load, child: Text('$_error Retry')),

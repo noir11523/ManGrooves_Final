@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../shared/retry_view.dart';
+import '../shared/list_filters.dart';
 import 'validation_history_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   String? _error;
   bool _loading = false;
   int _page = 1;
+  String _query = '', _health = '';
 
   @override
   void didUpdateWidget(covariant VerificationScreen oldWidget) {
@@ -39,7 +41,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
       _loading = true;
     });
     try {
-      _data = await widget.api.verification(page: page ?? _page);
+      _data = await widget.api.verification(
+        page: page ?? _page,
+        query: _query,
+        health: _health,
+      );
       _page = (_data!['page'] as num?)?.toInt() ?? 1;
     } catch (error) {
       _error = error is ApiException
@@ -94,6 +100,24 @@ class _VerificationScreenState extends State<VerificationScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          ListFilters(
+            hint: 'Site or report number',
+            filterLabel: 'Health',
+            options: const {
+              '': 'All health',
+              'Healthy': 'Healthy',
+              'Stressed': 'Stressed',
+              'At Risk': 'At Risk',
+              'Unknown': 'Unknown',
+            },
+            busy: _loading,
+            onApply: (query, health) {
+              _query = query;
+              _health = health;
+              _load(page: 1);
+            },
+          ),
+          Text('${_data!["total"] ?? items.length} results'),
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -105,10 +129,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ),
           const SizedBox(height: 20),
           if (items.isEmpty)
-            const Card(
+            Card(
               child: Padding(
                 padding: EdgeInsets.all(22),
-                child: Text('No reports waiting for review.'),
+                child: Text(
+                  _query.isNotEmpty || _health.isNotEmpty
+                      ? 'No pending reports match. Try another search or clear the filters.'
+                      : 'No reports waiting for review.',
+                ),
               ),
             )
           else

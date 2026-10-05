@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/display_text.dart';
+import '../shared/list_filters.dart';
 import 'report_detail_screen.dart';
 
 class ValidationHistoryScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
   Map<String, dynamic>? _data;
   String? _error;
   bool _loading = false;
+  String _query = '', _action = '';
   @override
   void initState() {
     super.initState();
@@ -26,7 +28,11 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
     if (_loading) return;
     setState(() => _loading = true);
     try {
-      final data = await widget.api.validationHistory(page: page);
+      final data = await widget.api.validationHistory(
+        page: page,
+        query: _query,
+        action: _action,
+      );
       if (mounted) {
         setState(() {
           _data = data;
@@ -58,6 +64,25 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            ListFilters(
+              hint: 'Report number or reviewer',
+              filterLabel: 'Decision',
+              options: const {
+                '': 'All decisions',
+                'confirm': 'Confirmed',
+                'correct': 'Corrected',
+                'reject': 'Rejected',
+                'auto_verify': 'Automatic verification',
+              },
+              busy: _loading,
+              onApply: (query, action) {
+                _query = query;
+                _action = action;
+                _load();
+              },
+            ),
+            if (_data != null)
+              Text('${_data!["total"] ?? items.length} results'),
             if (_loading) const LinearProgressIndicator(),
             if (_error != null)
               TextButton(
@@ -65,7 +90,11 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
                 child: Text('$_error Retry'),
               ),
             if (!_loading && _error == null && items.isEmpty)
-              const Text('No reviews yet.'),
+              Text(
+                _query.isNotEmpty || _action.isNotEmpty
+                    ? 'No reviews match. Try another search or clear the filters.'
+                    : 'No reviews yet.',
+              ),
             for (final item in items)
               Card(
                 child: ListTile(

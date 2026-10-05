@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../core/api_client.dart';
 import '../core/display_text.dart';
 import '../shared/retry_view.dart';
+import '../shared/list_filters.dart';
 import 'report_detail_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -33,6 +34,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   int _page = 1;
   int _pages = 1;
   bool _loading = false;
+  String _query = '', _health = '';
 
   @override
   void didUpdateWidget(covariant ReportsScreen oldWidget) {
@@ -53,13 +55,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
     if (_loading) return;
     setState(() => _loading = true);
     try {
-      final result = _status.isEmpty && !_attention && widget.clusterId == null
+      final result =
+          _status.isEmpty &&
+              !_attention &&
+              widget.clusterId == null &&
+              _query.isEmpty &&
+              _health.isEmpty
           ? await widget.api.reports(page: requestPage)
           : await widget.api.filteredReports(
               page: requestPage,
               status: _status,
               needsAttention: _attention,
               clusterId: widget.clusterId,
+              query: _query,
+              health: _health,
             );
       _pages = (result['pages'] as num?)?.toInt() ?? 1;
       _page = (result['page'] as num?)?.toInt() ?? requestPage;
@@ -109,7 +118,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               _attention = entry.key == 'attention';
                               _status = _attention ? '' : entry.key;
                               _page = 1;
-                              _reports = null;
                             });
                             _load();
                           },
@@ -124,16 +132,42 @@ class _ReportsScreenState extends State<ReportsScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
-            child: _reports!.isEmpty
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(24),
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+              itemCount: _reports!.isEmpty ? 2 : _reports!.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return ListFilters(
+                    hint: 'Site or report number',
+                    filterLabel: 'Health',
+                    options: const {
+                      '': 'All health',
+                      'Healthy': 'Healthy',
+                      'Stressed': 'Stressed',
+                      'At Risk': 'At Risk',
+                      'Unknown': 'Unknown',
+                    },
+                    busy: _loading,
+                    onApply: (query, health) {
+                      _query = query;
+                      _health = health;
+                      _load(page: 1);
+                    },
+                  );
+                }
+                if (_reports!.isEmpty) {
+                  return Column(
                     children: [
-                      const SizedBox(height: 70),
+                      const SizedBox(height: 24),
                       const Icon(Icons.assignment_outlined, size: 54),
                       const SizedBox(height: 12),
                       Text(
-                        _status.isNotEmpty || _attention
+                        _status.isNotEmpty ||
+                                _attention ||
+                                _query.isNotEmpty ||
+                                _health.isNotEmpty
                             ? 'No reports match this filter.'
                             : 'No reports here yet.',
                         textAlign: TextAlign.center,
@@ -153,64 +187,57 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           child: const Text('Clear status filter'),
                         ),
                     ],
-                  )
-                : ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-                    itemCount: _reports!.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final report = _reports![index];
-                      return Card(
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ReportDetailScreen(
-                                api: widget.api,
-                                reportId: report['id'] as int,
-                              ),
-                            ),
-                          ),
-                          title: Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Text(
-                                report['report_code']?.toString() ?? '',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              _StatusChip(report),
-                            ],
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  report['cluster_name']?.toString() ??
-                                      report['sitio_name']?.toString() ??
-                                      'New site',
-                                ),
-                                Text(
-                                  '${report['display_health'] ?? 'Unknown'} · ${_formatDate(report['submitted_at'])}',
-                                ),
-                              ],
-                            ),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
+                  );
+                }
+                final report = _reports![index - 1];
+                return Card(
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReportDetailScreen(
+                          api: widget.api,
+                          reportId: report['id'] as int,
                         ),
-                      );
-                    },
+                      ),
+                    ),
+                    title: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          report['report_code']?.toString() ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        _StatusChip(report),
+                      ],
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            report['cluster_name']?.toString() ??
+                                report['sitio_name']?.toString() ??
+                                'New site',
+                          ),
+                          Text(
+                            '${report['display_health'] ?? 'Unknown'} · ${_formatDate(report['submitted_at'])}',
+                          ),
+                        ],
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
                   ),
+                );
+              },
+            ),
           ),
         ),
         if (_pages > 1)

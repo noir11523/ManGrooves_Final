@@ -3,6 +3,7 @@ import PDFDocument from '../pdf.js';
 import { randomUUID } from 'node:crypto';
 import { Service } from './service.js';
 import { AppError, integer, now, paginate, password, publicUser, requireRole, ROLES, text, wireDates } from './domain.js';
+import { filterRows } from './list-query.js';
 import { displayHealth, reportLabel, newest, reportList } from './analytics.js';
 import { readInput, sendImage } from './uploads.js';
 import {searchPlaces} from './places.js';
@@ -133,7 +134,7 @@ export function createApi({db, auth, bucket, projectId}) {
           return send(res, {reports});
         }
         case 'clusters.php': {
-          only('GET'); const q = String(req.query.q ?? '').toLowerCase();
+          only('GET'); const q = String(req.query.q ?? '').trim().toLowerCase();
           return send(res, {clusters: (await service.clusters(user)).filter(c => (!req.query.health || c.latest_health === req.query.health)
             && (!q || `${c.name} ${c.barangay_name} ${c.cluster_code}`.toLowerCase().includes(q)))});
         }
@@ -157,7 +158,7 @@ export function createApi({db, auth, bucket, projectId}) {
             rejected: rows.filter(r => r.status === 'rejected').length, verified_attention: 0}, species: await service.species()});
         }
         case 'review.php': only('POST'); return send(res, {result: await service.review(user, req.body ?? {}), message: 'Review saved.'});
-        case 'validation-history.php': only('GET'); requireRole(user, 'expert', 'system_admin'); return send(res, paginate((await service.rows('verification_logs')).map(r=>({...r,report_code:reportLabel(r)})).sort(newest), req.query.page));
+        case 'validation-history.php': only('GET'); requireRole(user, 'expert', 'system_admin'); return send(res, paginate(filterRows((await service.rows('verification_logs')).map(r=>({...r,report_code:reportLabel(r)})), req.query, ['report_code', 'verifier_name', 'reviewer'], ['action']).sort(newest), req.query.page));
         case 'checklist.php': {
           requireRole(user, 'system_admin');
           if (get) return send(res, {criteria: await service.criteria()});
@@ -216,7 +217,7 @@ export function createApi({db, auth, bucket, projectId}) {
         }
         case 'users.php': {
           requireRole(user, 'system_admin');
-          if (get) return send(res, paginate((await service.rows('users')).map(u => ({...publicUser(u), status: u.status})), req.query.page));
+          if (get) return send(res, paginate(filterRows((await service.rows('users')).map(u => ({...publicUser(u), status: u.status})), req.query, ['full_name', 'email', 'barangay_name'], ['role', 'status']).sort((a,b) => a.full_name.localeCompare(b.full_name) || a.id-b.id), req.query.page));
           const input = req.body ?? {}, id = integer(input.id, 'user');
           if (id === user.id) throw new AppError('Ask another administrator to change your access.');
           if (!ROLES.includes(input.role) || !['active', 'inactive'].includes(input.status)) throw new AppError('Choose a valid role and account status.');
@@ -256,7 +257,7 @@ export function createApi({db, auth, bucket, projectId}) {
           const batch = db.batch(); batch.set(service.ref('badges', id), badge, {merge: true}); service.audit(batch, user, 'admin.badge_updated', 'badge', id); await batch.commit();
           return send(res, {message: 'Badge saved.'});
         }
-        case 'audit.php': only('GET'); requireRole(user, 'system_admin'); return send(res, paginate((await service.rows('audit_logs')).sort(newest), req.query.page));
+        case 'audit.php': only('GET'); requireRole(user, 'system_admin'); return send(res, paginate(filterRows(await service.rows('audit_logs'), req.query, ['actor_name', 'user_id', 'action', 'entity_type', 'entity_id'], ['entity_type']).sort(newest), req.query.page));
         default: throw new AppError('Page not found.', 404);
       }
     } catch (error) { next(error); }

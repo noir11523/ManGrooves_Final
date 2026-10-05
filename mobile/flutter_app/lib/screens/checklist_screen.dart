@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
+import '../shared/list_filters.dart';
 
 class ChecklistScreen extends StatefulWidget {
   const ChecklistScreen({super.key, required this.api});
@@ -16,6 +17,14 @@ class ChecklistScreen extends StatefulWidget {
 class _ChecklistScreenState extends State<ChecklistScreen> {
   List<Map<String, dynamic>>? _criteria;
   String? _error;
+  String _query = '';
+  List<Map<String, dynamic>> get _filteredCriteria => (_criteria ?? [])
+      .where(
+        (item) => '${item['name']} ${item['question_text']}'
+            .toLowerCase()
+            .contains(_query.toLowerCase()),
+      )
+      .toList();
   @override
   void initState() {
     super.initState();
@@ -70,7 +79,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   ),
                 ),
                 if (_error != null) Text(_error!),
-                ..._criteria!.map(
+                ListFilters(
+                  hint: 'Checklist name or question',
+                  onApply: (query, _) => setState(() => _query = query),
+                ),
+                Text('${_filteredCriteria.length} results'),
+                if (_filteredCriteria.isEmpty)
+                  const Text('No checklist questions match.'),
+                ..._filteredCriteria.map(
                   (criterion) => Card(
                     child: ListTile(
                       title: Text('${criterion['name']}'),

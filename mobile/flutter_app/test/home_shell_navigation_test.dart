@@ -41,7 +41,11 @@ class _Api extends ApiClient {
     ],
   };
   @override
-  Future<Map<String, dynamic>> verification({int page = 1}) async {
+  Future<Map<String, dynamic>> verification({
+    int page = 1,
+    String query = '',
+    String health = '',
+  }) async {
     verificationLoads++;
     return {'summary': {}, 'items': []};
   }

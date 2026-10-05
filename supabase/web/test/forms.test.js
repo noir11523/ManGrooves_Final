@@ -38,6 +38,33 @@ const set = (name, value) => { const input = $(`[name=${name}]`); input.value = 
 const submit = () => { const form = $('#report-form'); return form.onsubmit({preventDefault() {}, submitter: $('#next')}); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };
 
+test('user search resets the page, keeps filters in pagination, and routes pending accounts to approval',async()=>{
+  globalThis.testApi=async(path,{query})=>{
+    assert.equal(path,'users.php');assert.equal(query.role,'expert');
+    return {page:2,pages:3,total:43,items:[{id:88,full_name:'Pending Reviewer',email:'pending@example.test',role:'expert',status:'pending_approval'}]};
+  };
+  await ui.adminPage($('#page'),'users',{page:'2',q:'coast',role:'expert'});
+  assert.match($('.pagination a').href,/q=coast/);assert.match($('.pagination a').href,/role=expert/);
+  assert.equal($('.user-form [name=role]'),null);assert.equal($('.user-form button'),null);
+  assert.equal($('.user-form a').getAttribute('href'),'#expert-applications');
+  const form=$('.list-filters');form.querySelector('[name=q]').value='  New name  ';
+  form.dispatchEvent(new Event('submit',{cancelable:true}));
+  assert.equal(location.hash,'#users?q=New+name&role=expert');
+  $('.clear-filters').click();assert.equal(location.hash,'#users');
+});
+
+test('catalog filters preserve an unfinished editor and clear restores hidden records',async()=>{
+  globalThis.testApi=async()=>({species:[{id:1,scientific_name:'Avicennia marina',common_name:'Grey mangrove',local_name:'Bungalon',active:1},{id:2,scientific_name:'Rhizophora',common_name:'Red mangrove',active:0}]});
+  await ui.adminPage($('#page'),'species',{});
+  $('.edit-item').click();$('[name=scientific_name]').value='Unsaved species';
+  const form=$('.list-filters');form.querySelector('[name=q]').value='RED';form.querySelector('[name=active]').value='0';form.dispatchEvent(new Event('submit',{cancelable:true}));
+  assert.equal($('.edit-item[data-id="1"]').hidden,true);assert.equal($('.edit-item[data-id="2"]').hidden,false);
+  assert.equal($('[name=scientific_name]').value,'Unsaved species');assert.match($('.result-count').textContent,/1 result/);
+  form.querySelector('[name=q]').value='missing';form.dispatchEvent(new Event('submit',{cancelable:true}));assert.equal($('.filter-empty').hidden,false);
+  $('.clear-filters').click();assert.equal($('.filter-empty').hidden,true);assert.equal($('.edit-item').hidden,false);
+  assert.equal($('[name=scientific_name]').value,'Unsaved species');
+});
+
 test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, and confirms before sending', async () => {
   const submissions = [];
   globalThis.testApi = async (path, {body} = {}) => {

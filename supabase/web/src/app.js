@@ -9,6 +9,7 @@ import { $, $$, esc, pill, displayLabel, reportStatus, field, select, formValues
 import { reportWizard, reportDraft } from './report-form.js';
 import {reportMapPage} from './report-map.js';
 import { checklistPage, adminPage } from './admin.js';
+import {listFilters,bindListFilters,listRoute} from './list-filters.js';
 
 let viewer = null, ready = false, cleanup = () => {}, cleanupMenu = () => {}, previousHash = location.hash, navigating = false;
 const roleLabel = {guardian: 'Coastal Guardian', expert: 'Expert', system_admin: 'Administrator'};
@@ -73,6 +74,11 @@ async function reportsPage(node, query, verification = false) {
   set(node, `${title(verification ? 'Review reports' : viewer.role === 'guardian' ? 'My reports' : 'Reports', verification ? 'Review health and species suggestions.' : '')}
     ${!verification ? `<form id="filters" class="filters">${select('status_filter', 'Status', [['', 'All reports'], ['verified', 'Verified'], ['pending', 'Pending'], ['attention', 'Needs attention'], ['rejected', 'Rejected']], filter)}${select('health', 'Health', [['', 'All health'], ...['Healthy', 'Stressed', 'At Risk', 'Unknown'].map(v => [v, v])], query.health)}${field('q', 'Search', query.q ?? '', 'search', 'placeholder="Site or report number"')}<button>Apply</button>${filtered ? '<a class="button outline" href="#reports">Clear filters</a>' : ''}</form>` : ''}
     ${!data.items.length && filtered && !verification ? '<p class="empty">No reports match your filters. Try another search or clear the filters.</p>' : verification && !data.items.length ? '<p class="empty">No reports waiting for review.</p>' : reportRows(data.items)}${pager(data, verification ? 'verification' : 'reports', {...query, page: undefined})}`);
+  if (verification) {
+    node.querySelector('.page-head').insertAdjacentHTML('afterend',listFilters(query,[['health','Health',[['','All health'],...['Healthy','Stressed','At Risk','Unknown'].map(v=>[v,v])]]],'Site or report number'));
+    bindListFilters(node,query,q=>listRoute('verification',q),data.total);
+    if (!data.items.length && (query.q || query.health)) node.querySelector('.empty').textContent='No pending reports match. Try another search or clear the filters.';
+  }
   back(); $('#filters')?.addEventListener('submit', event => { event.preventDefault(); const values = formValues(event.target), selected = values.status_filter; delete values.status_filter; if (selected === 'attention') values.needs_attention = '1'; else if (selected) values.status = selected; location.hash = `reports?${new URLSearchParams(Object.entries(values).filter(([, value]) => value))}`; });
 }
 async function reportPage(node, id) {
@@ -107,9 +113,12 @@ async function analyticsPage(node, query) {
     new Chart($('#growth-chart'), {type: 'line', data: {labels: a.growth.map(p => p.month_label), datasets: [{label: a.capabilities.can_view_survival ? 'Survival (%)' : 'Verified reports', data: a.growth.map(p => p[a.capabilities.can_view_survival ? 'survival_rate' : 'verified_reports']), borderColor: '#35713d', tension: 0}]}, options: {maintainAspectRatio: false, scales: {y: {beginAtZero: true, ...(a.capabilities.can_view_survival ? {max: 100} : {})}}}})];
   cleanup = () => charts.forEach(c => c.destroy());
 }
-async function clustersPage(node, growth = false) {
-  const {clusters} = await api('clusters.php');
+async function clustersPage(node, growth = false, query = {}) {
+  const {clusters} = await api('clusters.php', {query});
   set(node, `${title(growth ? 'Growth timeline' : 'Health history', 'Select a cluster to see its visits.')}<div id="map" class="map large"></div>${legend}<h2>Clusters</h2>${clusters.length ? `<div class="list">${clusters.map(c => `<a class="report-row" href="#cluster/${c.id}?tab=${growth ? 'growth' : 'health'}"><div><strong>${esc(c.name)}</strong><small>${c.verified_count} verified visits · ${esc(c.barangay_name)}</small></div>${pill(c.latest_health)}</a>`).join('')}</div>` : '<p class="empty">Clusters appear after reports are verified.</p>'}`);
+  node.querySelector('.page-head').insertAdjacentHTML('afterend',listFilters(query,[['health','Health',[['','All health'],...['Healthy','Stressed','At Risk','Unknown'].map(v=>[v,v])]]],'Cluster name, code, or barangay'));
+  bindListFilters(node,query,q=>listRoute(growth?'growth':'clusters',q),clusters.length);
+  if (!clusters.length && (query.q || query.health)) node.querySelector('.empty').textContent='No clusters match. Try another search or clear the filters.';
   back(); const canvas = map($('#map'), clusters, {timelineMode:growth?'growth':'health'}); cleanup = () => canvas.remove();
 }
 async function timelinePage(node,id,query){
@@ -143,6 +152,10 @@ async function badgesPage(node) {
 async function historyPage(node, query) {
   const data = await api('validation-history.php', {query});
   set(node, `${title('Review history', 'Past health and species reviews.')}<div class="list">${data.items.map(v => `<a class="report-row" href="#report/${v.report_id}"><div><strong>${esc(v.report_code)} · ${esc(displayLabel(v.action))}</strong><p>${esc(v.verifier_name ?? v.reviewer ?? 'Automatic check')} · ${esc(v.created_at)}</p><small>${esc(v.previous_health ?? 'Unknown')} → ${esc(v.new_health ?? v.health ?? 'Unconfirmed')}</small></div>${pill(v.new_status ?? v.status)}</a>`).join('') || '<p class="empty">No reviews yet.</p>'}</div>${pager(data, 'history')}`); back();
+  node.querySelector('.list').insertAdjacentHTML('beforebegin',listFilters(query,[['action','Decision',[['','All decisions'],['confirm','Confirmed'],['correct','Corrected'],['reject','Rejected'],['auto_verify','Automatic verification']]]],'Report number or reviewer'));
+  node.querySelector('.pagination')?.remove();node.insertAdjacentHTML('beforeend',pager(data,'history',query));
+  bindListFilters(node,query,q=>listRoute('history',q),data.total);
+  if (!data.items.length && (query.q || query.action)) node.querySelector('.empty').textContent='No reviews match. Try another search or clear the filters.';
 }
 function privacyPage() {
   $('#app').innerHTML = `<header class="public-header"><a class="brand" href="#home">♣ ManGROOVES</a><a class="button outline" href="#home">Back to home</a></header><main class="privacy card"><h1>Privacy notice</h1><p>ManGROOVES records your name, email, barangay, optional phone number, and field reports. Reports include a photo, location, checklist answers, and visit notes.</p><p>Your information is stored using Supabase. Guardians see their own private reports. Authorized experts and administrators can review reports and manage the monitoring program. Verified cluster summaries help the community follow site health.</p><p>Location is requested when you choose to use GPS. You can also place a pin yourself. Personal photo metadata is removed before new photos are stored.</p><p>Your password is handled by Supabase Auth. Your email address cannot be changed through this app. Ask the program administrator about access, corrections, or account removal.</p><p>Expert applicants enter a work or professional ID code for admin review. Only administrators can view the code. Older ID photos remain private. Field reports should only contain mangrove photos. Address searches are sent to Photon; do not enter private home details. Certificate QR links allow anyone with the link to download the certificate for 10 minutes.</p></main>`;
@@ -174,8 +187,8 @@ async function route() {
       case 'verification': return await reportsPage(node, query, true);
       case 'report': return await reportPage(node, id);
       case 'analytics': return await analyticsPage(node, query);
-      case 'clusters': return await clustersPage(node);
-      case 'growth': return await clustersPage(node, true);
+      case 'clusters': return await clustersPage(node,false,query);
+      case 'growth': return await clustersPage(node,true,query);
       case 'cluster': return await timelinePage(node, id, query);
       case 'history': return await historyPage(node, query);
       case 'notifications': return await notificationsPage(node, query);
@@ -183,7 +196,7 @@ async function route() {
       case 'badges': return await badgesPage(node);
       case 'submit': cleanup = await reportWizard(node, query, viewer); return;
       case 'checklist': return await checklistPage(node);
-      case 'expert-applications':return await expertApplicationsPage(node);
+      case 'expert-applications':return await expertApplicationsPage(node,query);
       case 'certificate-settings':return await certificateSettingsPage(node);
       case 'users': case 'species': case 'badge-settings': case 'audit': return await adminPage(node, name, query);
       default: set(node, '<h1>Page not found</h1><a href="#dashboard">Back to dashboard</a>');
@@ -249,8 +262,8 @@ export async function renderEmbedded(name, node, query, user) {
     case 'verification': return reportsPage(node,query,true);
     case 'report': return reportPage(node,query.id);
     case 'analytics': return analyticsPage(node,query);
-    case 'clusters': return clustersPage(node);
-    case 'growth': return clustersPage(node,true);
+    case 'clusters': return clustersPage(node,false,query);
+    case 'growth': return clustersPage(node,true,query);
     case 'cluster': return timelinePage(node,query.id,query);
     case 'history': return historyPage(node,query);
     case 'notifications': return notificationsPage(node,query);
@@ -258,7 +271,7 @@ export async function renderEmbedded(name, node, query, user) {
     case 'badges': return badgesPage(node);
     case 'submit': cleanup=await reportWizard(node,query,viewer);return;
     case 'checklist': return checklistPage(node);
-    case 'expert-applications': return expertApplicationsPage(node);
+    case 'expert-applications': return expertApplicationsPage(node,query);
     case 'certificate-settings': return certificateSettingsPage(node);
     case 'users': case 'species': case 'badge-settings': case 'audit': return adminPage(node,name,query);
     default: throw new Error('Page not found.');
