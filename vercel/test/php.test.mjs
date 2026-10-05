@@ -51,7 +51,20 @@ async function browser(){
 }
 async function login(role='guardian'){const b=await browser();await b.request('/login.php');const result=await b.request('/cloud-session.php',{action:'login',email:`${role}@example.test`,password:'Example123'});return {b,result};}
 test('original PHP home renders real counts and links to email registration',async()=>{
-  const b=await browser(),{res,text}=await b.request('/index.php');assert.equal(res.status,200);assert.match(text,/Every mangrove tells a story/);assert.match(text,/href="\/register.php"/);assert.doesNotMatch(text,/id="authModal"/);assert.match(text,/<strong>12<\/strong>/);assert.match(res.headers.get('cache-control'),/no-store/);
+  const b=await browser(),{res,text}=await b.request('/index.php');assert.equal(res.status,200);assert.match(text,/Protect mangroves/);assert.match(text,/href="\/register.php"/);assert.doesNotMatch(text,/id="authModal"/);assert.match(text,/<strong>12<\/strong>/);assert.match(res.headers.get('cache-control'),/no-store/);
+  const dom=new JSDOM(text),doc=dom.window.document;
+  assert.equal(doc.querySelectorAll('h1').length,1);
+  assert.match(doc.querySelector('.home-role-guardian').textContent,/No professional experience needed/);
+  assert.match(doc.querySelector('#for-experts').textContent,/work or professional ID code/);
+  const routes=new Set();
+  for(const link of doc.querySelectorAll('a[href]')){
+    const url=new URL(link.getAttribute('href'),origin+'/index.php');
+    if(url.origin!==origin)continue;
+    if(url.hash&&['/','/index.php'].includes(url.pathname))assert.ok(doc.getElementById(url.hash.slice(1)),url.hash);
+    else if(!url.hash)routes.add(url.pathname);
+  }
+  for(const route of routes)assert.equal((await fetch(origin+route,{method:'HEAD'})).status,200,route);
+  dom.window.close();
 });
 test('map security policy allows the actual tile provider',async()=>{
   const b=await browser(),{res}=await b.request('/login.php');

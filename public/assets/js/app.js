@@ -30,6 +30,22 @@
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    // Close the existing mobile menu when a homepage section link is chosen.
+    if (document.body.classList.contains('home-page')) {
+        const publicMenu = document.getElementById('publicNavigation');
+        publicMenu?.querySelectorAll('a[href*="#"]').forEach((link) => {
+            link.addEventListener('click', () => {
+                if (publicMenu.classList.contains('show') && window.bootstrap) {
+                    window.bootstrap.Collapse.getOrCreateInstance(publicMenu, { toggle: false }).hide();
+                    const target = document.querySelector(new URL(link.href).hash);
+                    publicMenu.addEventListener('hidden.bs.collapse', () => {
+                        target?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+                    }, { once: true });
+                }
+            });
+        });
+    }
+
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
         if (window.bootstrap) {
             window.bootstrap.Tooltip.getOrCreateInstance(element);

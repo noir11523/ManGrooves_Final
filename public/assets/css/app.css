@@ -801,3 +801,182 @@ textarea {
 .growth-row { display: grid; grid-template-columns: 100px minmax(40px, 1fr) 55px 160px; gap: .75rem; align-items: center; padding: .75rem 0; border-bottom: 1px solid #e5e9e2; }
 #health-history, #growth-timeline, #observation-timeline { scroll-margin-top: 95px; }
 @media (max-width: 600px) { .growth-row { grid-template-columns: 90px minmax(40px, 1fr) 45px; } .growth-row > span { grid-column: 1 / -1; } }
+
+/* Landing-page refinement. Keep these rules scoped away from account/workspace pages. */
+.home-page { --home-cream: #f7f4ec; background: var(--home-cream); }
+.home-page .section-padding { padding-block: clamp(3.25rem, 5.5vw, 5rem); }
+.home-page .section-title { font-size: clamp(1.9rem, 3.4vw, 2.8rem); line-height: 1.1; margin-bottom: 0; }
+.home-page .section-title span { color: var(--mg-green); }
+.home-page .section-lead { font-size: 1rem; line-height: 1.65; margin: 0; color: #576259; }
+.home-page .section-kicker { font-size: .72rem; letter-spacing: .12em; }
+.home-page .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; font-size: .94rem; border-radius: .8rem; }
+.home-page .text-link { min-height: 44px; line-height: 1.45; }
+.home-page :is(a, button):focus-visible { outline: 3px solid #ad7b1b !important; outline-offset: 4px !important; }
+.home-page :is(.hero-section, .cta-panel, .public-footer) :is(a, button):focus-visible { outline-color: #f3d791 !important; }
+.home-page .public-navbar { background: rgba(252, 252, 248, .97); min-height: 5rem; }
+.home-page .public-navbar .nav-link { padding-inline: .6rem; min-height: 44px; display: flex; align-items: center; }
+.home-page .public-navbar .btn { padding-inline: .95rem; font-size: .83rem; }
+.home-page .navbar-toggler { min-width: 46px; min-height: 46px; }
+.home-page .hero-section { min-height: 0; }
+.home-page .hero-overlay { background: linear-gradient(90deg, rgba(13, 34, 23, .92) 0%, rgba(17, 37, 24, .82) 39%, rgba(22, 39, 23, .22) 78%), linear-gradient(0deg, rgba(15, 32, 20, .4), transparent 60%); }
+.home-page .home-hero-grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); align-items: end; gap: 3rem; padding-block: clamp(3rem, 5vw, 5rem) 3rem; }
+.home-page .hero-kicker { padding: 0; border: 0; background: none; backdrop-filter: none; color: #e8dfc7; margin-bottom: 1.5rem; font-size: .72rem; letter-spacing: .13em; }
+.home-page .hero-section h1 { max-width: none; font-size: clamp(2.65rem, 4.6vw, 4.6rem); line-height: 1.04; margin-bottom: 1.5rem; letter-spacing: -.045em; }
+.home-page .hero-section h1 span { color: #e8d8b9; }
+.home-page .hero-lead { max-width: 36rem; font-size: 1.04rem; line-height: 1.65; margin-bottom: 1.75rem; color: #eeeee5; }
+.home-page .hero-actions { gap: .75rem; }
+.home-page .hero-actions .btn-primary { --bs-btn-bg: #dce7cb; --bs-btn-border-color: #dce7cb; --bs-btn-color: #183b22; --bs-btn-hover-bg: #f0f4e8; --bs-btn-hover-border-color: #f0f4e8; --bs-btn-hover-color: #183b22; }
+.home-page .hero-actions .btn-outline-light { border-width: 1px; border-color: #c3cabc; }
+.home-page .home-reassurance { display: flex; align-items: baseline; gap: .45rem; font-size: .86rem; color: #e2e9db; margin: 1rem 0 0; }
+.home-page .home-hero-roles { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; border-top: 1px solid #c8d1ba55; padding-top: 1.25rem; margin: 2rem 0 0; max-width: 36rem; }
+.home-page .home-hero-roles dt { font-size: .9rem; margin-bottom: .35rem; }
+.home-page .home-hero-roles dd { margin: 0; font-size: .82rem; line-height: 1.5; color: #d9e1d3; max-width: 25ch; }
+.home-page .home-observation { width: 100%; max-width: 21rem; justify-self: end; margin-bottom: 1rem; padding: 1.4rem; border: 1px solid #f2efdb70; border-radius: 1.35rem 1.35rem 3rem 1.35rem; background: rgba(247, 244, 236, .93); color: var(--mg-ink); backdrop-filter: blur(8px); box-shadow: 0 15px 40px #10271d33; transition: transform .2s ease; }
+.home-page .home-observation:hover { transform: translateY(-4px); }
+.home-page .home-observation-heading { display: flex; align-items: center; gap: .5rem; color: var(--mg-green); font-size: .66rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.home-page .home-observation-heading > i { font-size: 1.2rem; }
+.home-page .home-example { margin-left: auto; font-size: .6rem; border: 1px solid #acb8a5; padding: .2rem .35rem; border-radius: .3rem; }
+.home-page .home-observation > p { font-size: 1.12rem; font-weight: 750; letter-spacing: -.025em; margin: .9rem 0 1rem; }
+.home-page .home-observation dl { margin: 0 0 1rem; }
+.home-page .home-observation dl > div { display: flex; justify-content: space-between; gap: .6rem; border-top: 1px solid #c6cfbd; padding: .65rem 0; font-size: .8rem; }
+.home-page .home-observation dt { font-weight: 450; color: #525d51; }
+.home-page .home-observation dd { margin: 0; font-weight: 700; color: var(--mg-green); }
+.home-page .home-observation-note { font-size: .7rem; color: #576259; }
+.home-page .home-section-heading { display: flex; justify-content: space-between; align-items: end; gap: 2.5rem; margin-bottom: 2rem; }
+.home-page .home-section-heading > div { flex: 1; }
+.home-page .home-section-heading > p { max-width: 27rem; flex: 1; }
+.home-page .home-role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+.home-page .home-role-card { padding: clamp(1.4rem, 3vw, 2.25rem); border: 1px solid #c9d5c3; border-radius: 1.2rem; background: #eaf0e4; }
+.home-page .home-role-expert { background: #fcfaf5; border-color: #dcccaf; }
+.home-page .home-role-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .8rem; }
+.home-page .home-role-top > i { color: var(--mg-green); font-size: 1.8rem; }
+.home-page .home-role-expert .home-role-top > i { color: var(--mg-brown); }
+.home-page .home-role-badge { color: #45613c; font-size: .66rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.home-page .home-role-expert .home-role-badge { color: var(--mg-brown); }
+.home-page .home-role-card h3 { font-size: clamp(1.5rem, 2.3vw, 2rem); font-weight: 800; letter-spacing: -.03em; color: var(--mg-brown); }
+.home-page .home-role-card p { max-width: 45ch; color: #52604f; line-height: 1.65; font-size: .97rem; margin: .8rem 0; }
+.home-page .home-role-card .home-role-promise { color: var(--mg-green); font-size: .83rem; font-weight: 700; }
+.home-page .home-role-actions { display: flex; justify-content: space-between; gap: .65rem; padding: 1rem 0; margin: 1.2rem 0 .65rem; border-top: 1px solid #b9c6ad; list-style: none; }
+.home-page .home-role-actions li { display: flex; align-items: center; gap: .5rem; font-size: .84rem; font-weight: 650; }
+.home-page .home-role-actions i { font-size: 1.1rem; color: var(--mg-green); }
+.home-page .home-link-button { background: none; border: none; padding: 0; color: var(--mg-green); text-align: left; }
+.home-page .home-process { background: #eaf0e8; }
+.home-page .home-process-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.75rem; margin: 0; padding: 0; list-style: none; }
+.home-page .home-process-steps li { position: relative; padding-top: 1rem; border-top: 1px solid #a9b9a2; }
+.home-page .home-process-steps li::before { content: ''; position: absolute; top: -4px; left: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--mg-green); }
+.home-page .home-step-number { color: #54724b; font-size: .8rem; font-weight: 750; }
+.home-page .home-process-steps h3 { margin: .8rem 0 .5rem; font-size: 1.35rem; font-weight: 800; color: var(--mg-brown); }
+.home-page .home-process-steps p { margin: 0; color: #52604f; font-size: .94rem; line-height: 1.6; }
+.home-page .home-process-note { margin: 1.5rem 0 0; font-size: .8rem; color: #52604f; }
+.home-page .home-benefit-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.3rem; }
+.home-page .benefit-card { padding: 0 1rem 0 0; border: none; border-radius: 0; box-shadow: none; background: none; }
+.home-page .benefit-card .feature-icon { background: none; border: 1px solid #c5d2bd; border-radius: 1rem 1rem 1rem .25rem; }
+.home-page .benefit-card p { color: #576259; }
+.home-page .health-guide-section { background: #fcfcf8; }
+.home-page .home-health-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.home-page .health-card { padding: 1.4rem; gap: .9rem; }
+.home-page .health-card ul { padding-left: 1.15rem; margin: .85rem 0 0; font-size: .9rem; line-height: 1.8; color: #52604f; }
+.home-page .home-guide-note { margin: 1rem 0 0; font-size: .8rem; text-align: center; color: #576259; }
+.home-page .home-role-reminder { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 1.5rem 0 0; font-size: 1rem; color: var(--mg-brown); }
+.home-page .home-role-reminder strong { color: var(--mg-green); }
+.home-page .impact-strip { padding-block: 2rem; }
+.home-page .home-impact-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem 1rem; margin-bottom: .75rem; }
+.home-page .home-impact-heading h2 { font-size: 1.25rem; font-weight: 700; letter-spacing: -.025em; margin: 0; }
+.home-page .home-impact-heading > span { color: #decdbd; font-size: .77rem; }
+.home-page .impact-stat > i { color: #d9c7a8; font-size: 1.15rem; display: block; margin-bottom: .65rem; }
+.home-page .impact-stat strong { font-size: clamp(2rem, 3vw, 2.7rem); }
+.home-page .impact-stat span { color: #ecdfcb; font-size: .7rem; }
+.home-page .home-explore-grid { display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: clamp(2rem, 5vw, 5rem); }
+.home-page .home-explore-visual { position: relative; height: 20rem; overflow: hidden; border-radius: 1.5rem 1.5rem 4rem 1.5rem; }
+.home-page .home-explore-visual img { width: 100%; height: 100%; object-fit: cover; object-position: 80% 65%; }
+.home-page .home-place-label { position: absolute; left: 1rem; bottom: 1rem; display: flex; align-items: center; gap: .5rem; padding: .6rem .85rem; border-radius: .6rem; background: #fcfcf8; color: var(--mg-green); font-size: .8rem; font-weight: 700; }
+.home-page .home-explore-copy p { margin: 1.15rem 0 1.5rem; max-width: 35ch; }
+.home-page .home-expert-section { padding-bottom: clamp(3rem, 5vw, 4.5rem); }
+.home-page .home-expert-panel { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 3.5rem; padding: 2.3rem; border: 1px solid #d8cbb6; border-radius: 1.2rem; background: #fcfaf5; }
+.home-page .home-expert-intro .section-title { font-size: clamp(1.65rem, 2.7vw, 2.2rem); }
+.home-page .home-expert-intro > p { margin: 1rem 0 .65rem; color: #576259; font-size: .96rem; line-height: 1.7; }
+.home-page .home-expert-process ol { display: grid; gap: .7rem; list-style: none; padding: 0; margin: 0; }
+.home-page .home-expert-process li { display: flex; align-items: center; gap: .8rem; font-size: .91rem; font-weight: 650; }
+.home-page .home-expert-process li span { display: grid; place-items: center; width: 1.9rem; height: 1.9rem; flex: 0 0 auto; background: #eaf0e4; color: var(--mg-green); border-radius: 50%; font-size: .68rem; }
+.home-page .home-expert-process > p { margin: 1.2rem 0 0; background: #eaf0e4; padding: .85rem 1rem; border-radius: .65rem; font-size: .86rem; line-height: 1.55; color: #314f2b; }
+.home-page .home-expert-process > p i { margin-right: .3rem; }
+.home-page .cta-section { padding: 0 0 4.5rem; background: var(--home-cream); }
+.home-page .cta-panel { padding: clamp(1.5rem, 4vw, 3.5rem); background: var(--mg-green-dark); box-shadow: none; border-radius: 1.5rem 1.5rem 3.5rem 1.5rem; }
+.home-page .cta-panel .section-kicker { color: #d6e1c5; }
+.home-page .cta-panel h2 { max-width: none; font-size: clamp(1.8rem, 3vw, 2.8rem); line-height: 1.12; }
+.home-page .cta-panel p { margin-top: 1rem; color: #e4eadb; font-size: .97rem; }
+.home-page .home-cta-actions { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; gap: .7rem; }
+.home-page .home-cta-actions > span { color: #d2dfc5; font-size: .77rem; }
+.home-page .home-cta-secondary { color: #fff; min-height: 44px; display: inline-flex; align-items: center; font-weight: 600; font-size: .9rem; }
+.home-page .public-footer { padding-top: 3rem; }
+.home-page .footer-links a { display: inline-flex; align-items: center; min-height: 44px; color: #e3d7cc; }
+.home-page .footer-links li + li { margin-top: 0; }
+.home-page .footer-bottom { margin-top: 2rem; color: #d6c7bb; }
+@media (max-width: 1399.98px) {
+    .home-page .public-navbar .navbar-collapse { padding-block: 1rem .5rem; }
+    .home-page .public-navbar .navbar-nav { align-items: stretch !important; gap: .3rem; }
+    .home-page .public-navbar .nav-item { margin-left: 0 !important; }
+    .home-page .public-navbar .btn { width: 100%; }
+    .home-page .public-navbar .navbar-collapse.show { max-height: calc(100dvh - 5rem); overflow-y: auto; }
+}
+@media (max-width: 991.98px) {
+    .home-page .home-hero-grid { display: block; padding-block: 3.5rem 2.5rem; }
+    .home-page .home-hero-copy { max-width: 42rem; }
+    .home-page .hero-section h1 { font-size: clamp(2.6rem, 6.5vw, 4rem); }
+    .home-page .home-observation { display: none; }
+    .home-page .hero-overlay { background: linear-gradient(90deg, #102719ed, #152d1cbf 65%, #152d1c88); }
+    .home-page .home-section-heading { gap: 1.5rem; }
+    .home-page .home-role-actions li { flex-direction: column; align-items: start; }
+    .home-page .home-health-grid { grid-template-columns: 1fr; }
+    .home-page .health-card ul { margin-top: .5rem; }
+    .home-page .home-expert-panel { gap: 2rem; padding: 1.5rem; }
+    .home-page .cta-panel { flex-direction: column; align-items: start; }
+    .home-page .home-cta-actions { align-items: start; }
+}
+@media (max-width: 767.98px) {
+    .home-page .home-section-heading { flex-direction: column; align-items: start; gap: .9rem; }
+    .home-page .home-section-heading > p { max-width: 36rem; }
+    .home-page .home-role-grid { grid-template-columns: 1fr; }
+    .home-page .home-role-actions li { flex-direction: row; }
+    .home-page .home-process-steps, .home-page .home-benefit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.75rem 1.2rem; }
+    .home-page .home-explore-grid, .home-page .home-expert-panel { grid-template-columns: 1fr; }
+    .home-page .home-explore-visual { height: 16rem; }
+    .home-page .home-impact-heading { flex-wrap: wrap; }
+    .home-page .home-role-reminder { font-size: .92rem; flex-direction: column; gap: .35rem; }
+    .home-page .home-role-reminder > i { display: none; }
+}
+@media (max-width: 575.98px) {
+    .home-page .container { padding-inline: 1.25rem; }
+    .home-page .public-navbar { min-height: 4.5rem; }
+    .home-page .hero-section { min-height: 0; }
+    .home-page .home-hero-grid { padding-block: 2.5rem; }
+    .home-page .hero-section h1 { font-size: clamp(2rem, 8.2vw, 2.9rem); letter-spacing: -.035em; }
+    .home-page .hero-lead { font-size: .96rem; }
+    .home-page .hero-actions .btn { min-height: 50px; padding-inline: .8rem; }
+    .home-page .hero-actions { flex-direction: column; }
+    .home-page .home-hero-roles { gap: 1rem; }
+    .home-page .home-hero-roles dt { font-size: .85rem; }
+    .home-page .home-hero-roles dd { font-size: .8rem; }
+    .home-page .home-role-card { padding: 1.3rem; }
+    .home-page .home-role-actions li { font-size: .8rem; gap: .3rem; }
+    .home-page .home-role-actions i { font-size: 1rem; }
+    .home-page .home-role-card .text-link { font-size: .9rem; }
+    .home-page .home-process-steps, .home-page .home-benefit-grid { grid-template-columns: 1fr; gap: 1.3rem; }
+    .home-page .home-process-steps li { padding-left: 3rem; padding-top: 0; border-top: none; }
+    .home-page .home-process-steps li::before { display: none; }
+    .home-page .home-step-number { position: absolute; left: 0; top: .25rem; }
+    .home-page .home-process-steps h3 { margin-top: 0; }
+    .home-page .benefit-card { display: grid; grid-template-columns: 3rem 1fr; column-gap: 1rem; }
+    .home-page .benefit-card .feature-icon { grid-row: span 2; }
+    .home-page .benefit-card h3 { margin: 0 0 .35rem; }
+    .home-page .benefit-card p { grid-column: 2; }
+    .home-page .home-expert-panel { padding: 1.25rem; gap: 1.5rem; }
+    .home-page .home-cta-actions { width: 100%; align-items: stretch; text-align: center; }
+    .home-page .home-cta-actions .btn { white-space: normal; font-size: .9rem; }
+    .home-page .home-cta-secondary { justify-content: center; }
+    .home-page .cta-panel h2 br { display: none; }
+    .home-page .public-footer .brand-copy { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .home-page .home-observation:hover { transform: none; }
+}

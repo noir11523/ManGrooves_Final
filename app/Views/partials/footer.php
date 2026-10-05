@@ -5,7 +5,7 @@
                 <a class="app-brand footer-brand" href="<?= e(url('index.php')) ?>">
                     <?php require APP_ROOT . '/app/Views/partials/brand.php'; ?>
                 </a>
-                <p class="mt-3 mb-0">Helping communities turn careful observation into healthier mangrove forests.</p>
+                <p class="mt-3 mb-0"><?= ($viewName ?? '') === 'home' ? 'Community-powered mangrove monitoring for healthier coastal ecosystems.' : 'Helping communities turn careful observation into healthier mangrove forests.' ?></p>
             </div>
             <div class="col-6 col-lg-3">
                 <h2 class="footer-heading">Explore</h2>
@@ -21,6 +21,9 @@
                 <ul class="footer-links">
                     <li><a href="<?= e(url('register.php')) ?>">Become a guardian</a></li>
                     <li><a href="<?= e(url('login.php')) ?>">Sign in</a></li>
+                    <?php if (($viewName ?? '') === 'home'): ?>
+                        <li><a href="#for-experts">Expert applications</a></li>
+                    <?php endif; ?>
                 </ul>
             </div>
         </div>
