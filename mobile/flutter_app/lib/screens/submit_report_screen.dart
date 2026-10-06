@@ -482,7 +482,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     _locationRequest++;
     if (_gettingLocation) {
       _locationNeedsRetry = true;
-      _locationMessage = 'Location search paused. Try again or place a pin.';
+      _locationMessage = 'Try again or place a pin.';
     }
     _gettingLocation = false;
     _gpsProgressAccuracy = null;
@@ -689,21 +689,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       center = LatLng(device.latitude, device.longitude);
       accuracy = device.accuracy;
     }
-    if (center == null || accuracy! > 5000) {
-      try {
-        final area = await widget.api.approximateArea();
-        final estimate = area['accuracy'] as double?;
-        if (center == null || (estimate != null && estimate < accuracy!)) {
-          center = LatLng(
-            area['latitude'] as double,
-            area['longitude'] as double,
-          );
-          accuracy = estimate;
-        }
-      } catch (_) {
-        /* Address search and the map stay available. */
-      }
-    }
+    // Mobile uses device positioning only. A coarse reading can guide the map,
+    // but cannot become a report pin; search and manual selection stay available.
     if (!mounted ||
         !widget.active ||
         request != _locationRequest ||

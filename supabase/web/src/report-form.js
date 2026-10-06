@@ -69,7 +69,7 @@ export async function reportWizard(node, query, user = null) {
       stopGps();
       if (searching && draft.step === 1) {
         $('#gps').textContent = 'Try again';
-        $('#location-status').textContent = 'Location search paused. Try again or place a pin.';
+        $('#location-status').textContent = 'Try again or place a pin.';
       }
     }
   };
@@ -195,7 +195,6 @@ export async function reportWizard(node, query, user = null) {
     $('#step-body').innerHTML = `<h2>Where is the mangrove?</h2><p id="location-status" class="muted" role="status">${draft.fields.location_source ? 'Your selected pin is saved.' : 'Finding your location… Allow access if asked.'}</p><label class="field"><span>Find an address or landmark</span><input id="place-search" type="search" autocomplete="off" placeholder="Type a place name"><small>Choose a result, then check the pin.</small></label><div id="place-results" class="list" role="status"></div><div id="location-map" class="map large"></div><details><summary>Location details</summary><div class="row">${field('latitude', 'Latitude', draft.fields.latitude ?? '', 'number', 'required min="-90" max="90" step="any" readonly')}${field('longitude', 'Longitude', draft.fields.longitude ?? '', 'number', 'required min="-180" max="180" step="any" readonly')}</div><p class="muted">Location is detected automatically. The circle shows estimated accuracy. An approximate area needs an exact pin.</p></details>`;
     const locationInput = $('#place-search');
     $('#location-status').insertAdjacentHTML('beforebegin', '<div class="actions"><button type="button" id="gps" aria-describedby="location-status">Use my location</button><button type="button" id="manual-pin" class="outline" aria-describedby="location-status">Place a pin</button></div>');
-    $('#location-status').insertAdjacentHTML('afterend', '<p class="muted">We try your device location first (GPS or nearby networks). If no reliable fix is available, GeoJS may use your IP address to estimate your area. This estimate only guides the map; place a pin at the exact site. <a href="https://www.geojs.io/privacy/" target="_blank" rel="noopener noreferrer">GeoJS privacy policy</a>.</p>');
     const gpsButton = $('#gps');
     const mapElement = $('#location-map');
     mapElement.tabIndex = 0;
@@ -284,6 +283,7 @@ export async function reportWizard(node, query, user = null) {
       const generation = locationGeneration;
       const current = () => !stopped && draft.step === 1 && canvas === currentCanvas && generation === locationGeneration;
       tracker = new locationTools.AutomaticLocator({geolocation:navigator.geolocation,
+        allowIpFallback:!locationTools.isMobileDevice(navigator),
         secure:window.isSecureContext || ['localhost','127.0.0.1'].includes(location.hostname),
         maxAccuracy:Number(data.location.max_gps_accuracy_meters)||100,
         onPosition:position=>{

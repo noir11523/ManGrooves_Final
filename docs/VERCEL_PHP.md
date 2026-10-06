@@ -1,5 +1,13 @@
 # ManGROOVES PHP website on Vercel
 
+## Desktop fallback and mobile device location — October 6, 2026
+
+The report form no longer shows the long technical explanation or provider link beneath the location controls. The existing Privacy notice retains the provider disclosure. **Use my location**, **Try again**, **Place a pin**, and address search remain available.
+
+Desktop browsers request fresh device positioning first; the OS can use GPS, Wi-Fi or Windows Location Services when available. A second device request runs before approximate IP fallback. Phone/tablet browsers and the Android APK use device positioning without an IP lookup. If mobile location is blocked or unreliable, users can retry, search, or place a pin. Estimated accuracy is still checked; a coarse device reading only guides the map. No phone or PC is assumed to have guaranteed GPS accuracy.
+
+This update is included in APK `2.0.0+36`. Validation passed: 60 shared/web tests, 25 location tests, 21 PHP/package tests, and 85 Android tests with one existing skip; Flutter analysis found no issues. Location tests cover desktop fallback, Android/iPhone/iPad detection, mobile denial/timeout without IP requests, successful retry, and preservation of manual pins. Browser checks at 320/390/768/1440 px found no overflow. The earlier release details below describe their corresponding versions.
+
 ## Homepage, compact administration and automatic location — October 6, 2026
 
 The existing homepage now includes exactly three curated Cebu article cards between the monitoring explanation and field guide. Links retain the owner's supplied SunStar/MyTV/CCENRO destinations and open the original source in a new tab. The SunStar and World Water Day images are optimized local WebP files with visible source credits. The unavailable MyTV assessment photo uses the existing project mangrove image, explicitly labelled illustrative. Its Kinasang-an/Basak Pardo headline was confirmed from the supplied post metadata. No feeds, external embeds, article scraping at runtime, new routes, or data queries were added. Real homepage statistics continue loading after the page appears.

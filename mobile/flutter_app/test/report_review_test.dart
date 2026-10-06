@@ -229,7 +229,7 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
 
 void main() {
   testWidgets(
-    'denied permission offers an approximate area and retry can recover a precise location',
+    'mobile skips IP fallback after denial and retry can recover device location',
     (tester) async {
       final old = GeolocatorPlatform.instance, gps = _DeniedGps();
       GeolocatorPlatform.instance = gps;
@@ -249,7 +249,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(gps.requests, 1);
-      expect(api.lookups, 1);
+      expect(api.lookups, 0);
       expect(find.text('Find approximate area'), findsNothing);
       expect(find.text('Find my location'), findsNothing);
       expect(find.text('Try again'), findsOneWidget);
@@ -265,7 +265,7 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(gps.requests, 2);
-      expect(api.lookups, 1);
+      expect(api.lookups, 0);
       expect(find.text('Use my location'), findsOneWidget);
       expect(find.text('Adjust pin'), findsOneWidget);
       expect(

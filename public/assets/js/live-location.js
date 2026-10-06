@@ -170,6 +170,14 @@
         return parseIpArea(await response.json());
     }
 
+    function isMobileDevice(device = globalThis.navigator) {
+        // iPadOS may identify as a Mac; screen width alone would misclassify PCs.
+        return device?.userAgentData?.mobile === true
+            || /^(Android|iOS)$/i.test(device?.userAgentData?.platform || '')
+            || /Android|iPhone|iPad|iPod/i.test(device?.userAgent || '')
+            || (device?.platform === 'MacIntel' && device?.maxTouchPoints > 1);
+    }
+
     class AutomaticLocator {
         constructor(options) { this.options = options; this.active = false; }
         stop() {
@@ -199,7 +207,7 @@
                 const coords = this.best?.coords;
                 let area = this.best && Date.now() - this.best.timestamp < 30000
                     ? {latitude:coords.latitude, longitude:coords.longitude, accuracy:coords.accuracy, label:''} : null;
-                if (!area || area.accuracy > 5000) {
+                if (options.allowIpFallback !== false && (!area || area.accuracy > 5000)) {
                     options.onState?.({state:'searching', message:'Finding the nearest area…'});
                     const timeout = setTimeout(() => controller.abort(), 10000);
                     try {
@@ -243,5 +251,5 @@
         }
     }
 
-    return {Tracker, AutomaticLocator, parseIpArea, lookupIpArea};
+    return {Tracker, AutomaticLocator, parseIpArea, lookupIpArea, isMobileDevice};
 });

@@ -1,6 +1,6 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {AutomaticLocator}=require('../public/assets/js/live-location.js');
+const {AutomaticLocator,isMobileDevice}=require('../public/assets/js/live-location.js');
 const tick=()=>new Promise(r=>setImmediate(r));
 function setup(t,changes={}){
   t.mock.timers.enable({apis:['setTimeout','setInterval','Date'],now:1700000000000});
@@ -42,4 +42,17 @@ test('late fallback responses cannot replace a manual selection or a new capture
   let resolve;const f=setup(t,{lookupIpArea:()=>new Promise(r=>resolve=r)});f.fail({code:1});
   f.locator.stop();f.locator.start();resolve({latitude:0,longitude:0,accuracy:5000});await tick();
   assert.equal(f.areas.length,0);assert.equal(f.pins.length,0);
+});
+test('phones and iPad desktop mode are mobile; a narrow or touch-enabled PC is not',()=>{
+  for(const device of [{userAgentData:{mobile:true}},{userAgentData:{mobile:false,platform:'Android'}},{userAgent:'Android'},{userAgent:'iPhone'},{userAgent:'iPad'},{platform:'MacIntel',maxTouchPoints:5}]) assert.equal(isMobileDevice(device),true);
+  for(const device of [{userAgent:'Windows NT',platform:'Win32',maxTouchPoints:10},{platform:'MacIntel',maxTouchPoints:0},{}]) assert.equal(isMobileDevice(device),false);
+});
+test('mobile permission denial does not use IP and retry still finds device location',async t=>{
+  const f=setup(t,{allowIpFallback:false});f.fail({code:1});await tick();
+  assert.equal(f.ipCalls,0);assert.equal(f.areas.length,0);assert.equal(f.states.at(-1).state,'unavailable');
+  f.locator.start();f.source.receive(f.reading(7));assert.equal(f.pins.length,1);assert.equal(f.ipCalls,0);
+});
+test('mobile timeout with a broad device reading never falls back to IP or saves a pin',async t=>{
+  const f=setup(t,{allowIpFallback:false});t.mock.timers.tick(20000);f.receive(f.reading(8000));t.mock.timers.tick(10000);await tick();
+  assert.equal(f.ipCalls,0);assert.equal(f.pins.length,0);assert.equal(f.areas[0].accuracy,8000);
 });

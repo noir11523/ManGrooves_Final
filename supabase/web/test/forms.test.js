@@ -71,6 +71,26 @@ test('location buttons support automatic capture, approximate fallback, retry an
   } finally {dispose();globalThis.fetch=originalFetch;ui.reportDraft.reset();}
 });
 
+test('mobile report location omits technical copy and never calls the IP provider',async()=>{
+  const originalFetch=globalThis.fetch,agent=Object.getOwnPropertyDescriptor(navigator,'userAgent');let lookups=0;
+  Object.defineProperty(navigator,'userAgent',{configurable:true,value:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'});
+  globalThis.fetch=async()=>{lookups++;throw new Error('IP must not be called on mobile');};
+  globalThis.testApi=async path=>path==='report-form.php'?{criteria:reference.criteria,clusters:[],species:[],location:{}}:{places:[]};
+  ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,fields:{location_source:''}});
+  const dispose=await ui.reportWizard($('#page'),{});
+  try {
+    assert.doesNotMatch($('#step-body').textContent,/GeoJS|We try your device/);
+    gpsFail({code:1});await tick();assert.equal(lookups,0);
+    assert.equal($('#gps').textContent,'Try again');assert.equal($('#manual-pin').disabled,false);
+    assert.equal(ui.reportDraft.fields.location_source,'');
+    $('#gps').click();gps({timestamp:Date.now(),coords:{latitude:10.28,longitude:123.88,accuracy:8}});
+    assert.equal(ui.reportDraft.fields.location_source,'gps');assert.equal(lookups,0);
+  } finally {
+    dispose();globalThis.fetch=originalFetch;ui.reportDraft.reset();
+    if(agent)Object.defineProperty(navigator,'userAgent',agent);else delete navigator.userAgent;
+  }
+});
+
 test('user search resets the page, keeps filters in pagination, and routes pending accounts to approval',async()=>{
   globalThis.testApi=async(path,{query})=>{
     assert.equal(path,'users.php');assert.equal(query.role,'expert');
