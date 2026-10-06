@@ -60,6 +60,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   String? _error;
   bool _busy = false;
   bool _gettingLocation = false;
+  bool _locationNeedsRetry = false;
   LatLng? _areaCenter;
   double? _areaAccuracy;
   String? _locationMessage;
@@ -377,11 +378,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
   }
 
-  Future<void> _captureLocation() async {
+  Future<void> _captureLocation({bool retry = false}) async {
     if (_gettingLocation) return;
+    if (retry) _permissionAsked = false;
     final request = ++_locationRequest;
+    String? failureHint;
     setState(() {
       _gettingLocation = true;
+      _locationNeedsRetry = false;
       _gpsProgressAccuracy = null;
       _approximatePosition = null;
       _locationMessage = 'Finding your location… Allow access if asked.';
@@ -389,9 +393,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     });
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
+        failureHint = 'Turn on device Location, then try again.';
         throw const ApiException('Turn on Location/GPS, then try again.');
       }
       var permission = await Geolocator.checkPermission();
+      if (!mounted || !widget.active || request != _locationRequest) return;
       if (permission == LocationPermission.denied && !_permissionAsked) {
         _permissionAsked = true;
         _requestingPermission = true;
@@ -403,6 +409,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        failureHint = 'Allow location access in app settings to retry.';
         throw const ApiException(
           'Allow location access or place a pin on the map.',
         );
@@ -427,12 +434,18 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
       _selectedPlaceLabel = null;
       _approximatePosition = null;
+      _areaCenter = null;
+      _areaAccuracy = null;
       _locationMessage =
           'Location found · about ${position.accuracy.round()} m accuracy. Check the pin.';
+      setState(() {
+        _gettingLocation = false;
+        _gpsProgressAccuracy = null;
+      });
       await _fillNearbyAddress(_location!);
     } catch (_) {
       if (!mounted || !widget.active || request != _locationRequest) return;
-      await _findApproximateArea(request);
+      await _findApproximateArea(request, failureHint: failureHint);
     }
     if (mounted && request == _locationRequest) {
       setState(() {
@@ -467,6 +480,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
 
   void _cancelGps() {
     _locationRequest++;
+    if (_gettingLocation) {
+      _locationNeedsRetry = true;
+      _locationMessage = 'Location search paused. Try again or place a pin.';
+    }
     _gettingLocation = false;
     _gpsProgressAccuracy = null;
     _gpsDeadline?.cancel();
@@ -646,6 +663,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
     setState(() {
       _location = location;
+      _locationNeedsRetry = false;
+      _locationMessage = 'Pin placed. Check the spot before continuing.';
       _selectedPlaceLabel = null;
       _error = null;
     });
@@ -653,7 +672,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     await _saveDraft();
   }
 
-  Future<void> _findApproximateArea(int request) async {
+  Future<void> _findApproximateArea(int request, {String? failureHint}) async {
+    if (_location != null) {
+      setState(() {
+        _locationNeedsRetry = true;
+        _locationMessage =
+            'Could not update your location. Your selected pin is unchanged. ${failureHint ?? 'Try again or adjust the pin.'}';
+      });
+      return;
+    }
     LatLng? center;
     double? accuracy;
     final device = _approximatePosition;
@@ -686,9 +713,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     setState(() {
       _areaCenter = center;
       _areaAccuracy = accuracy;
-      _locationMessage = center == null
-          ? 'Location unavailable. Search a place or choose your spot on the map.'
-          : 'Approximate area found. Choose your exact spot on the map.';
+      _locationNeedsRetry = true;
+      _locationMessage =
+          '${center == null ? 'Location unavailable.' : 'Approximate area only.'} Try again, search a place, or place a pin.${failureHint == null ? '' : ' $failureHint'}';
     });
   }
 
@@ -777,6 +804,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         longitude: longitude,
       );
       _gettingLocation = false;
+      _locationNeedsRetry = false;
+      _locationMessage = 'Your selected pin is saved.';
       _gpsProgressAccuracy = null;
       _approximatePosition = null;
       _selectedPlaceLabel = label.length > 120
@@ -784,8 +813,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           : label;
       _sitio.text = _selectedPlaceLabel!;
       _placeSuggestions = [];
-      _placeMessage =
-          'Location selected. Check its pin using Adjust pin on map.';
+      _placeMessage = 'Location selected. Use Adjust pin to check its spot.';
       _error = null;
     });
     FocusScope.of(context).unfocus();
@@ -1182,15 +1210,26 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               key: const ValueKey('automatic-location-status'),
             ),
             const SizedBox(height: 12),
+            FilledButton.icon(
+              key: const ValueKey('device-location'),
+              onPressed: _busy || _gettingLocation
+                  ? null
+                  : () => _captureLocation(retry: true),
+              icon: const Icon(Icons.my_location),
+              label: Text(
+                _gettingLocation
+                    ? 'Finding location…'
+                    : _locationNeedsRetry
+                    ? 'Try again'
+                    : 'Use my location',
+              ),
+            ),
+            const SizedBox(height: 8),
             OutlinedButton.icon(
               key: const ValueKey('manual-location'),
               onPressed: _busy ? null : _chooseManualLocation,
               icon: const Icon(Icons.pin_drop_outlined),
-              label: Text(
-                _location == null
-                    ? 'Choose location on map'
-                    : 'Adjust pin on map',
-              ),
+              label: Text(_location == null ? 'Place a pin' : 'Adjust pin'),
             ),
             if (_location != null)
               Padding(

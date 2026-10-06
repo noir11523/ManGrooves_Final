@@ -180,13 +180,21 @@
         }
         start() {
             this.stop(); this.active = true; this.best = null; this.accepted = false;
+            this.position = null;
             this.abort = new AbortController();
             const controller = this.abort;
             const options = this.options;
+            const current = () => this.active && this.abort === controller;
+            const foundMessage = () => `Location found · about ${Math.round(this.position.coords.accuracy)} m accuracy. Check the pin.`;
+            const complete = () => {
+                this.stop();
+                options.onState?.({state:'ready', message:foundMessage()});
+            };
+            let failureHint = '';
             const finish = async () => {
                 if (!this.active || this.abort !== controller || this.finishing) return;
                 this.finishing = true; this.tracker?.stop(); clearTimeout(this.timer);
-                if (this.accepted) { this.stop(); return; }
+                if (this.accepted) { complete(); return; }
                 // Browser coordinate attributes can be prototype getters, not enumerable fields.
                 const coords = this.best?.coords;
                 let area = this.best && Date.now() - this.best.timestamp < 30000
@@ -203,24 +211,31 @@
                 }
                 if (!this.active || this.abort !== controller) return;
                 if (area) options.onApproximate?.(area);
-                options.onState?.({state:area?'approximate':'unavailable',message:area?'Approximate area. Check the map and tap your exact spot.':'Location unavailable. Search a place or tap the map.'});
                 this.stop();
+                options.onState?.({state:area?'approximate':'unavailable',message:(area
+                    ? 'Approximate area only. Try again, search a place, or place a pin.'
+                    : 'Location unavailable. Try again, search a place, or place a pin.') + failureHint});
             };
             this.finishing = false;
             this.tracker = new Tracker({...options, waitMs:30000,
                 onPosition:position=>{
-                    if (!this.active) return;
-                    this.accepted = true; options.onPosition?.(position);
-                    options.onState?.({state:'tracking',message:`Location found · about ${Math.round(position.coords.accuracy)} m accuracy. Check the pin.`});
-                    if (position.coords.accuracy <= 20) this.stop();
+                    if (!current()) return;
+                    this.accepted = true; this.position = position; options.onPosition?.(position);
+                    if (!current()) return;
+                    if (position.coords.accuracy <= 20) complete();
+                    else options.onState?.({state:'tracking',message:foundMessage() + ' Checking for a clearer location…'});
                 },
                 onApproximate:position=>{
-                    if (!this.active || this.accepted) return;
+                    if (!current() || this.accepted) return;
                     if (!this.best || position.coords.accuracy < this.best.coords.accuracy) this.best=position;
                 },
                 onState:state=>{
-                    if (!this.active || this.accepted) return;
-                    if (['denied','unsupported','insecure','unavailable','timeout'].includes(state.state)) void finish();
+                    if (!current() || this.accepted) return;
+                    if (['denied','unsupported','insecure','unavailable','timeout'].includes(state.state)) {
+                        if (state.state === 'denied') failureHint = ' Allow location in your browser and device settings to retry.';
+                        if (state.state === 'insecure') failureHint = ' Use the HTTPS site for device location.';
+                        void finish();
+                    }
                     else options.onState?.({state:'searching',message:'Finding your location… Allow access if asked.'});
                 }});
             this.timer=setTimeout(finish,30000);

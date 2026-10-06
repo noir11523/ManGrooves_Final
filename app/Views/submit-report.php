@@ -104,7 +104,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
 
                 <hr class="my-4">
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button class="btn btn-success" type="button" data-use-gps><i class="bi bi-crosshair me-2" aria-hidden="true"></i>Find my location</button>
+                    <button class="btn btn-success" type="button" data-use-gps><i class="bi bi-crosshair me-2" aria-hidden="true"></i>Use my location</button>
                     <button class="btn btn-success" type="button" data-save-location hidden disabled>Use this location</button>
                     <button class="btn btn-outline-secondary" type="button" data-cancel-location hidden>Cancel</button>
                     <button class="btn btn-outline-success" type="button" data-use-manual><i class="bi bi-pin-map me-2" aria-hidden="true"></i>Place a pin</button>

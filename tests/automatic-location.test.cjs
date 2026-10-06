@@ -10,17 +10,27 @@ function setup(t,changes={}){
   t.after(()=>locator.stop());locator.start();
   return {...result,get ipCalls(){return result.ipCalls;},locator,reading:accuracy=>({timestamp:Date.now(),coords:{latitude:10.28,longitude:123.88,accuracy}}),source:result};
 }
-test('automatic capture accepts a precise fix without a source button or IP request',t=>{
+test('automatic capture finishes with a ready state after a precise fix without an IP request',t=>{
   const f=setup(t);assert.equal(f.primary.enableHighAccuracy,true);f.receive(f.reading(9));
   assert.equal(f.pins.length,1);assert.equal(f.locator.active,false);assert.equal(f.ipCalls,0);
+  assert.equal(f.states.at(-1).state,'ready');
 });
 test('device network positioning is attempted before IP and preserves precise coordinates',t=>{
   const f=setup(t);t.mock.timers.tick(15000);assert.equal(f.source.networkOptions.enableHighAccuracy,false);
   f.source.network(f.reading(45));t.mock.timers.tick(15000);
   assert.equal(f.pins.length,1);assert.equal(f.pins[0].coords.accuracy,45);assert.equal(f.ipCalls,0);
+  assert.equal(f.states.at(-1).state,'ready');assert.equal(f.locator.active,false);
 });
 test('denied device permission falls back automatically without inventing a report pin',async t=>{
   const f=setup(t);f.fail({code:1});await tick();assert.equal(f.ipCalls,1);assert.equal(f.areas.length,1);assert.equal(f.pins.length,0);assert.equal(f.locator.active,false);
+  assert.equal(f.states.at(-1).state,'approximate');assert.match(f.states.at(-1).message,/Allow location/);
+});
+test('retry starts a fresh device request after failure and accepts a recovered location',async t=>{
+  const f=setup(t,{lookupIpArea:async()=>{throw new Error('offline');}});
+  f.fail({code:1});await tick();assert.equal(f.states.at(-1).state,'unavailable');
+  const oldReceive=f.receive;f.locator.start();
+  oldReceive(f.reading(1));assert.equal(f.pins.length,0);
+  f.source.receive(f.reading(8));assert.equal(f.pins.length,1);assert.equal(f.states.at(-1).state,'ready');
 });
 test('a usable coarse device estimate is preferred to IP and remains approximate',async t=>{
   const f=setup(t);t.mock.timers.tick(20000);

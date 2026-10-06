@@ -39,6 +39,8 @@ export async function reportWizard(node, query, user = null) {
   const stopGps = () => {
     locationGeneration++;
     tracker?.stop(); tracker = null;
+    const button = node.querySelector('#gps');
+    if (button) { button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Use my location'; }
   };
   const status = () => {
     const element = node.querySelector('#draft-notice');
@@ -60,7 +62,17 @@ export async function reportWizard(node, query, user = null) {
   };
   const flush = async () => { save(node.querySelector('#report-form')); await persist(); };
   draft.flush = flush;
-  const hidden = () => { if (document.visibilityState === 'hidden') { void flush(); stopGps(); } };
+  const hidden = () => {
+    if (document.visibilityState === 'hidden') {
+      void flush();
+      const searching = tracker?.active;
+      stopGps();
+      if (searching && draft.step === 1) {
+        $('#gps').textContent = 'Try again';
+        $('#location-status').textContent = 'Location search paused. Try again or place a pin.';
+      }
+    }
+  };
   const leaving = () => { void flush(); };
   document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', leaving);
   const dispose = () => { void flush(); stopped = true; clearTimeout(searchTimer);searchGeneration++;stopGps(); canvas?.remove(); canvas = null; if (photoUrl) URL.revokeObjectURL(photoUrl); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', leaving); draft.flush = async () => {}; };
@@ -182,6 +194,25 @@ export async function reportWizard(node, query, user = null) {
   function locationStep() {
     $('#step-body').innerHTML = `<h2>Where is the mangrove?</h2><p id="location-status" class="muted" role="status">${draft.fields.location_source ? 'Your selected pin is saved.' : 'Finding your location… Allow access if asked.'}</p><label class="field"><span>Find an address or landmark</span><input id="place-search" type="search" autocomplete="off" placeholder="Type a place name"><small>Choose a result, then check the pin.</small></label><div id="place-results" class="list" role="status"></div><div id="location-map" class="map large"></div><details><summary>Location details</summary><div class="row">${field('latitude', 'Latitude', draft.fields.latitude ?? '', 'number', 'required min="-90" max="90" step="any" readonly')}${field('longitude', 'Longitude', draft.fields.longitude ?? '', 'number', 'required min="-180" max="180" step="any" readonly')}</div><p class="muted">Location is detected automatically. The circle shows estimated accuracy. An approximate area needs an exact pin.</p></details>`;
     const locationInput = $('#place-search');
+    $('#location-status').insertAdjacentHTML('beforebegin', '<div class="actions"><button type="button" id="gps" aria-describedby="location-status">Use my location</button><button type="button" id="manual-pin" class="outline" aria-describedby="location-status">Place a pin</button></div>');
+    $('#location-status').insertAdjacentHTML('afterend', '<p class="muted">We try your device location first (GPS or nearby networks). If no reliable fix is available, GeoJS may use your IP address to estimate your area. This estimate only guides the map; place a pin at the exact site. <a href="https://www.geojs.io/privacy/" target="_blank" rel="noopener noreferrer">GeoJS privacy policy</a>.</p>');
+    const gpsButton = $('#gps');
+    const mapElement = $('#location-map');
+    mapElement.tabIndex = 0;
+    mapElement.setAttribute('aria-label', 'Location map. Use arrow keys to move and Enter to place a pin.');
+    $('#manual-pin').onclick = () => {
+      stopGps();
+      $('#location-status').textContent = 'Tap the map to place your pin, or move it with the arrow keys and press Enter.';
+      mapElement.scrollIntoView({block:'center', behavior:'auto'});
+      mapElement.focus({preventScroll:true});
+    };
+    mapElement.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' || event.target !== mapElement) return;
+      event.preventDefault();
+      const center = canvas.getCenter();
+      stopGps(); choose(center.lat, center.lng, 'manual', null);
+      $('#location-status').textContent = 'Pin placed. Check the spot before continuing.';
+    });
     locationInput.value = draft.fields.sitio_name || '';
     locationInput.closest('.field').querySelector('span').textContent = 'Location name';
     locationInput.closest('.field').querySelector('small').textContent = 'Check the pin or choose another place.';
@@ -245,8 +276,11 @@ export async function reportWizard(node, query, user = null) {
       circle(Number(draft.fields.latitude), Number(draft.fields.longitude), Number(draft.fields.location_accuracy));
     }
     if (!draft.fields.location_source && locationInput.value.trim().length >= 3) locationInput.oninput();
-    if (!draft.fields.location_source) {
+    function startLocation() {
       stopGps();
+      gpsButton.disabled = true;
+      gpsButton.setAttribute('aria-busy', 'true');
+      gpsButton.textContent = 'Finding location…';
       const generation = locationGeneration;
       const current = () => !stopped && draft.step === 1 && canvas === currentCanvas && generation === locationGeneration;
       tracker = new locationTools.AutomaticLocator({geolocation:navigator.geolocation,
@@ -262,10 +296,22 @@ export async function reportWizard(node, query, user = null) {
           if (area.accuracy) circle(area.latitude,area.longitude,area.accuracy);
           else canvas.setView([area.latitude,area.longitude],11);
         },
-        onState:({message})=>{if(current()) $('#location-status').textContent=message;}
+        onState:({state,message})=>{
+          if (!current()) return;
+          const busy = ['searching','tracking'].includes(state);
+          const retry = ['approximate','unavailable'].includes(state);
+          gpsButton.disabled = busy;
+          gpsButton.setAttribute('aria-busy', String(busy));
+          gpsButton.textContent = busy ? 'Finding location…' : retry ? 'Try again' : 'Use my location';
+          $('#location-status').textContent = retry && draft.fields.location_source
+            ? 'Could not update your location. Your selected pin is unchanged. ' + message
+            : message;
+        }
       });
       tracker.start();
     }
+    gpsButton.onclick = startLocation;
+    if (!draft.fields.location_source) startLocation();
   }
 
   function checklist() {

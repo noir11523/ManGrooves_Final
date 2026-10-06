@@ -36,13 +36,16 @@ class _Gps extends GeolocatorPlatform {
 
 class _DeniedGps extends _Gps {
   int requests = 0;
+  bool grantOnRequest = false;
   @override
   Future<LocationPermission> checkPermission() async =>
       LocationPermission.denied;
   @override
   Future<LocationPermission> requestPermission() async {
     requests++;
-    return LocationPermission.denied;
+    return grantOnRequest
+        ? LocationPermission.whileInUse
+        : LocationPermission.denied;
   }
 }
 
@@ -226,7 +229,7 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
 
 void main() {
   testWidgets(
-    'denied device permission quietly finds an area without saving a report pin',
+    'denied permission offers an approximate area and retry can recover a precise location',
     (tester) async {
       final old = GeolocatorPlatform.instance, gps = _DeniedGps();
       GeolocatorPlatform.instance = gps;
@@ -249,9 +252,25 @@ void main() {
       expect(api.lookups, 1);
       expect(find.text('Find approximate area'), findsNothing);
       expect(find.text('Find my location'), findsNothing);
+      expect(find.text('Try again'), findsOneWidget);
+      expect(find.text('Place a pin'), findsOneWidget);
       expect(
         drafts.saved.values.every((draft) => draft['location'] == null),
         isTrue,
+      );
+      gps.grantOnRequest = true;
+      await tap(tester, find.byKey(const ValueKey('device-location')));
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pumpAndSettle();
+      expect(gps.requests, 2);
+      expect(api.lookups, 1);
+      expect(find.text('Use my location'), findsOneWidget);
+      expect(find.text('Adjust pin'), findsOneWidget);
+      expect(
+        find.textContaining('Device location: 10.283300, 123.883300'),
+        findsOneWidget,
       );
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
@@ -310,6 +329,15 @@ void main() {
       final saved = drafts.saved.values.single;
       expect((saved['location'] as Map)['location_source'], 'manual');
       expect((saved['location'] as Map)['latitude'], '10.30123450');
+      GeolocatorPlatform.instance = _DeniedGps();
+      await tap(tester, find.byKey(const ValueKey('device-location')));
+      expect(find.text('Try again'), findsOneWidget);
+      expect(
+        find.textContaining('Your selected pin is unchanged'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Manual pin: 10.301'), findsOneWidget);
+      GeolocatorPlatform.instance = gps;
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       await open();

@@ -19,8 +19,8 @@ dom.window.HTMLElement.prototype.scrollIntoView = () => {};
 dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
 dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new Event('close')); };
 URL.createObjectURL = () => 'blob:test-photo'; URL.revokeObjectURL = () => {};
-let gps;
-Object.defineProperty(navigator, 'geolocation', {value: {watchPosition(callback) { gps = callback; return 1; }, clearWatch() {}}});
+let gps, gpsFail;
+Object.defineProperty(navigator, 'geolocation', {value: {watchPosition(callback,error) { gps = callback; gpsFail=error; return 1; }, clearWatch() {}}});
 const bundle = await build({stdin: {contents: 'export * from "./report-form.js"; export * from "./admin.js"; export * from "./auth-pages.js"; export * from "./account-admin.js"; export {toast} from "./ui.js";',
   resolveDir: fileURLToPath(new URL('../src/', import.meta.url))}, bundle: true, write: false, format: 'esm', platform: 'node', plugins: [{name: 'adapters', setup(b) {
     b.onResolve({filter: /client\.js$/}, () => ({path: 'client', namespace: 'stub'}));
@@ -28,7 +28,7 @@ const bundle = await build({stdin: {contents: 'export * from "./report-form.js";
     b.onLoad({filter: /.*/, namespace: 'stub'}, ({path}) => ({contents: path === 'client'
       ? 'export const api = (...args) => globalThis.testApi(...args); export const login = (...args) => globalThis.testLogin(...args); export const friendly = e => e.message; export const apiUrl = p => p;'
       : `const layer = () => ({addTo(){return this},setLatLng(){return this},setRadius(){return this},getBounds(){return []},remove(){}});
-         export default {map(){return globalThis.testMap={events:{},setView(point){this.center=point;return this},fitBounds(){return this},remove(){},on(k,f){this.events[k]=f;return this}}},
+         export default {map(){return globalThis.testMap={events:{},getCenter(){return {lat:10.29,lng:123.89}},setView(point){this.center=point;return this},fitBounds(){return this},remove(){},on(k,f){this.events[k]=f;return this}}},
          tileLayer:layer,circle:layer,marker:layer,divIcon:o=>o};` }));
   }}]});
 const ui = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
@@ -38,6 +38,38 @@ const change = element => element.dispatchEvent(new Event('change', {bubbles: tr
 const set = (name, value) => { const input = $(`[name=${name}]`); input.value = value; change(input); };
 const submit = () => { const form = $('#report-form'); return form.onsubmit({preventDefault() {}, submitter: $('#next')}); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };
+
+test('location buttons support automatic capture, approximate fallback, retry and keyboard manual selection',async()=>{
+  const originalFetch=globalThis.fetch;
+  globalThis.fetch=async()=>({ok:true,json:async()=>({latitude:10.3,longitude:123.9,accuracy:20})});
+  globalThis.testApi=async path=>path==='report-form.php'
+    ? {criteria:reference.criteria,clusters:[],species:[],location:{barangay:reference.barangays[0]}}
+    : {places:[]};
+  ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,fields:{location_source:''}});
+  const dispose=await ui.reportWizard($('#page'),{});
+  try {
+    assert.equal($('#gps').textContent,'Finding location…');assert.equal($('#gps').disabled,true);
+    assert.equal($('#manual-pin').disabled,false);
+    gpsFail({code:1});await tick();
+    assert.equal($('#gps').textContent,'Try again');assert.equal($('#gps').disabled,false);
+    assert.equal(ui.reportDraft.fields.location_source,'');assert.match($('#location-status').textContent,/Approximate area only/);
+    $('#gps').click();assert.equal($('#gps').disabled,true);
+    gps({timestamp:Date.now(),coords:{latitude:10.28,longitude:123.88,accuracy:9}});
+    assert.equal($('#gps').disabled,false);assert.equal($('#gps').textContent,'Use my location');
+    assert.equal(ui.reportDraft.fields.location_source,'gps');
+    $('#gps').click();const late=gps;
+    $('#manual-pin').click();assert.equal(document.activeElement,$('#location-map'));
+    const zoomButton=document.createElement('button');$('#location-map').append(zoomButton);
+    zoomButton.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+    assert.equal(ui.reportDraft.fields.location_source,'gps');
+    $('#location-map').dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+    late({timestamp:Date.now(),coords:{latitude:1,longitude:1,accuracy:1}});
+    assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(Number(ui.reportDraft.fields.latitude),10.29);
+    $('#gps').click();gpsFail({code:1});await tick();
+    assert.equal($('#gps').textContent,'Try again');assert.match($('#location-status').textContent,/selected pin is unchanged/);
+    assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(Number(ui.reportDraft.fields.latitude),10.29);
+  } finally {dispose();globalThis.fetch=originalFetch;ui.reportDraft.reset();}
+});
 
 test('user search resets the page, keeps filters in pagination, and routes pending accounts to approval',async()=>{
   globalThis.testApi=async(path,{query})=>{
@@ -127,7 +159,7 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
     set('sitio_name', 'First location'); set('observed_alive_count', '12');
     for (const k of ['root_type', 'leaf_shape', 'bark_texture']) set(k, reference.species[0][k]);
     await submit(); assert.equal(ui.reportDraft.step, 1);
-    assert.equal($('#gps'),null);assert.equal($('#approximate'),null);assert.equal(typeof gps,'function');
+    assert.equal($('#gps').disabled,true);assert.ok($('#manual-pin'));assert.equal($('#approximate'),null);assert.equal(typeof gps,'function');
     gps({timestamp:Date.now(),coords: {latitude: 10.2833, longitude: 123.8833, accuracy: 180}});
     assert.equal(ui.reportDraft.fields.location_source, '');
     await submit(); assert.equal(ui.reportDraft.step, 1);
@@ -182,7 +214,7 @@ test('report draft restores fields, photo, checklist and step after reload, isol
     set('sitio_name','Saved coastal site');set('observed_alive_count','16');set('guardian_remarks','Remember this visit');
     for(const k of ['root_type','leaf_shape','bark_texture'])set(k,reference.species[0][k]);
     await submit();
-    assert.equal($('#gps'),null); const oldGps = gps;
+    assert.equal($('#gps').disabled,true); const oldGps = gps;
     gps({timestamp:Date.now()-60000,coords:{latitude:10.28,longitude:123.88,accuracy:2}});
     assert.equal(ui.reportDraft.fields.location_source,'');
     gps({timestamp:Date.now(),coords:{latitude:10.28,longitude:123.88,accuracy:12}});
