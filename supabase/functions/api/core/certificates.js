@@ -75,7 +75,7 @@ export async function shareCertificate(service,user,input,base) {
   const token=randomBytes(32).toString('base64url'),hash=createHash('sha256').update(token).digest('hex'),expires=Date.now()+10*60000;
   await service.ref('certificate_links',hash).set({user_id:data.owner.id,badge_id:data.badge.id,expires_at:expires});
   const url=`${base}/certificate-download.php?token=${token}`,qr=QRCode.create(url,{errorCorrectionLevel:'M'});
-  return {url,expires_at:new Date(expires).toISOString(),qr:{size:qr.modules.size,data:Array.from(qr.modules.data)}};
+  return {url,expires_at:new Date(expires).toISOString(),expires_unix_ms:expires,qr:{size:qr.modules.size,data:Array.from(qr.modules.data)}};
 }
 export async function sharedCertificate(service,token) {
   if(typeof token!=='string'||!/^[\w-]{43}$/.test(token))throw new AppError('This download link is invalid or expired.',404);

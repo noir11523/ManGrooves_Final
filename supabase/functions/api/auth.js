@@ -50,6 +50,15 @@ export class Auth {
       auth_time:Math.max(0,...(claims.amr??[]).filter(a=>a.method==='password').map(a=>a.timestamp))};
   }
   async deleteUser(uid) { const {error}=await this.client.auth.admin.deleteUser(uid); if(error) throw error; }
+  async createUser(input) {
+    const {data,error}=await this.client.auth.admin.createUser({email:input.email,password:input.password,email_confirm:true,user_metadata:{full_name:input.displayName}});
+    if(error){
+      if(['email_exists','user_already_exists'].includes(error.code))throw new AppError('An account already uses this email.',409);
+      throw new AppError('Could not create the staff account. Try again.',503);
+    }
+    if(!data?.user?.id)throw new AppError('Could not create the staff account.',503);
+    return {uid:data.user.id};
+  }
   async updateUser(uid,input) {
     const {error}=await this.client.auth.admin.updateUserById(uid,{
       ...(input.password?{password:input.password}:{}),

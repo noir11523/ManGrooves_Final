@@ -4,6 +4,7 @@ import '../core/api_client.dart';
 import 'account_security_screen.dart';
 import 'checklist_screen.dart';
 import 'cloud_admin_screen.dart';
+import 'management_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -114,6 +115,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         if (user['role'] == 'system_admin' &&
             widget.api.supportsCloudAccounts) ...[
+          for (final entry in const {
+            'users': 'Users',
+            'species': 'Species',
+            'badge-settings': 'Manage badges',
+          }.entries)
+            ListTile(
+              title: Text(entry.value),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      ManagementScreen(api: widget.api, page: entry.key),
+                ),
+              ),
+            ),
           ListTile(
             title: const Text('Expert applications'),
             onTap: () => Navigator.push(

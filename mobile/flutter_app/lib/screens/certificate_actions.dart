@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
@@ -19,6 +21,14 @@ class _CertificateActionsState extends State<CertificateActions> {
   bool _busy = false;
   String? _error;
   Map<String, dynamic>? _qr;
+  Timer? _expiry;
+  bool _expired = false;
+  @override
+  void dispose() {
+    _expiry?.cancel();
+    super.dispose();
+  }
+
   Future<void> _action(bool share) async {
     if (_busy) return;
     if (share) {
@@ -54,7 +64,28 @@ class _CertificateActionsState extends State<CertificateActions> {
           body: {'badge_id': widget.badgeId},
         );
         if (mounted) {
-          setState(() => _qr = Map<String, dynamic>.from(data['qr'] as Map));
+          _expiry?.cancel();
+          setState(() {
+            _qr = Map<String, dynamic>.from(data['qr'] as Map);
+            _expired = false;
+          });
+          final deadline =
+              (data['expires_unix_ms'] as num?)?.toInt() ??
+              DateTime.now().millisecondsSinceEpoch + 600000;
+          _expiry = Timer(
+            Duration(
+              milliseconds: (deadline - DateTime.now().millisecondsSinceEpoch)
+                  .clamp(0, 600000),
+            ),
+            () {
+              if (mounted) {
+                setState(() {
+                  _qr = null;
+                  _expired = true;
+                });
+              }
+            },
+          );
         }
       } else {
         final bytes = await widget.api.cloudFile(
@@ -103,6 +134,7 @@ class _CertificateActionsState extends State<CertificateActions> {
           _error!,
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
+      if (_expired) const Text('QR expired. Select Show QR for a new code.'),
       if (_qr != null) ...[
         Semantics(
           label: 'Scan to download your certificate',
@@ -111,8 +143,13 @@ class _CertificateActionsState extends State<CertificateActions> {
             painter: CertificateQrPainter(_qr!),
           ),
         ),
-        const Text(
-          'Scan to download. Expires in 10 minutes. The PDF has no QR code.',
+        const Text('Scan to download · valid for 10 minutes.'),
+        TextButton(
+          onPressed: () {
+            _expiry?.cancel();
+            setState(() => _qr = null);
+          },
+          child: const Text('Hide QR'),
         ),
       ],
     ],

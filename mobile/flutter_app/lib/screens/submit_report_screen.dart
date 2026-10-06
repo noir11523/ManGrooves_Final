@@ -60,7 +60,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   String? _error;
   bool _busy = false;
   bool _gettingLocation = false;
-  bool _gettingArea = false;
+  LatLng? _areaCenter;
+  double? _areaAccuracy;
+  String? _locationMessage;
   Timer? _placeTimer;
   int _placeRequest = 0;
   int _locationRequest = 0;
@@ -73,6 +75,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   Completer<Position>? _gpsResult;
   Timer? _gpsDeadline;
   bool _autoCaptureTried = false;
+  bool _requestingPermission = false;
+  bool _permissionAsked = false;
   bool _loadingParents = false;
   bool _confirmed = false;
   Map<String, dynamic>? _preview;
@@ -222,7 +226,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
       _draftEdited();
+      if (state == AppLifecycleState.inactive && _requestingPermission) return;
+      if (_gettingLocation && _location == null) _autoCaptureTried = false;
       _cancelGps();
+    } else {
+      unawaited(_tryAutoCapture());
     }
   }
 
@@ -376,6 +384,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _gettingLocation = true;
       _gpsProgressAccuracy = null;
       _approximatePosition = null;
+      _locationMessage = 'Finding your location… Allow access if asked.';
       _error = null;
     });
     try {
@@ -383,8 +392,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         throw const ApiException('Turn on Location/GPS, then try again.');
       }
       var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied && !_permissionAsked) {
+        _permissionAsked = true;
+        _requestingPermission = true;
+        try {
+          permission = await Geolocator.requestPermission();
+        } finally {
+          _requestingPermission = false;
+        }
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
@@ -412,14 +427,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
       _selectedPlaceLabel = null;
       _approximatePosition = null;
+      _locationMessage =
+          'Location found · about ${position.accuracy.round()} m accuracy. Check the pin.';
       await _fillNearbyAddress(_location!);
-    } catch (error) {
-      if (request != _locationRequest) return;
-      _error = error is ApiException
-          ? error.message
-          : 'Could not capture GPS. Try again or choose a location on the map.';
+    } catch (_) {
+      if (!mounted || !widget.active || request != _locationRequest) return;
+      await _findApproximateArea(request);
     }
-    if (mounted) {
+    if (mounted && request == _locationRequest) {
       setState(() {
         _gettingLocation = false;
         _gpsProgressAccuracy = null;
@@ -431,7 +446,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   @override
   void didUpdateWidget(covariant SubmitReportScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.active) _cancelGps();
+    if (!widget.active) {
+      if (_gettingLocation && _location == null) _autoCaptureTried = false;
+      _cancelGps();
+    }
     if (widget.active && !oldWidget.active) unawaited(_tryAutoCapture());
   }
 
@@ -443,17 +461,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _gettingLocation) {
       return;
     }
-    try {
-      final permission = await Geolocator.checkPermission();
-      if (!mounted || !widget.active || _location != null) return;
-      _autoCaptureTried = true;
-      if (permission == LocationPermission.always ||
-          permission == LocationPermission.whileInUse) {
-        await _captureLocation();
-      }
-    } catch (_) {
-      /* Manual capture remains available if the platform cannot query permission. */
-    }
+    _autoCaptureTried = true;
+    await _captureLocation();
   }
 
   void _cancelGps() {
@@ -577,6 +586,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     LatLng? areaCenter,
     double? areaAccuracy,
   }) async {
+    _cancelGps();
+    areaCenter ??= _areaCenter;
+    areaAccuracy ??= _areaAccuracy;
     if (_approximatePosition != null &&
         DateTime.now().difference(_approximatePosition!.timestamp).inMinutes >=
             5) {
@@ -623,7 +635,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         ),
       ),
     );
-    if (location == null || !mounted) return;
+    if (!mounted) return;
+    if (location == null) {
+      setState(
+        () => _locationMessage = _location != null
+            ? 'Your selected pin is saved.'
+            : 'Search for a place or choose a pin on the map.',
+      );
+      return;
+    }
     setState(() {
       _location = location;
       _selectedPlaceLabel = null;
@@ -633,28 +653,43 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     await _saveDraft();
   }
 
-  Future<void> _findApproximateArea() async {
-    if (_gettingArea || _gettingLocation) return;
-    setState(() => _gettingArea = true);
-    try {
-      final area = await widget.api.approximateArea();
-      if (!mounted || !widget.active) return;
-      await _chooseManualLocation(
-        areaCenter: LatLng(
-          area['latitude'] as double,
-          area['longitude'] as double,
-        ),
-        areaAccuracy: area['accuracy'] as double?,
-      );
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => _error = 'Area unavailable. Search an address or choose your spot on the map.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _gettingArea = false);
+  Future<void> _findApproximateArea(int request) async {
+    LatLng? center;
+    double? accuracy;
+    final device = _approximatePosition;
+    if (device != null &&
+        DateTime.now().difference(device.timestamp).inSeconds < 30) {
+      center = LatLng(device.latitude, device.longitude);
+      accuracy = device.accuracy;
     }
+    if (center == null || accuracy! > 5000) {
+      try {
+        final area = await widget.api.approximateArea();
+        final estimate = area['accuracy'] as double?;
+        if (center == null || (estimate != null && estimate < accuracy!)) {
+          center = LatLng(
+            area['latitude'] as double,
+            area['longitude'] as double,
+          );
+          accuracy = estimate;
+        }
+      } catch (_) {
+        /* Address search and the map stay available. */
+      }
+    }
+    if (!mounted ||
+        !widget.active ||
+        request != _locationRequest ||
+        _location != null) {
+      return;
+    }
+    setState(() {
+      _areaCenter = center;
+      _areaAccuracy = accuracy;
+      _locationMessage = center == null
+          ? 'Location unavailable. Search a place or choose your spot on the map.'
+          : 'Approximate area found. Choose your exact spot on the map.';
+    });
   }
 
   Future<void> _fillNearbyAddress(ReportLocation point) async {
@@ -769,7 +804,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
     if (_location == null) {
       setState(
-        () => _error = 'Capture GPS or choose your field location on the map.',
+        () => _error = 'Search for a place or choose your spot on the map.',
       );
       return;
     }
@@ -1135,46 +1170,21 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            FilledButton.tonalIcon(
-              onPressed: _gettingLocation ? null : _captureLocation,
-              icon: _gettingLocation
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.my_location),
-              label: Text(
-                _gettingLocation
-                    ? (_gpsProgressAccuracy == null
-                          ? 'Finding location...'
-                          : 'Improving GPS · ±${_gpsProgressAccuracy!.round()} m')
-                    : _location?.source != 'gps'
-                    ? 'Find my location'
-                    : 'GPS captured · ±${_location!.accuracy!.toStringAsFixed(0)} m',
-              ),
-            ),
-            if (_gettingLocation)
-              TextButton(
-                onPressed: () => setState(_cancelGps),
-                child: const Text('Cancel'),
-              ),
-            TextButton.icon(
-              onPressed: _gettingLocation || _gettingArea || _busy
-                  ? null
-                  : _findApproximateArea,
-              icon: const Icon(Icons.near_me_outlined),
-              label: Text(
-                _gettingArea
-                    ? 'Finding approximate area...'
-                    : 'Find approximate area',
-              ),
+            Text(
+              _gettingLocation
+                  ? (_gpsProgressAccuracy == null
+                        ? 'Finding your location…'
+                        : 'Improving location · about ${_gpsProgressAccuracy!.round()} m')
+                  : _locationMessage ??
+                        (_location != null
+                            ? 'Check your selected pin.'
+                            : 'Search a place or choose your spot on the map.'),
+              key: const ValueKey('automatic-location-status'),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               key: const ValueKey('manual-location'),
-              onPressed: _gettingLocation || _busy
-                  ? null
-                  : _chooseManualLocation,
+              onPressed: _busy ? null : _chooseManualLocation,
               icon: const Icon(Icons.pin_drop_outlined),
               label: Text(
                 _location == null
@@ -1186,20 +1196,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  '${_location!.source == 'manual' ? 'Manual pin' : 'GPS location'}: '
+                  '${_location!.source == 'manual' ? 'Manual pin' : 'Device location'}: '
                   '${_location!.latitude.toStringAsFixed(6)}, '
                   '${_location!.longitude.toStringAsFixed(6)}',
                   key: const ValueKey('report-location-summary'),
                 ),
               ),
-            if (_approximatePosition != null && _location == null)
-              Text(
-                'Approximate: +/-${_approximatePosition!.accuracy.round()} m. Open the map to place a pin.',
-              ),
-            const Text(
-              'The circle shows your approximate area. Check your pin before continuing.',
-              style: TextStyle(fontSize: 12),
-            ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _sitio,
@@ -1477,7 +1479,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           if (_location != null)
             Text(
               _location!.source == 'gps'
-                  ? 'GPS (+/-${_location!.accuracy!.round()} m)'
+                  ? 'Device location (+/-${_location!.accuracy!.round()} m)'
                   : 'Manual pin',
             ),
           Text('Living mangroves: ${_aliveCount.text.trim()}'),

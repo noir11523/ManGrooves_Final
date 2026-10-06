@@ -61,6 +61,11 @@ test('PHP home renders before any API call and loads real counts separately',asy
   assert.doesNotMatch(text,/No environmental experience required|No professional experience needed|No environmental degree required/);
   assert.equal(doc.querySelector('.home-hero-roles'),null);
   assert.equal(doc.querySelectorAll('.home-benefit-grid article').length,3);
+  const articles=[...doc.querySelectorAll('.home-news-card')];assert.equal(articles.length,3);
+  assert.deepEqual(articles.map(card=>new URL(card.querySelector('a').href).hostname),['www.sunstar.com.ph','www.facebook.com','www.facebook.com']);
+  for(const card of articles){const link=card.querySelector('a'),image=card.querySelector('img');assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');assert.ok(link.getAttribute('aria-label').startsWith('Read article:'));assert.ok(image.getAttribute('src').startsWith('/assets/img/'));assert.equal(image.getAttribute('loading'),'lazy');}
+  assert.match(articles[1].textContent,/Illustrative photo/);
+  assert.equal(doc.querySelector('#publicNavigation a[href="#for-experts"]'),null);
   assert.equal(doc.querySelector('a[download]').textContent.trim(),'Android APK');
   assert.match(doc.querySelector('#for-experts').textContent,/work or professional ID code/);
   const routes=new Set();

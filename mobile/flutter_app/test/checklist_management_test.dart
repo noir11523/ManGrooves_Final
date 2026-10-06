@@ -164,13 +164,30 @@ void main() {
       await _tap(tester, find.text('Undo delete'));
       expect(find.text('Cannot tell'), findsOneWidget);
       await _tap(tester, find.text('Add choice'));
-      final kind = find.byType(DropdownButtonFormField<String>);
-      await _tap(tester, kind);
-      await _tap(tester, find.text('All choices').last);
+      expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+      final regularCard = find.byWidgetPredicate(
+        (w) => w is Card && w.key is ValueKey && (w.key as ValueKey).value == -1,
+      );
+      final regularField = find.descendant(
+        of: regularCard,
+        matching: find.byType(TextField),
+      );
+      await tester.scrollUntilVisible(
+        regularField,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(regularField, 'Regular added answer');
+      await _tap(tester, find.byTooltip('Restore a special choice'));
+      await _tap(tester, find.text('Add All of the above').last);
       final allField = find.byWidgetPredicate(
         (w) => w is TextField && w.controller?.text == 'All of the above',
       );
-      await tester.ensureVisible(allField);
+      await tester.scrollUntilVisible(
+        allField,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.enterText(allField, 'Mixed colors');
       await _tap(tester, find.text('Save checklist'));
       await _tap(tester, find.text('Save'));
@@ -180,6 +197,10 @@ void main() {
         'Cannot tell',
       );
       expect(choices.last['kind'], 'all_of_the_above');
+      expect(
+        choices.firstWhere((o) => o['label'] == 'Regular added answer')['kind'],
+        'standard',
+      );
       expect(choices.last['label'], 'Mixed colors');
       expect(choices.last['points'], 0);
       expect(choices.last['id'], lessThan(0));

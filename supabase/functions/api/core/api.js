@@ -9,6 +9,7 @@ import { readInput, sendImage } from './uploads.js';
 import {searchPlaces} from './places.js';
 import {certificateSettings,getCertificate,certificatePdf,shareCertificate,sharedCertificate} from './certificates.js';
 import {emailAddress,emailCode,completeRegistration,expertApplications} from './registration.js';
+import {createStaff} from './staff.js';
 
 export function createApi({db, auth, bucket, projectId}) {
   const service = new Service(db, auth, bucket), app = express();
@@ -108,6 +109,16 @@ export function createApi({db, auth, bucket, projectId}) {
         case 'places.php': only('GET');return send(res,await searchPlaces(service,user,req.query));
         case 'certificate-settings.php': {
           requireRole(user,'system_admin');const {input,files}=post?await readInput(req):{input:null,files:{}};
+          if(get&&req.query.signature==='1'){
+            const settings=await service.get('meta','certificate_settings');
+            return await sendImage(bucket,settings?.signature_path,res);
+          }
+          if(get&&req.query.preview==='1'){
+            const settings=await service.get('meta','certificate_settings');
+            if(!settings?.signer_name||!settings?.signer_title)throw new AppError('Save the signer name and title first.',409);
+            const bytes=await certificatePdf(service,{settings,owner:{full_name:'Sample Coastal Guardian'},badge:{badge_name:'Community Monitoring',description:'Preview of the certificate layout. This is not an issued award.'},award:{earned_at:now(),certificate_code:'PREVIEW - NOT ISSUED'}});
+            res.set({'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="ManGROOVES-certificate-preview.pdf"'});res.end(bytes);return;
+          }
           return send(res,await certificateSettings(service,user,input,files));
         }
         case 'certificate-link.php': only('POST');return send(res,await shareCertificate(service,user,req.body??{},`https://${projectId}.supabase.co/functions/v1/api`));
@@ -226,7 +237,12 @@ export function createApi({db, auth, bucket, projectId}) {
         }
         case 'users.php': {
           requireRole(user, 'system_admin');
-          if (get) return send(res, paginate(filterRows((await service.rows('users')).map(u => ({...publicUser(u), status: u.status})), req.query, ['full_name', 'email', 'barangay_name'], ['role', 'status']).sort((a,b) => a.full_name.localeCompare(b.full_name) || a.id-b.id), req.query.page));
+          if (get) {
+            const [users,barangays]=await Promise.all([service.rows('users'),service.rows('barangays')]);
+            return send(res,{...paginate(filterRows(users.map(u=>({...publicUser(u),status:u.status,created_at:u.created_at??null})),req.query,
+              ['full_name','email','phone','barangay_name'],['role','status','barangay_id']).sort((a,b)=>a.full_name.localeCompare(b.full_name)||a.id-b.id),req.query.page),barangays});
+          }
+          if(req.body?.action==='create_staff')return send(res,await createStaff(service,user,req.body),201);
           const input = req.body ?? {}, id = integer(input.id, 'user');
           if (id === user.id) throw new AppError('Ask another administrator to change your access.');
           if (!ROLES.includes(input.role) || !['active', 'inactive'].includes(input.status)) throw new AppError('Choose a valid role and account status.');
@@ -256,7 +272,11 @@ export function createApi({db, auth, bucket, projectId}) {
         }
         case 'badge-settings.php': {
           requireRole(user, 'system_admin');
-          if (get) return send(res, {badges: await service.rows('badges')});
+          if (get) {
+            const [badges,awards]=await Promise.all([service.rows('badges'),service.rows('user_badges')]);
+            const counts=new Map();for(const award of awards)counts.set(award.badge_id,(counts.get(award.badge_id)||0)+1);
+            return send(res,{badges:badges.map(b=>({...b,earned_count:counts.get(b.id)||0}))});
+          }
           const input = req.body ?? {}, id = input.id ? integer(input.id, 'badge') : (await service.ids())[0];
           if (!['verified_reports', 'verified_followups', 'distinct_species', 'uncorrected_reports', 'steward_days'].includes(input.metric)) throw new AppError('Choose a badge metric.');
           const current = input.id ? await service.get('badges', id) : null;

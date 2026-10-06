@@ -34,6 +34,27 @@ class _Gps extends GeolocatorPlatform {
       );
 }
 
+class _DeniedGps extends _Gps {
+  int requests = 0;
+  @override
+  Future<LocationPermission> checkPermission() async =>
+      LocationPermission.denied;
+  @override
+  Future<LocationPermission> requestPermission() async {
+    requests++;
+    return LocationPermission.denied;
+  }
+}
+
+class _AreaApi extends _Api {
+  int lookups = 0;
+  @override
+  Future<Map<String, dynamic>> approximateArea() async {
+    lookups++;
+    return {'latitude': 10.28, 'longitude': 123.88, 'accuracy': 15000.0};
+  }
+}
+
 class _Api extends ApiClient {
   bool failSubmit = false;
   int submissions = 0;
@@ -205,6 +226,38 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
 
 void main() {
   testWidgets(
+    'denied device permission quietly finds an area without saving a report pin',
+    (tester) async {
+      final old = GeolocatorPlatform.instance, gps = _DeniedGps();
+      GeolocatorPlatform.instance = gps;
+      addTearDown(() => GeolocatorPlatform.instance = old);
+      final api = _AreaApi(), drafts = _Drafts();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftOwner: 'fallback-user',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(gps.requests, 1);
+      expect(api.lookups, 1);
+      expect(find.text('Find approximate area'), findsNothing);
+      expect(find.text('Find my location'), findsNothing);
+      expect(
+        drafts.saved.values.every((draft) => draft['location'] == null),
+        isTrue,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+  testWidgets(
     'location-name suggestion saves a manual pin and late GPS cannot replace it',
     (tester) async {
       final old = GeolocatorPlatform.instance, gps = _LiveGps();
@@ -313,7 +366,7 @@ void main() {
       });
       await tester.pump(const Duration(milliseconds: 100));
       expect(
-        find.textContaining('GPS location: 10.283300, 123.883300'),
+        find.textContaining('Device location: 10.283300, 123.883300'),
         findsOneWidget,
       );
       expect(

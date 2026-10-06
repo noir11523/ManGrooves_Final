@@ -6,9 +6,9 @@
     <div class="container hero-content">
         <div class="home-hero-grid">
             <div class="home-hero-copy">
-                <span class="hero-kicker"><i class="bi bi-geo-alt" aria-hidden="true"></i> Cebu City coastal monitoring</span>
+                <span class="hero-kicker"><i class="bi bi-geo-alt" aria-hidden="true"></i> Cebu City mangrove monitoring</span>
                 <h1 id="home-title">Protect mangroves,<br><span>one observation<br>at a time.</span></h1>
-                <p class="hero-lead">ManGROOVES helps communities document mangrove conditions, with qualified environmental reviewers supporting continued restoration monitoring.</p>
+                <p class="hero-lead">ManGROOVES helps communities document mangrove conditions while qualified environmental experts review reports and support continued restoration monitoring.</p>
                 <div class="hero-actions">
                     <?php if ($authUser): ?>
                         <a class="btn btn-primary btn-lg" href="<?= e(url('dashboard.php')) ?>">Go to your dashboard <i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></a>
@@ -19,7 +19,7 @@
                     <?php endif; ?>
                     <a class="btn btn-outline-light btn-lg" href="<?= e(url('explore.php')) ?>">Explore mangroves</a>
                 </div>
-                <p class="home-reassurance"><i class="bi bi-check2-circle" aria-hidden="true"></i> Guided field observations. Expert review when needed.</p>
+                <p class="home-reassurance"><i class="bi bi-check2-circle" aria-hidden="true"></i> Guided field observations. Qualified expert review.</p>
 
             </div>
             <aside class="home-observation" aria-label="Example mangrove observation">
@@ -48,7 +48,7 @@
                 <h3>Coastal Guardian</h3>
                 <p>Document visible mangrove conditions through photos, location data and a guided field checklist.</p>
 
-                <ol class="home-role-actions" aria-label="What Coastal Guardians do"><li><i class="bi bi-eye" aria-hidden="true"></i>Visit</li><li><i class="bi bi-camera" aria-hidden="true"></i>Photograph</li><li><i class="bi bi-send" aria-hidden="true"></i>Submit Report</li></ol>
+                <ol class="home-role-actions" aria-label="What Coastal Guardians do"><li><i class="bi bi-eye" aria-hidden="true"></i>Observe</li><li><i class="bi bi-camera" aria-hidden="true"></i>Photograph</li><li><i class="bi bi-send" aria-hidden="true"></i>Report</li></ol>
                 <?php if ($authUser): ?>
                     <a class="text-link" href="<?= e(url($authUser['role'] === 'guardian' ? 'submit-report.php' : 'dashboard.php')) ?>">Continue to ManGROOVES <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
                 <?php elseif (defined('MANGROOVES_CLOUD')): ?>
@@ -76,7 +76,7 @@
 
         </div>
         <ol class="home-process-steps">
-            <li><span class="home-step-number">01</span><h3>Visit</h3><p>Visit a monitored area and check visible conditions.</p></li>
+            <li><span class="home-step-number">01</span><h3>Observe</h3><p>Visit a monitored area and check visible conditions.</p></li>
             <li><span class="home-step-number">02</span><h3>Document</h3><p>Take a photo, place the location pin and complete the checklist.</p></li>
             <li><span class="home-step-number">03</span><h3>Submit Report</h3><p>Send your field report through ManGROOVES.</p></li>
             <li><span class="home-step-number">04</span><h3>Review</h3><p>Reports needing review go to a qualified expert for validation or feedback.</p></li>
@@ -97,6 +97,64 @@
             <article class="benefit-card"><span class="feature-icon"><i class="bi bi-journal-text" aria-hidden="true"></i></span><h3>Support restoration decisions</h3><p>Validated records help CCENRO and stakeholders identify areas needing closer monitoring.</p></article>
         </div>
         <p class="home-local-fact"><i class="bi bi-water" aria-hidden="true"></i> Mangroves help protect shorelines, shelter marine life and store carbon. Continued care matters as much as planting.</p>
+    </div>
+</section>
+
+<section class="section-padding home-news-section" id="cebu-stories" aria-labelledby="news-title">
+    <div class="container">
+        <div class="home-section-heading">
+            <div><span class="section-kicker">Around our coast</span><h2 class="section-title" id="news-title">Mangroves in Cebu</h2></div>
+            <p class="section-lead">Local stories on mangrove protection, restoration and monitoring.</p>
+        </div>
+        <?php
+        // Curated links supplied by the project owner. No external requests run on page load.
+        $homeArticles = [
+            [
+                'source' => 'SunStar Cebu',
+                'title' => 'Cebu City halts road project to protect mangroves, wildlife',
+                'summary' => 'Environmental concerns prompted a pause in coastal road work for a technical review.',
+                'url' => 'https://www.sunstar.com.ph/cebu/cebu-city-halts-road-project-to-protect-mangroves-wildlife',
+                'image' => 'img/news/cebu-mangrove-road-project.webp',
+                'alt' => 'Coastal road project beside mangroves in Cebu City',
+                'credit' => 'Photo: Juan Carlo de Vela / SunStar Cebu',
+                'date' => '2025-06-05', 'date_label' => 'June 5, 2025',
+            ],
+            [
+                'source' => 'MyTV Cebu · Facebook',
+                'title' => 'CCENRO assesses mangroves in Kinasang-an and Basak Pardo',
+                'summary' => 'A two-day field assessment documents local mangrove conditions in the two barangays.',
+                'url' => 'https://www.facebook.com/mytvcebu30/posts/%F0%9D%97%96%F0%9D%97%96%F0%9D%97%98%F0%9D%97%A1%F0%9D%97%A5%F0%9D%97%A2-%F0%9D%97%96%F0%9D%97%A2%F0%9D%97%A1%F0%9D%97%97%F0%9D%97%A8%F0%9D%97%96%F0%9D%97%A7%F0%9D%97%A6-%F0%9D%97%A0%F0%9D%97%94%F0%9D%97%A1%F0%9D%97%9A%F0%9D%97%A5%F0%9D%97%A2%F0%9D%97%A9%F0%9D%97%98-%F0%9D%97%94%F0%9D%97%A6%F0%9D%97%A6%F0%9D%97%98%F0%9D%97%A6%F0%9D%97%A6%F0%9D%97%A0%F0%9D%97%98%F0%9D%97%A1%F0%9D%97%A7-%F0%9D%97%9C%F0%9D%97%A1-%F0%9D%97%95%F0%9D%97%94%F0%9D%97%A5%F0%9D%97%94%F0%9D%97%A1%F0%9D%97%9A%F0%9D%97%94%F0%9D%97%AC%F0%9D%97%A6-%F0%9D%97%9E%F0%9D%97%9C%F0%9D%97%A1%F0%9D%97%94%F0%9D%97%A6%F0%9D%97%94%F0%9D%97%A1%F0%9D%97%9A-%F0%9D%97%94%F0%9D%97%A1-%F0%9D%97%95%F0%9D%97%94%F0%9D%97%A6%F0%9D%97%94%F0%9D%97%9E-%F0%9D%97%A3%F0%9D%97%94%F0%9D%97%A5%F0%9D%97%97%F0%9D%97%A2look-the/1460656179404221/',
+                'image' => 'img/hero-mangroves.webp',
+                'alt' => 'Illustrative mangrove shoreline; not a photo of the reported assessment',
+                'credit' => 'Illustrative photo · ManGROOVES',
+            ],
+            [
+                'source' => 'CCENRO · Facebook',
+                'title' => 'CCENRO marks World Water Day with a mangrove assessment',
+                'summary' => 'A coastal survey examines mangrove species and environmental concerns in Cebu City.',
+                'url' => 'https://www.facebook.com/cebucityenro/posts/%F0%9D%99%84%F0%9D%99%89-%F0%9D%98%BE%F0%9D%99%80%F0%9D%99%87%F0%9D%99%80%F0%9D%98%BD%F0%9D%99%8D%F0%9D%98%BC%F0%9D%99%8F%F0%9D%99%84%F0%9D%99%8A%F0%9D%99%89-%F0%9D%99%8A%F0%9D%99%81-%F0%9D%99%92%F0%9D%99%8A%F0%9D%99%8D%F0%9D%99%87%F0%9D%98%BF-%F0%9D%99%92%F0%9D%98%BC%F0%9D%99%8F%F0%9D%99%80%F0%9D%99%8D-%F0%9D%98%BF%F0%9D%98%BC%F0%9D%99%94-%F0%9D%99%8F%F0%9D%99%83%F0%9D%99%80-%F0%9D%98%BE%F0%9D%98%BE%F0%9D%99%80%F0%9D%99%89%F0%9D%99%8D%F0%9D%99%8A-%F0%9D%98%BE%F0%9D%99%8A%F0%9D%99%89%F0%9D%98%BF%F0%9D%99%90%F0%9D%98%BE%F0%9D%99%8F-%F0%9D%98%BC-%F0%9D%99%8D%F0%9D%98%BC%F0%9D%99%8B%F0%9D%99%84%F0%9D%98%BF-%F0%9D%99%88%F0%9D%98%BC%F0%9D%99%89%F0%9D%99%82%F0%9D%99%8D%F0%9D%99%8A%F0%9D%99%91%F0%9D%99%80-%F0%9D%98%BC%F0%9D%99%8E%F0%9D%99%8E%F0%9D%99%80%F0%9D%99%8E%F0%9D%99%8E%F0%9D%99%88%F0%9D%99%80%F0%9D%99%89%F0%9D%99%8F/1353336196826821/',
+                'image' => 'img/news/ccenro-world-water-day-mangrove-assessment.webp',
+                'alt' => 'CCENRO field assessment beside a mangrove and coastal area',
+                'credit' => 'Photo: Cebu City Environment and Natural Resources Office',
+            ],
+        ];
+        ?>
+        <div class="home-news-grid">
+            <?php foreach ($homeArticles as $article): ?>
+            <article class="home-news-card">
+                <figure>
+                    <img src="<?= e(asset($article['image'])) ?>" alt="<?= e($article['alt']) ?>" width="768" height="432" loading="lazy" decoding="async">
+                    <figcaption><?= e($article['credit']) ?></figcaption>
+                </figure>
+                <div class="home-news-body">
+                    <div class="home-news-meta"><span><?= e($article['source']) ?></span><?php if (isset($article['date'])): ?><time datetime="<?= e($article['date']) ?>"><?= e($article['date_label']) ?></time><?php endif; ?></div>
+                    <h3><?= e($article['title']) ?></h3>
+                    <p><?= e($article['summary']) ?></p>
+                    <a href="<?= e($article['url']) ?>" target="_blank" rel="noopener noreferrer" aria-label="<?= e('Read article: ' . $article['title'] . ' (opens in a new tab)') ?>">Read article <i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+                </div>
+            </article>
+            <?php endforeach; ?>
+        </div>
     </div>
 </section>
 

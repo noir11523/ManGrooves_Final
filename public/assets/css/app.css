@@ -876,6 +876,24 @@ textarea {
 .home-page .benefit-card { padding: 0 1rem 0 0; border: none; border-radius: 0; box-shadow: none; background: none; }
 .home-page .benefit-card .feature-icon { background: none; border: 1px solid #c5d2bd; border-radius: 1rem 1rem 1rem .25rem; }
 .home-page .benefit-card p { color: #576259; }
+.home-page .home-news-section { background: #eef2e9; }
+.home-page .home-news-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.25rem; }
+.home-page .home-news-card { min-width:0; overflow:hidden; display:flex; flex-direction:column; position:relative; background:#fcfcf8; border:1px solid #d8dfcf; border-radius:1.1rem; transition:transform .18s ease,box-shadow .18s ease; }
+.home-page .home-news-card:hover { transform:translateY(-3px); box-shadow:var(--mg-shadow-sm); }
+.home-page .home-news-card:focus-within { outline:3px solid var(--mg-green); outline-offset:4px; }
+.home-page .home-news-card figure { margin:0; position:relative; }
+.home-page .home-news-card img { display:block; width:100%; height:auto; aspect-ratio:16/9; object-fit:cover; }
+.home-page .home-news-card figcaption { padding:.5rem 1.25rem 0; color:#606b61; font-size:.66rem; line-height:1.45; }
+.home-page .home-news-body { display:flex; flex-direction:column; flex:1; gap:.75rem; padding:1rem 1.25rem 1.1rem; }
+.home-page .home-news-meta { display:flex; align-items:baseline; flex-wrap:wrap; gap:.35rem .7rem; color:var(--mg-green); font-weight:700; font-size:.72rem; }
+.home-page .home-news-meta time { color:#606b61; font-weight:400; }
+.home-page .home-news-card h3 { font-size:1.17rem; font-weight:750; line-height:1.35; margin:0; color:var(--mg-brown); }
+.home-page .home-news-card p { color:#52604f; font-size:.89rem; line-height:1.65; margin:0; }
+.home-page .home-news-card a { display:flex; align-items:center; justify-content:space-between; min-height:44px; margin-top:auto; color:var(--mg-green); font-size:.88rem; font-weight:750; text-decoration:none; }
+.home-page .home-news-card a::after { content:''; position:absolute; inset:0; }
+@media (min-width:768px) and (max-width:991.98px) { .home-page .home-news-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:767.98px) { .home-page .home-news-grid { grid-template-columns:minmax(0,1fr); } }
+@media (prefers-reduced-motion:reduce) { .home-page .home-news-card { transition:none; }.home-page .home-news-card:hover { transform:none; } }
 .home-page .health-guide-section { background: #fcfcf8; }
 .home-page .home-health-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 .home-page .health-card { padding: 1.4rem; gap: .9rem; }

@@ -17,7 +17,7 @@
             this.now = options.now || Date.now;
             this.setInterval = options.setInterval || globalThis.setInterval.bind(globalThis);
             this.clearInterval = options.clearInterval || globalThis.clearInterval.bind(globalThis);
-            this.waitMs = 60000;
+            this.waitMs = options.waitMs || 60000;
             this.freshMs = 15000;
             this.active = false;
             this.generation = 0;
@@ -170,5 +170,63 @@
         return parseIpArea(await response.json());
     }
 
-    return {Tracker, parseIpArea, lookupIpArea};
+    class AutomaticLocator {
+        constructor(options) { this.options = options; this.active = false; }
+        stop() {
+            this.active = false;
+            this.tracker?.stop();
+            clearTimeout(this.timer);
+            this.abort?.abort();
+        }
+        start() {
+            this.stop(); this.active = true; this.best = null; this.accepted = false;
+            this.abort = new AbortController();
+            const controller = this.abort;
+            const options = this.options;
+            const finish = async () => {
+                if (!this.active || this.abort !== controller || this.finishing) return;
+                this.finishing = true; this.tracker?.stop(); clearTimeout(this.timer);
+                if (this.accepted) { this.stop(); return; }
+                // Browser coordinate attributes can be prototype getters, not enumerable fields.
+                const coords = this.best?.coords;
+                let area = this.best && Date.now() - this.best.timestamp < 30000
+                    ? {latitude:coords.latitude, longitude:coords.longitude, accuracy:coords.accuracy, label:''} : null;
+                if (!area || area.accuracy > 5000) {
+                    options.onState?.({state:'searching', message:'Finding the nearest area…'});
+                    const timeout = setTimeout(() => controller.abort(), 10000);
+                    try {
+                        const ip = await (options.lookupIpArea || lookupIpArea)({signal:controller.signal});
+                        // A known device estimate beats an IP location with unknown precision.
+                        if (!area || (ip.accuracy && ip.accuracy < area.accuracy)) area = ip;
+                    } catch { /* Search and manual pin placement remain available. */ }
+                    finally { clearTimeout(timeout); }
+                }
+                if (!this.active || this.abort !== controller) return;
+                if (area) options.onApproximate?.(area);
+                options.onState?.({state:area?'approximate':'unavailable',message:area?'Approximate area. Check the map and tap your exact spot.':'Location unavailable. Search a place or tap the map.'});
+                this.stop();
+            };
+            this.finishing = false;
+            this.tracker = new Tracker({...options, waitMs:30000,
+                onPosition:position=>{
+                    if (!this.active) return;
+                    this.accepted = true; options.onPosition?.(position);
+                    options.onState?.({state:'tracking',message:`Location found · about ${Math.round(position.coords.accuracy)} m accuracy. Check the pin.`});
+                    if (position.coords.accuracy <= 20) this.stop();
+                },
+                onApproximate:position=>{
+                    if (!this.active || this.accepted) return;
+                    if (!this.best || position.coords.accuracy < this.best.coords.accuracy) this.best=position;
+                },
+                onState:state=>{
+                    if (!this.active || this.accepted) return;
+                    if (['denied','unsupported','insecure','unavailable','timeout'].includes(state.state)) void finish();
+                    else options.onState?.({state:'searching',message:'Finding your location… Allow access if asked.'});
+                }});
+            this.timer=setTimeout(finish,30000);
+            this.tracker.start();
+        }
+    }
+
+    return {Tracker, AutomaticLocator, parseIpArea, lookupIpArea};
 });

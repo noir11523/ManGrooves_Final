@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:printing/printing.dart';
 
 import '../core/api_client.dart';
 import '../core/display_text.dart';
@@ -210,6 +211,44 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
     }
   }
 
+  Future<void> _previewSigner() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final bytes = await widget.api.cloudFile(
+        'certificate-settings.php',
+        query: {'preview': '1'},
+      );
+      if (!mounted) return;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Certificate preview')),
+            body: PdfPreview(
+              build: (_) async => bytes,
+              canChangePageFormat: false,
+              canChangeOrientation: false,
+              allowPrinting: false,
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _error = e is ApiException
+              ? e.message
+              : 'Could not open the preview.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -234,54 +273,95 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _name,
+              onChanged: (_) => setState(() {}),
               maxLength: 100,
               decoration: const InputDecoration(labelText: 'Signer name'),
             ),
             TextField(
               controller: _title,
+              onChanged: (_) => setState(() {}),
               maxLength: 100,
               decoration: const InputDecoration(labelText: 'Position or title'),
             ),
-            OutlinedButton.icon(
-              onPressed: _busy
-                  ? null
-                  : () async {
-                      try {
-                        final image = await ImagePicker().pickImage(
-                          source: ImageSource.gallery,
-                        );
-                        if (image != null && mounted) {
-                          setState(() => _signature = image.path);
-                        }
-                      } catch (_) {
-                        if (mounted) {
-                          setState(
-                            () =>
-                                _error = 'Could not select a signature image.',
-                          );
-                        }
-                      }
-                    },
-              icon: const Icon(Icons.draw_outlined),
-              label: Text(
-                _signature == null
-                    ? 'Add signature image'
-                    : 'Signature selected · Change',
+            ExpansionTile(
+              title: const Text('Signature image (optional)'),
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _busy
+                      ? null
+                      : () async {
+                          try {
+                            final image = await ImagePicker().pickImage(
+                              source: ImageSource.gallery,
+                            );
+                            if (image != null && mounted) {
+                              setState(() => _signature = image.path);
+                            }
+                          } catch (_) {
+                            if (mounted) {
+                              setState(
+                                () => _error =
+                                    'Could not select a signature image.',
+                              );
+                            }
+                          }
+                        },
+                  icon: const Icon(Icons.draw_outlined),
+                  label: Text(
+                    _signature == null
+                        ? 'Add signature image'
+                        : 'Signature selected · Change',
+                  ),
+                ),
+                const Text(
+                  'Use an approved PNG or JPG signature. Without an image, the certificate shows “Signed by” and the name.',
+                ),
+                if (_hasSignature)
+                  CheckboxListTile(
+                    value: _removeSignature,
+                    onChanged: (v) =>
+                        setState(() => _removeSignature = v ?? false),
+                    title: const Text('Remove current signature image'),
+                  ),
+              ],
+            ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Signer preview', textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    Text(
+                      _name.text.trim().isEmpty
+                          ? 'Signer name'
+                          : _name.text.trim(),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      _title.text.trim().isEmpty
+                          ? 'Position or title'
+                          : _title.text.trim(),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             ),
-            const Text(
-              'Use an approved PNG or JPG signature. Without an image, the certificate shows “Signed by” and the name.',
-            ),
-            if (_hasSignature)
-              CheckboxListTile(
-                value: _removeSignature,
-                onChanged: (v) => setState(() => _removeSignature = v ?? false),
-                title: const Text('Remove current signature image'),
-              ),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: _busy ? null : _saveSigner,
               child: const Text('Save signer'),
+            ),
+            OutlinedButton(
+              onPressed: _busy ? null : _previewSigner,
+              child: const Text('Preview saved PDF'),
+            ),
+            const Text(
+              'Save changes before previewing the PDF.',
+              textAlign: TextAlign.center,
             ),
           ] else if (_items != null) ...[
             const Text('Check the ID code before approving expert access.'),

@@ -17,6 +17,7 @@ for (const key of ['window', 'document', 'location', 'navigator', 'FormData', 'F
 }
 dom.window.HTMLElement.prototype.scrollIntoView = () => {};
 dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new Event('close')); };
 URL.createObjectURL = () => 'blob:test-photo'; URL.revokeObjectURL = () => {};
 let gps;
 Object.defineProperty(navigator, 'geolocation', {value: {watchPosition(callback) { gps = callback; return 1; }, clearWatch() {}}});
@@ -46,11 +47,51 @@ test('user search resets the page, keeps filters in pagination, and routes pendi
   await ui.adminPage($('#page'),'users',{page:'2',q:'coast',role:'expert'});
   assert.match($('.pagination a').href,/q=coast/);assert.match($('.pagination a').href,/role=expert/);
   assert.equal($('.user-form [name=role]'),null);assert.equal($('.user-form button'),null);
-  assert.equal($('.user-form a').getAttribute('href'),'#expert-applications');
+  assert.equal($('.admin-table a').getAttribute('href'),'#expert-applications');
   const form=$('.list-filters');form.querySelector('[name=q]').value='  New name  ';
   form.dispatchEvent(new Event('submit',{cancelable:true}));
   assert.equal(location.hash,'#users?q=New+name&role=expert');
   $('.clear-filters').click();assert.equal(location.hash,'#users');
+});
+
+test('staff creation is available in Users and requests credentials for expert accounts',async()=>{
+  let sent;
+  globalThis.testApi=async(path,{body}={})=>{
+    if(body){sent=body;return {message:'Created.'};}
+    return {items:[],total:0,page:1,pages:1,barangays:[{id:1,name:'Inayawan'}]};
+  };
+  await ui.adminPage($('#page'),'users',{});$('#add').click();
+  const dialog=$('#admin-editor'),form=dialog.querySelector('form');
+  assert.equal(dialog.open,true);assert.equal(form.elements.expert_id_code.required,true);
+  form.elements.role.value='system_admin';change(form.elements.role);
+  assert.equal(form.elements.expert_id_code.required,false);assert.equal($('#staff-credential').hidden,true);
+  for(const [key,value] of Object.entries({first_name:'Admin',last_name:'Staff',email:'staff@example.test',barangay_id:'1',password:'initialpass12',password_confirmation:'initialpass12'}))form.elements[key].value=value;
+  await form.onsubmit({preventDefault(){},target:form,submitter:form.querySelector('button[type=submit]')});
+  assert.equal(sent.action,'create_staff');assert.equal(sent.role,'system_admin');assert.equal(sent.barangay_id,'1');
+});
+
+test('typed certificate signer preview reflects edits and requires save before PDF preview',async()=>{
+  globalThis.testApi=async()=>({settings:{signer_name:'Saved Name',signer_title:'Coordinator',has_signature:false}});
+  await ui.certificateSettingsPage($('#page'));
+  assert.equal($('#preview-certificate').disabled,false);assert.equal($('#signature-preview').hidden,true);
+  const input=$('[name=signer_name]');input.value='Updated Name';input.dispatchEvent(new Event('input',{bubbles:true}));
+  assert.equal($('#signer-preview-name').textContent,'Updated Name');assert.equal($('#preview-certificate').disabled,true);
+  assert.equal($('#typed-signature').hidden,false);
+});
+
+test('regenerated certificate QR stays valid until its own expiry and can be hidden',async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:1700000000000});
+  dom.window.HTMLCanvasElement.prototype.getContext=()=>({fillRect(){}});
+  let duration=100;
+  globalThis.testApi=async()=>({url:'https://example.test/certificate',qr:{size:1,data:[1]},expires_unix_ms:Date.now()+duration});
+  $('#page').innerHTML='<article><button data-id="1">Show QR</button></article>';
+  const button=$('#page button');let action=ui.certificateQr(button);closeConfirm('confirm');await action;
+  assert.ok($('.certificate-share canvas'));
+  t.mock.timers.tick(50);duration=200;
+  action=ui.certificateQr(button);closeConfirm('confirm');await action;
+  t.mock.timers.tick(50);assert.ok($('.certificate-share canvas'));
+  t.mock.timers.tick(150);assert.equal($('.certificate-share canvas'),null);assert.match($('.qr-expiry').textContent,/expired/);
+  $('.hide-qr').click();assert.equal($('.certificate-share'),null);
 });
 
 test('catalog filters preserve an unfinished editor and clear restores hidden records',async()=>{
@@ -58,10 +99,10 @@ test('catalog filters preserve an unfinished editor and clear restores hidden re
   await ui.adminPage($('#page'),'species',{});
   $('.edit-item').click();$('[name=scientific_name]').value='Unsaved species';
   const form=$('.list-filters');form.querySelector('[name=q]').value='RED';form.querySelector('[name=active]').value='0';form.dispatchEvent(new Event('submit',{cancelable:true}));
-  assert.equal($('.edit-item[data-id="1"]').hidden,true);assert.equal($('.edit-item[data-id="2"]').hidden,false);
+  assert.equal($('.edit-item[data-id="1"]').closest('tr').hidden,true);assert.equal($('.edit-item[data-id="2"]').closest('tr').hidden,false);
   assert.equal($('[name=scientific_name]').value,'Unsaved species');assert.match($('.result-count').textContent,/1 result/);
   form.querySelector('[name=q]').value='missing';form.dispatchEvent(new Event('submit',{cancelable:true}));assert.equal($('.filter-empty').hidden,false);
-  $('.clear-filters').click();assert.equal($('.filter-empty').hidden,true);assert.equal($('.edit-item').hidden,false);
+  $('.clear-filters').click();assert.equal($('.filter-empty').hidden,true);assert.equal($('.edit-item').closest('tr').hidden,false);
   assert.equal($('[name=scientific_name]').value,'Unsaved species');
 });
 
@@ -86,7 +127,8 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
     set('sitio_name', 'First location'); set('observed_alive_count', '12');
     for (const k of ['root_type', 'leaf_shape', 'bark_texture']) set(k, reference.species[0][k]);
     await submit(); assert.equal(ui.reportDraft.step, 1);
-    $('#gps').click(); gps({timestamp:Date.now(),coords: {latitude: 10.2833, longitude: 123.8833, accuracy: 180}});
+    assert.equal($('#gps'),null);assert.equal($('#approximate'),null);assert.equal(typeof gps,'function');
+    gps({timestamp:Date.now(),coords: {latitude: 10.2833, longitude: 123.8833, accuracy: 180}});
     assert.equal(ui.reportDraft.fields.location_source, '');
     await submit(); assert.equal(ui.reportDraft.step, 1);
     assert.match($('.error').textContent, /tap the map/);
@@ -140,7 +182,7 @@ test('report draft restores fields, photo, checklist and step after reload, isol
     set('sitio_name','Saved coastal site');set('observed_alive_count','16');set('guardian_remarks','Remember this visit');
     for(const k of ['root_type','leaf_shape','bark_texture'])set(k,reference.species[0][k]);
     await submit();
-    $('#gps').click(); const oldGps = gps;
+    assert.equal($('#gps'),null); const oldGps = gps;
     gps({timestamp:Date.now()-60000,coords:{latitude:10.28,longitude:123.88,accuracy:2}});
     assert.equal(ui.reportDraft.fields.location_source,'');
     gps({timestamp:Date.now(),coords:{latitude:10.28,longitude:123.88,accuracy:12}});

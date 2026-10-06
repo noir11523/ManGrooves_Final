@@ -71,11 +71,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      '6 Healthy | 3-5 Stressed | 0-2 At Risk\n\nLeaf color, pests, and roots add 0-2 points each. Not Sure is unscored and needs review.\n\nNone: 0. All: lowest score (0) for health; total of regular choices for context and environment. Context and environment do not change health.\n\nAdd, rename, or delete choices. Past reports stay unchanged. Keep a 0-point and a 2-point choice in each health check.',
-                    ),
+                  child: ExpansionTile(
+                    title: Text('Health scoring guide'),
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          '6 Healthy | 3-5 Stressed | 0-2 At Risk\n\nLeaf color, pests, and roots add 0-2 points each. Not Sure is unscored and needs review.\n\nNone: 0. All: lowest score (0) for health; total of regular choices for context and environment. Context and environment do not change health.\n\nAdd, rename, or delete choices. Past reports stay unchanged. Keep a 0-point and a 2-point choice in each health check.',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 if (_error != null) Text(_error!),
@@ -136,7 +141,24 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
     super.dispose();
   }
 
-  void _addChoice() {
+  Map<String, String> get _missingSpecials => Map.fromEntries(
+    const {
+      'unknown': 'Not Sure',
+      'all_of_the_above': 'All of the above',
+      'none_of_the_above': 'None of the above',
+    }.entries.where(
+      (entry) =>
+          (entry.key != 'none_of_the_above' ||
+              _data['selection_mode'] == 'multiple') &&
+          !_options.any(
+            (option) =>
+                option['delete'] != true &&
+                (option['code'] ?? option['kind']) == entry.key,
+          ),
+    ),
+  );
+
+  void _addChoice({String kind = 'standard'}) {
     if (_options.where((o) => o['delete'] != true).length >= 30) {
       setState(() => _error = 'Use up to 30 choices.');
       return;
@@ -144,9 +166,15 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
     setState(() {
       _options.add({
         'id': _nextId--,
-        'code': 'standard',
-        'kind': 'standard',
-        'label': '',
+        'code': kind,
+        'kind': kind,
+        'label':
+            const {
+              'unknown': 'Not Sure',
+              'all_of_the_above': 'All of the above',
+              'none_of_the_above': 'None of the above',
+            }[kind] ??
+            '',
         'points': 0,
         'image_path': null,
       });
@@ -342,6 +370,21 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                 icon: const Icon(Icons.add),
                 label: const Text('Add choice'),
               ),
+              if (_missingSpecials.isNotEmpty)
+                PopupMenuButton<String>(
+                  tooltip: 'Restore a special choice',
+                  enabled: !_busy,
+                  onSelected: (kind) => _addChoice(kind: kind),
+                  itemBuilder: (_) => _missingSpecials.entries
+                      .map(
+                        (entry) => PopupMenuItem(
+                          value: entry.key,
+                          child: Text('Add ${entry.value}'),
+                        ),
+                      )
+                      .toList(),
+                  icon: const Icon(Icons.more_horiz),
+                ),
               FilledButton(
                 onPressed: _busy ? null : _save,
                 child: Text(_busy ? 'Saving...' : 'Save checklist'),
@@ -448,47 +491,6 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                           label: const Text('Delete choice'),
                         ),
                       ),
-                      if ((option['id'] as int) < 0)
-                        DropdownButtonFormField<String>(
-                          initialValue: option['kind'] as String,
-                          decoration: const InputDecoration(
-                            labelText: 'Answer type',
-                          ),
-                          isExpanded: true,
-                          items: [
-                            const DropdownMenuItem(
-                              value: 'standard',
-                              child: Text('Regular choice'),
-                            ),
-                            const DropdownMenuItem(
-                              value: 'all_of_the_above',
-                              child: Text('All choices'),
-                            ),
-                            const DropdownMenuItem(
-                              value: 'unknown',
-                              child: Text('Not Sure (needs review)'),
-                            ),
-                            if (_data['selection_mode'] == 'multiple')
-                              const DropdownMenuItem(
-                                value: 'none_of_the_above',
-                                child: Text('None of the above'),
-                              ),
-                          ],
-                          onChanged: _busy
-                              ? null
-                              : (kind) => setState(() {
-                                  option['kind'] = kind;
-                                  option['code'] = kind;
-                                  option['points'] = 0;
-                                  option['label'] = switch (kind) {
-                                    'all_of_the_above' => 'All of the above',
-                                    'unknown' => 'Not Sure',
-                                    'none_of_the_above' => 'None of the above',
-                                    _ => '',
-                                  };
-                                  _dirty = true;
-                                }),
-                        ),
                       TextFormField(
                         initialValue: '${option['label']}',
                         key: ValueKey(

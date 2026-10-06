@@ -1,5 +1,22 @@
 # ManGROOVES PHP website on Vercel
 
+## Homepage, compact administration and automatic location — October 6, 2026
+
+The existing homepage now includes exactly three curated Cebu article cards between the monitoring explanation and field guide. Links retain the owner's supplied SunStar/MyTV/CCENRO destinations and open the original source in a new tab. The SunStar and World Water Day images are optimized local WebP files with visible source credits. The unavailable MyTV assessment photo uses the existing project mangrove image, explicitly labelled illustrative. Its Kinasang-an/Basak Pardo headline was confirmed from the supplied post metadata. No feeds, external embeds, article scraping at runtime, new routes, or data queries were added. Real homepage statistics continue loading after the page appears.
+
+The cloud website and Supabase Android APK `2.0.0+34` now use automatic device location, with a quiet approximate-area fallback. The OS/browser selects the available GPS or network provider; precision is based on the reported accuracy. No GPS/IP source buttons are shown. Permission prompts still belong to the device/browser. A coarse device/IP estimate centers the map only and never becomes an exact report pin. Existing selected landmarks and manual pins are preserved.
+
+Users, Species and Manage badges use compact lists with search and filters. Editing opens only when requested. Checklist categories start collapsed; Add choice creates a normal answer directly, and missing special choices can be restored separately. Species/badges can be archived and restored without deleting historical reports or earned certificates. Create staff account is available only under Users, with administrator-only API access, duplicate checking, and a required approved credential for expert staff. Public registration and expert-application approval remain unchanged.
+
+Certificate signer accepts a typed name/title and an optional signature image, with a live layout preview and a saved PDF preview. Signature images and settings stay private to administrators. Certificate QR codes display their expiry, can be hidden/regenerated, and authorize downloads for 10 minutes; expired links stop working. The homepage navigation no longer includes the redundant For experts item. Register, Submit Report and the download-icon Android APK labels are retained.
+
+Use the matching local cloud preview at http://127.0.0.1:8086. The Apache/MySQL implementation remains a separate legacy backend; the local cloud preview and Vercel use the same package and Supabase data.
+
+Release validation: 58 shared/web tests, 60 API integration checks, 21 location tests and 21 PHP/package tests passed. Flutter analysis found no issues; 85 Android tests passed with one existing test skipped. Browser checks covered the five admin pages at 320/390/768/1440 px, staff dialogs, and the homepage at seven widths with working mobile navigation, article images/links, keyboard focus and reduced-motion styling. Location/permission failure scenarios use simulated providers; actual hardware precision depends on the device and signal.
+
+APK `2.0.0+34`: 59,630,318 bytes, SHA-256 `0C09C31616A03A783B14FD72E21421B1CBBA732ACDBCE02F6BCBC82873936016`.
+
+
 ## Reports and homepage refinement — October 5, 2026
 
 Reports now use a clear desktop table with report number, site/species, health, status, submitted date and View. Staff also see who submitted the report. On phones, each row becomes a labelled card with one action. Guardians still receive only their own reports; staff access and report submission rules are unchanged.
@@ -40,7 +57,7 @@ The report wizard keeps its existing four-step layout. It automatically saves fi
 
 In **1. Details**, type at least three characters in **Location name**, then choose a suggestion. **2. Location** opens with that selected point and the location name already filled in. Editing a selected suggestion's name clears that suggestion's pin until another result is chosen or a pin is placed. Free-text landmarks carry into Step 2 and trigger suggestions when no pin has been chosen; typing alone never selects an arbitrary search result. Search errors do not erase the draft. The app carries its location name into its existing map picker as well.
 
-GPS requests a fresh reading and reports its accuracy. It can retry through the device's other location provider. Old readings and late callbacks after manual selection cannot replace the pin. **Find approximate area** uses the network area only to center the map; users must place their actual observation pin. It never turns an IP estimate into an accurate GPS report. Nearby street labels may be suggested when the location name is empty, but do not move the chosen coordinates. Device permissions, signal and map coverage still determine real-world precision.
+GPS requests a fresh reading and reports its accuracy. It can retry through the device's other location provider. Old readings and late callbacks after manual selection cannot replace the pin. If a precise reading is unavailable, a device or IP-area estimate automatically centers the map; users must place their actual observation pin. It never turns an IP estimate into an accurate GPS report. Nearby street labels may be suggested when the location name is empty, but do not move the chosen coordinates. Device permissions, signal and map coverage still determine real-world precision.
 
 Both this website and the Flutter APK use the same Supabase project, `rsjwlhqzzvtakcbrzqgi`. No MySQL server, Apache server, local IP address, or shared Wi-Fi is needed by users. An internet connection is required.
 

@@ -35,11 +35,10 @@ export async function reportWizard(node, query, user = null) {
   draft.owner = scope;
   draft.checklistVersions = Object.fromEntries(data.criteria.map(c => [c.id, c.version]));
   let searchTimer, searchGeneration=0, locationGeneration=0;
-  let canvas, marker, accuracyCircle, tracker = null, watchTimer = null, photoUrl = null, stopped = false, saving = 0;
+  let canvas, marker, accuracyCircle, tracker = null, photoUrl = null, stopped = false, saving = 0;
   const stopGps = () => {
     locationGeneration++;
-    tracker?.stop(); tracker = null; clearTimeout(watchTimer); watchTimer = null;
-    const button = node.querySelector('#stop-gps'); if (button) button.hidden = true;
+    tracker?.stop(); tracker = null;
   };
   const status = () => {
     const element = node.querySelector('#draft-notice');
@@ -93,7 +92,7 @@ export async function reportWizard(node, query, user = null) {
       try {
         if (draft.step === 0 && !draft.photo) throw new Error('Add a photo from this visit.');
         if (draft.step === 0 && $('#followup').checked && !draft.fields.parent_report_id) throw new Error('Choose the previous report for this follow-up.');
-        if (draft.step === 1 && !['gps', 'manual'].includes(draft.fields.location_source)) throw new Error('Use GPS or tap the map to place your pin.');
+        if (draft.step === 1 && !['gps', 'manual'].includes(draft.fields.location_source)) throw new Error('Search for a place or tap the map to set your pin.');
         if (draft.step === 2) {
           for (const c of data.criteria) {
             if (c.selection_mode === 'single' && draft.observations[c.code]?.length !== 1) throw new Error(`Choose an answer for ${c.name}.`);
@@ -181,7 +180,7 @@ export async function reportWizard(node, query, user = null) {
     if ($('#followup').checked) await followups();
   }
   function locationStep() {
-    $('#step-body').innerHTML = `<h2>Where is the mangrove?</h2><p>Use your location or tap the map to place a pin.</p><div class="actions"><button type="button" id="gps">Use my location</button><button type="button" class="outline" id="manual">Place a pin</button><button type="button" class="outline" id="stop-gps" hidden>Stop GPS</button></div><p id="location-status" class="muted" role="status">${draft.fields.location_source ? 'Your selected pin is saved.' : 'Place the pin where you took the photo.'}</p><label class="field"><span>Find an address or landmark</span><input id="place-search" type="search" autocomplete="off" placeholder="Type a place name"><small>Choose a result, then check the pin.</small></label><div id="place-results" class="list" role="status"></div><div id="location-map" class="map large"></div><details><summary>Location details</summary><div class="row">${field('latitude', 'Latitude', draft.fields.latitude ?? '', 'number', 'required min="-90" max="90" step="any" readonly')}${field('longitude', 'Longitude', draft.fields.longitude ?? '', 'number', 'required min="-180" max="180" step="any" readonly')}</div><p class="muted">The circle shows how close GPS is to your location. If it is too wide, tap the exact spot. For GPS, allow location access in your browser.</p></details>`;
+    $('#step-body').innerHTML = `<h2>Where is the mangrove?</h2><p id="location-status" class="muted" role="status">${draft.fields.location_source ? 'Your selected pin is saved.' : 'Finding your location… Allow access if asked.'}</p><label class="field"><span>Find an address or landmark</span><input id="place-search" type="search" autocomplete="off" placeholder="Type a place name"><small>Choose a result, then check the pin.</small></label><div id="place-results" class="list" role="status"></div><div id="location-map" class="map large"></div><details><summary>Location details</summary><div class="row">${field('latitude', 'Latitude', draft.fields.latitude ?? '', 'number', 'required min="-90" max="90" step="any" readonly')}${field('longitude', 'Longitude', draft.fields.longitude ?? '', 'number', 'required min="-180" max="180" step="any" readonly')}</div><p class="muted">Location is detected automatically. The circle shows estimated accuracy. An approximate area needs an exact pin.</p></details>`;
     const locationInput = $('#place-search');
     locationInput.value = draft.fields.sitio_name || '';
     locationInput.closest('.field').querySelector('span').textContent = 'Location name';
@@ -245,47 +244,30 @@ export async function reportWizard(node, query, user = null) {
     if (draft.fields.location_source === 'gps' && Number.isFinite(Number(draft.fields.location_accuracy))) {
       circle(Number(draft.fields.latitude), Number(draft.fields.longitude), Number(draft.fields.location_accuracy));
     }
-    const start = () => {
-      stopGps();
-      tracker = new locationTools.Tracker({geolocation: navigator.geolocation, secure: window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1',
-        maxAccuracy: Number(data.location.max_gps_accuracy_meters) || 100,
-        onPosition: position => {
-          if (stopped || draft.step !== 1 || !canvas) return;
-          const {latitude, longitude, accuracy} = position.coords;
-          circle(latitude, longitude, accuracy); choose(latitude, longitude, 'gps', accuracy);
-        },
-        onApproximate: position => {
-          if (stopped || draft.step !== 1 || !canvas || draft.fields.location_source) return;
-          circle(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
-        },
-        onState: ({state, message, active}) => {
-          if (stopped || draft.step !== 1 || !canvas) return;
-          $('#stop-gps').hidden = !active;
-          $('#location-status').textContent = state === 'tracking' ? `Pin found. About ${Math.round(Number(draft.fields.location_accuracy))} m accuracy. Check the spot before continuing.` : message;
-        }});
-      tracker.start();
-      watchTimer = setTimeout(() => { stopGps(); if ($('#stop-gps')) { $('#stop-gps').hidden = true; $('#location-status').textContent = draft.fields.location_source ? 'Your selected pin is saved. Check it before continuing.' : 'Only an approximate area is available. Tap your actual spot on the map.'; } }, 60000);
-    };
-    $('#manual').insertAdjacentHTML('afterend', '<button type="button" class="outline" id="approximate">Find approximate area</button>');
-    $('#approximate').onclick = async () => {
-      stopGps(); const button = $('#approximate'); button.disabled = true;
-      const generation = locationGeneration;
-      $('#location-status').textContent = 'Finding your approximate area...';
-      try {
-        const area = await locationTools.lookupIpArea({signal: AbortSignal.timeout(10000)});
-        if (stopped || draft.step !== 1 || canvas !== currentCanvas || generation !== locationGeneration) return;
-        if (area.accuracy) circle(area.latitude, area.longitude, area.accuracy);
-        else canvas.setView([area.latitude, area.longitude], 11);
-        $('#location-status').textContent = `Approximate network area${area.label ? ': '+area.label : ''}. This is not an exact address. Tap where you took the photo.`;
-      } catch { if (node.isConnected && draft.step === 1 && canvas === currentCanvas && generation === locationGeneration) $('#location-status').textContent = 'Area unavailable. Search an address or tap your spot on the map.'; }
-      finally { if (button.isConnected) button.disabled = false; }
-    };
-    $('#gps').onclick = start;
-    $('#stop-gps').onclick = () => { stopGps(); $('#stop-gps').hidden = true; $('#location-status').textContent = 'GPS stopped. Your selected pin is kept.'; };
-    $('#manual').onclick = () => { stopGps(); $('#stop-gps').hidden = true; $('#location-status').textContent = 'Tap where you took the photo.'; };
     if (!draft.fields.location_source && locationInput.value.trim().length >= 3) locationInput.oninput();
-    navigator.permissions?.query({name: 'geolocation'}).then(permission => { if (permission.state === 'granted' && !draft.fields.location_source && draft.step === 1 && canvas === currentCanvas && !stopped) start(); }).catch(() => {});
+    if (!draft.fields.location_source) {
+      stopGps();
+      const generation = locationGeneration;
+      const current = () => !stopped && draft.step === 1 && canvas === currentCanvas && generation === locationGeneration;
+      tracker = new locationTools.AutomaticLocator({geolocation:navigator.geolocation,
+        secure:window.isSecureContext || ['localhost','127.0.0.1'].includes(location.hostname),
+        maxAccuracy:Number(data.location.max_gps_accuracy_meters)||100,
+        onPosition:position=>{
+          if (!current()) return;
+          const {latitude,longitude,accuracy}=position.coords;
+          circle(latitude,longitude,accuracy); choose(latitude,longitude,'gps',accuracy);
+        },
+        onApproximate:area=>{
+          if (!current() || draft.fields.location_source) return;
+          if (area.accuracy) circle(area.latitude,area.longitude,area.accuracy);
+          else canvas.setView([area.latitude,area.longitude],11);
+        },
+        onState:({message})=>{if(current()) $('#location-status').textContent=message;}
+      });
+      tracker.start();
+    }
   }
+
   function checklist() {
     $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Leaf color, pests, and roots determine the health score. Choose Not Sure when you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Health score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p>${c.guide_image ? `<img class="guide" src="${esc(asset(c.guide_image))}" alt="${esc(c.name)} guide">` : ''}<div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
     for (const c of data.criteria) {
@@ -299,7 +281,7 @@ export async function reportWizard(node, query, user = null) {
   }
   function summary() {
     const c = draft.preview?.classification, species = draft.preview?.species?.best;
-    $('#step-body').innerHTML = `<h2>Review your report</h2><p>Check everything below. You can still make changes.</p><section class="summary-card"><h3>Details <button type="button" class="link edit" data-step="0">Edit</button></h3>${draft.photo ? '<img id="summary-photo" class="inline-photo" alt="Your field photo">' : ''}<dl class="summary"><dt>Location name</dt><dd>${esc(draft.fields.sitio_name)}</dd><dt>Living mangroves</dt><dd>${esc(draft.fields.observed_alive_count)}</dd><dt>Species assessment</dt><dd>${esc(species?.scientific_name ?? 'Needs identification')}</dd><dt>Notes</dt><dd>${esc(draft.fields.guardian_remarks || 'None')}</dd>${draft.fields.parent_report_id ? `<dt>Follow-up</dt><dd>Report #${esc(draft.fields.parent_report_id)}</dd>` : ''}</dl></section><section class="summary-card"><h3>Location <button type="button" class="link edit" data-step="1">Edit</button></h3><p>${esc(draft.fields.latitude)}, ${esc(draft.fields.longitude)} · ${draft.fields.location_source === 'gps' ? `GPS (about ${Math.round(Number(draft.fields.location_accuracy))} m)` : 'Manual pin'}</p></section><section class="summary-card"><h3>Checklist <button type="button" class="link edit" data-step="2">Edit</button></h3>${pill(c?.status ?? 'Unknown')}<p>${c?.health_score == null ? 'An expert will review the uncertain answers.' : `${c.health_score} / 6 health points. ${c.status === 'Healthy' ? 'This report will be verified automatically.' : 'An expert will review this report.'}`}</p>${data.criteria.map(criterion => `<p><strong>${esc(criterion.name)}:</strong> ${criterion.options.filter(o => draft.observations[criterion.code]?.includes(o.id)).map(o => esc(o.label)).join(', ') || 'None selected'}</p>`).join('')}</section><label class="check"><input type="checkbox" id="field-confirm" required><span>This photo, location, and checklist describe my field visit.</span></label>`;
+    $('#step-body').innerHTML = `<h2>Review your report</h2><p>Check everything below. You can still make changes.</p><section class="summary-card"><h3>Details <button type="button" class="link edit" data-step="0">Edit</button></h3>${draft.photo ? '<img id="summary-photo" class="inline-photo" alt="Your field photo">' : ''}<dl class="summary"><dt>Location name</dt><dd>${esc(draft.fields.sitio_name)}</dd><dt>Living mangroves</dt><dd>${esc(draft.fields.observed_alive_count)}</dd><dt>Species assessment</dt><dd>${esc(species?.scientific_name ?? 'Needs identification')}</dd><dt>Notes</dt><dd>${esc(draft.fields.guardian_remarks || 'None')}</dd>${draft.fields.parent_report_id ? `<dt>Follow-up</dt><dd>Report #${esc(draft.fields.parent_report_id)}</dd>` : ''}</dl></section><section class="summary-card"><h3>Location <button type="button" class="link edit" data-step="1">Edit</button></h3><p>${esc(draft.fields.latitude)}, ${esc(draft.fields.longitude)} · ${draft.fields.location_source === 'gps' ? `Device location (about ${Math.round(Number(draft.fields.location_accuracy))} m)` : 'Manual pin'}</p></section><section class="summary-card"><h3>Checklist <button type="button" class="link edit" data-step="2">Edit</button></h3>${pill(c?.status ?? 'Unknown')}<p>${c?.health_score == null ? 'An expert will review the uncertain answers.' : `${c.health_score} / 6 health points. ${c.status === 'Healthy' ? 'This report will be verified automatically.' : 'An expert will review this report.'}`}</p>${data.criteria.map(criterion => `<p><strong>${esc(criterion.name)}:</strong> ${criterion.options.filter(o => draft.observations[criterion.code]?.includes(o.id)).map(o => esc(o.label)).join(', ') || 'None selected'}</p>`).join('')}</section><label class="check"><input type="checkbox" id="field-confirm" required><span>This photo, location, and checklist describe my field visit.</span></label>`;
     if (draft.photo) { if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = URL.createObjectURL(draft.photo); $('#summary-photo').src = photoUrl; }
     $$('.edit').forEach(button => button.onclick = () => { draft.step = Number(button.dataset.step); render().catch(e => toast(friendly(e))); });
     // The confirmation checkbox does not invalidate an already checked preview.
