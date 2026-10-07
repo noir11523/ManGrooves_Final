@@ -8,7 +8,7 @@ const cell=(label,value)=>`<td data-label="${esc(label)}">${value}</td>`;
 const table=(headers,rows)=>`<section class="report-table-card"><div class="table-wrap"><table class="report-table admin-table"><thead><tr>${headers.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
 const active=item=>Number(item.active)!==0;
 
-function editor(node,title,content,save) {
+export function editor(node,title,content,save) {
   const dialog=node.querySelector('#admin-editor');
   dialog.innerHTML=`<form class="admin-editor-form"><div class="page-head"><h2>${esc(title)}</h2><button type="button" class="outline close-editor" aria-label="Close editor">Close</button></div>${errorBox}${content}<div class="actions"><button type="submit">Save</button><button type="button" class="outline close-editor">Cancel</button></div></form>`;
   dialog.querySelectorAll('.close-editor').forEach(button=>button.onclick=()=>dialog.close());
@@ -23,7 +23,7 @@ function editor(node,title,content,save) {
 }
 export async function adminList(node,page,query,data,refresh,heading) {
   const users=page==='users',species=page==='species',items=users?data.items:species?data.species:data.badges;
-  const name=users?'Users':species?'Species':'Manage badges';
+  const name=users?'Users':species?'Species and Sites':'Manage badges';
   const note=users?'Manage community and staff access.':species?'Reference species and identification traits.':'Milestones for verified monitoring work.';
   const filters=users?[
     ['role','Role',[['','All roles'],...roles]],

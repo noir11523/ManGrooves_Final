@@ -72,7 +72,7 @@ test('verification cards apply the selected status, reset pagination and keep se
  assert.equal(calls.at(-1).status,'verified');assert.equal(calls.at(-1).verified_attention,undefined);
  assert.equal($('.report-table a').textContent,'View');
 });
-test('earned and unearned badge pages attach every certificate and QR action',async()=>{
+test('badges display artwork and progress, with certificates only for earned awards',async()=>{
  history.replaceState(null,'','#badges');
  let earned=true;
  globalThis.testApi=async path=>{
@@ -81,7 +81,10 @@ test('earned and unearned badge pages attach every certificate and QR action',as
  };
  await globalThis.restoreTestAccount({id:'user'});await tick();
  assert.equal(document.querySelectorAll('.certificate').length,2);
- for(const button of document.querySelectorAll('.certificate,.certificate-qr'))assert.equal(typeof button.onclick,'function');
+ for(const button of document.querySelectorAll('.certificate'))assert.equal(typeof button.onclick,'function');
+ assert.equal(document.querySelectorAll('.certificate-qr').length,0);
+ assert.equal(document.querySelectorAll('.badge-emblem').length,2);
+ assert.match(document.body.textContent,/QR is inside/);
  assert.equal($('#retry'),null);
  earned=false;await globalThis.restoreTestAccount({id:'user'});await tick();
  assert.equal($('#retry'),null);assert.equal(document.querySelectorAll('.certificate').length,0);

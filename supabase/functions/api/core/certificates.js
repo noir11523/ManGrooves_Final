@@ -1,8 +1,9 @@
-import {createHash,randomBytes} from 'node:crypto';
+import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {PDFDocument,StandardFonts,rgb} from 'pdf-lib';
 import QRCode from 'qrcode';
 import {AppError,integer,text,now,requireRole,manilaDate} from './domain.js';
 import {saveImage} from './uploads.js';
+const verificationCode=/^MG-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 export async function certificateSettings(service,user,input,files={}) {
   requireRole(user,'system_admin');
@@ -26,10 +27,22 @@ export async function certificateSettings(service,user,input,files={}) {
   } catch(error){if(upload)await service.bucket.file(upload.path).delete().catch(()=>{});throw error;}
 }
 async function certificateData(service,userId,badgeId) {
-  const award=await service.get('user_badges',`${userId}_${badgeId}`),badge=await service.get('badges',badgeId);
+  let award=await service.get('user_badges',`${userId}_${badgeId}`);
+  const badge=await service.get('badges',badgeId);
   if(!award||!badge)throw new AppError('Certificate not available.',404);
   const owner=(await service.rows('users',[['id','==',userId]]))[0],settings=await service.get('meta','certificate_settings');
   if(!settings?.signer_name||!settings?.signer_title)throw new AppError('The administrator needs to add the certificate signer first.',409);
+  // Imported awards used predictable legacy IDs. Upgrade only when an authorized
+  // certificate is requested, so their new public verification links are unguessable.
+  if(!verificationCode.test(award.certificate_code??'')) {
+    award=await service.db.runTransaction(async tx=>{
+      const ref=service.ref('user_badges',`${userId}_${badgeId}`),current=(await tx.get(ref)).data();
+      if(!current)throw new AppError('Certificate not available.',404);
+      if(verificationCode.test(current.certificate_code??''))return current;
+      const upgraded={...current,legacy_certificate_code:current.certificate_code??null,certificate_code:`MG-${randomUUID()}`};
+      tx.set(ref,upgraded);return upgraded;
+    });
+  }
   return {award,badge,owner,settings};
 }
 const safe=value=>String(value??'').replace(/[\u2010-\u2015]/g,'-').replace(/[^\x20-\x7e\xa0-\xff]/g,'?');
@@ -61,8 +74,23 @@ export async function certificatePdf(service,data) {
   page.drawLine({start:{x:281,y:139},end:{x:561,y:139},thickness:.7,color:muted});
   centered(settings.signer_name,118,15,bold);centered(settings.signer_title,98,12);
   centered(`Awarded ${manilaDate(award.earned_at)} | ${award.certificate_code}`,58,9,regular,muted);
-  // QR belongs only in the app/website. The downloaded PDF is always QR-free.
+  if(verificationCode.test(award.certificate_code??'')) {
+    const url=`https://mangrooves-php.vercel.app/certificate-verify.php?code=${encodeURIComponent(award.certificate_code)}`;
+    const qr=QRCode.create(url,{errorCorrectionLevel:'M'}),size=112,unit=size/(qr.modules.size+8),left=678,bottom=100;
+    page.drawRectangle({x:left,y:bottom,width:size,height:size,color:rgb(1,1,1)});
+    for(let row=0;row<qr.modules.size;row++)for(let col=0;col<qr.modules.size;col++)if(qr.modules.data[row*qr.modules.size+col])
+      page.drawRectangle({x:left+(col+4)*unit,y:bottom+size-(row+5)*unit,width:unit,height:unit,color:rgb(0,0,0)});
+    page.drawText('Scan to verify',{x:left+18,y:bottom-15,size:10,font:regular,color:muted});
+  }
   return Buffer.from(await doc.save());
+}
+export async function verifyCertificate(service,code) {
+  if(typeof code!=='string'||!verificationCode.test(code))throw new AppError('Certificate not found.',404);
+  const awards=await service.rows('user_badges',[['certificate_code','==',code]]),award=awards[0];
+  if(!award)throw new AppError('Certificate not found.',404);
+  const [badge,owners]=await Promise.all([service.get('badges',award.badge_id),service.rows('users',[['id','==',award.user_id]])]);
+  if(!badge||!owners[0])throw new AppError('Certificate not found.',404);
+  return {certificate:{valid:true,certificate_code:award.certificate_code,recipient:owners[0].full_name,badge_name:award.badge_name_snapshot??badge.badge_name,earned_at:award.earned_at,issuer:'ManGROOVES'}};
 }
 export async function getCertificate(service,user,query) {
   requireRole(user,'guardian','expert','system_admin');

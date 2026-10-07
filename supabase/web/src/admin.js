@@ -1,4 +1,5 @@
 import {adminList} from './admin-lists.js';
+import {sitesPage,catalogTabs} from './sites-page.js';
 import { api, friendly } from './client.js';
 import { $, $$, esc, field, select, formValues, errorBox, showError, toast, confirm, pager, asset } from './ui.js';
 import {listFilters, bindListFilters, listRoute, filterLocalList, matchesSearch} from './list-filters.js';
@@ -75,6 +76,7 @@ export async function checklistPage(node) {
 }
 
 export async function adminPage(node, page, query = {}) {
+  if(page==='species'&&query.tab==='sites')return sitesPage(node,query,()=>adminPage(node,page,query),head);
   const data = await api(`${page}.php`, {query});
   if (!node.isConnected) return;
   if (page === 'audit') {
@@ -88,5 +90,7 @@ export async function adminPage(node, page, query = {}) {
     bindListFilters(node, query, q => listRoute('audit',q), data.total);
     return;
   }
-  return adminList(node,page,query,data,()=>adminPage(node,page,query),head);
+  const result=await adminList(node,page,query,data,()=>adminPage(node,page,query),head);
+  if(page==='species')node.querySelector('.page-head').insertAdjacentHTML('afterend',catalogTabs('species'));
+  return result;
 }

@@ -2,20 +2,25 @@ import 'package:latlong2/latlong.dart';
 
 /// The selected report location, including how it was obtained.
 class ReportLocation {
-  const ReportLocation.manual({required this.latitude, required this.longitude})
-    : source = 'manual',
-      accuracy = null;
+  const ReportLocation.manual({
+    required this.latitude,
+    required this.longitude,
+    this.name,
+  }) : source = 'manual',
+       accuracy = null;
 
   const ReportLocation.gps({
     required this.latitude,
     required this.longitude,
     required double this.accuracy,
+    this.name,
   }) : source = 'gps';
 
   final double latitude;
   final double longitude;
   final String source;
   final double? accuracy;
+  final String? name;
 
   LatLng get point => LatLng(latitude, longitude);
 

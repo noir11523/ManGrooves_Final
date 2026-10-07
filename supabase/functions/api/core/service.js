@@ -35,7 +35,7 @@ export class Service extends Store {
   async form(user) {
     requireRole(user, 'guardian', 'expert');
     const [criteria, clusters, species, barangay] = await Promise.all([this.criteria(), this.clusters(user), this.species(), this.get('barangays', user.barangay_id)]);
-    return {criteria, clusters, species, location: {barangay, max_distance_meters: 5000, max_gps_accuracy_meters: 100},
+    return {criteria, clusters:clusters.filter(c=>Number(c.active)!==0), species, location: {barangay, max_distance_meters: 5000, max_gps_accuracy_meters: 100},
       traits: Object.fromEntries(['root_type', 'leaf_shape', 'bark_texture'].map(k => [k, [...new Set(species.map(s => s[k]).filter(Boolean))].sort()]))};
   }
   async preview(user, input) {
@@ -168,7 +168,7 @@ export class Service extends Store {
         const selected = requestedCluster ?? parent?.cluster_id;
         if (parent && selected !== parent.cluster_id) throw new AppError('Use the same cluster as the previous report.');
         let cluster = selected ? clusters.find(c => c.id === selected) : null;
-        if (selected && !cluster) throw new AppError('Choose a cluster in your barangay.');
+        if (selected && (!cluster || Number(cluster.active)===0)) throw new AppError('Choose an active site in your barangay.');
         if (cluster) validateLocation(input, barangay, cluster);
         // Lock in the version used for scoring; admin edits require a fresh preview.
         for (const c of criteria) {
@@ -176,7 +176,7 @@ export class Service extends Store {
           if (fresh.data()?.version !== c.version) throw new AppError('The checklist changed. Review your answers again.', 409);
         }
         const verified = classification.status === 'Healthy';
-        if (verified && !cluster) cluster = clusters.filter(c => distanceMeters(location.latitude, location.longitude, c.center_lat, c.center_lng) <= c.radius_meters)
+        if (verified && !cluster) cluster = clusters.filter(c => Number(c.active)!==0 && distanceMeters(location.latitude, location.longitude, c.center_lat, c.center_lng) <= c.radius_meters)
           .sort((a, b) => distanceMeters(location.latitude, location.longitude, a.center_lat, a.center_lng) - distanceMeters(location.latitude, location.longitude, b.center_lat, b.center_lng))[0] ?? null;
         const time = now(), best = matching.best;
         if (verified && !cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: `${barangay.name} ${clusterId}`, barangay_id: user.barangay_id,
@@ -251,7 +251,7 @@ export class Service extends Store {
       const rarity = action === 'correct' ? input.rarity_level || previous.rarity_level : previous.rarity_level;
       if (!['Common', 'Vulnerable', 'Rare', 'Unassigned'].includes(rarity)) throw new AppError('Choose a valid rarity level.');
       let cluster = clusters.find(c => c.id === previous.cluster_id);
-      if (action !== 'reject' && !cluster) cluster = clusters.filter(c => distanceMeters(previous.latitude, previous.longitude, c.center_lat, c.center_lng) <= c.radius_meters)
+      if (action !== 'reject' && !cluster) cluster = clusters.filter(c => Number(c.active)!==0 && distanceMeters(previous.latitude, previous.longitude, c.center_lat, c.center_lng) <= c.radius_meters)
         .sort((a, b) => distanceMeters(previous.latitude, previous.longitude, a.center_lat, a.center_lng) - distanceMeters(previous.latitude, previous.longitude, b.center_lat, b.center_lng))[0];
       if (action !== 'reject' && !cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: `${previous.barangay_name} ${clusterId}`,
         barangay_id: previous.barangay_id, barangay_name: previous.barangay_name, center_lat: previous.latitude, center_lng: previous.longitude,

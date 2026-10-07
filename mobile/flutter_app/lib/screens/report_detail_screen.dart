@@ -144,11 +144,25 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                     '${item['label']}${criterion['score_group'] == 'health' ? ' (${item['points'] == null ? 'Not scored' : '${item['points']}/2'})' : ''}',
               )
               .join(', ');
-          return ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.check_circle_outline),
-            title: Text(criterion['name']?.toString() ?? ''),
-            subtitle: Text(options),
+          return Card(
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 10,
+              ),
+              leading: const Icon(Icons.check_circle_outline),
+              title: Text(
+                criterion['name']?.toString() ?? '',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  options,
+                  style: const TextStyle(fontSize: 15, height: 1.5),
+                ),
+              ),
+            ),
           );
         }),
         if (_report!['cluster_id'] != null)

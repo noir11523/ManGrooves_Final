@@ -1,5 +1,37 @@
 # ManGROOVES PHP website on Vercel
 
+## Reporting, sites and certificates — October 7, 2026
+
+APK `2.0.0+37` uses an icon-only Submit destination with an accessible tooltip.
+The web report form has separate Camera and Gallery controls. Selecting an active
+site fills its location name and coordinates; an eligible previous verified visit
+automatically enables follow-up. Moving the pin refreshes the location name and
+clears an incompatible site assignment. Cancel confirms and removes the saved
+draft. Report details show checklist answers in readable, responsive groups.
+
+Administrators manage **Species and Sites** through two tabs. Sites support search,
+create, edit, map search/pinning, archive and restore. Archived sites disappear
+from new report choices while existing reports remain intact. The requested
+Inayawan Whiteroad entry and both Basak entries were archived in Supabase.
+
+Badge cards display emblems and real progress. Earned certificates contain their
+verification QR inside the PDF. Its public page exposes only recognition details.
+Imported awards receive an unguessable verification code on their next authorized
+download, preserving the award and its date. A configured signer is still required.
+
+Validation: 63 shared/web tests, 64 API workflow checks, 21 PHP/package tests and
+86 Flutter tests passed (one existing optional Flutter test skipped). Flutter
+analysis and the Deno check passed. Chrome checked 20 layouts and three site
+dialogs at 320/390/768/1440 px without overflow or JavaScript errors. The QR was
+decoded from a rendered certificate PDF and matched its earned award URL.
+Camera/gallery and GPS behavior were simulated; physical phone capture and field
+accuracy still depend on the device and permissions.
+
+APK SHA-256: `0292FA4B574648F6D54172C2889502691CD73A58955D986BE0DF13D4DEE02E3E`.
+Use `npm.cmd --prefix vercel run preview` and `http://127.0.0.1:8086` for the same
+prepared website and Supabase data as Vercel. The legacy MySQL/XAMPP application
+is a separate backend.
+
 ## Desktop fallback and mobile device location — October 6, 2026
 
 The report form no longer shows the long technical explanation or provider link beneath the location controls. The existing Privacy notice retains the provider disclosure. **Use my location**, **Try again**, **Place a pin**, and address search remain available.

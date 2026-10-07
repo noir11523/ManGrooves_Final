@@ -41,6 +41,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   final _map = MapController();
   LatLng? _selected;
   bool _edited = false;
+  String? _placeLabel;
   final _search = TextEditingController();
   Timer? _debounce;
   int _searchVersion = 0;
@@ -120,10 +121,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     return null;
   }
 
-  void _moveTo(LatLng point) {
+  void _moveTo(LatLng point, {String? label}) {
     setState(() {
       _selected = point;
       _edited = true;
+      _placeLabel = label;
     });
     _map.move(point, _map.camera.zoom);
   }
@@ -206,6 +208,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                                 (place['latitude'] as num).toDouble(),
                                 (place['longitude'] as num).toDouble(),
                               ),
+                              label: '${place['label']}',
                             );
                           },
                         ),
@@ -247,6 +250,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                         setState(() {
                           _selected = camera.center;
                           _edited = true;
+                          _placeLabel = null;
                         });
                       }
                     },
@@ -354,6 +358,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                                 : ReportLocation.manual(
                                     latitude: _selected!.latitude,
                                     longitude: _selected!.longitude,
+                                    name: _placeLabel,
                                   ),
                           ),
                     child: const Text('Use this location'),

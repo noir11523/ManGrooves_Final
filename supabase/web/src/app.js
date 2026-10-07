@@ -1,11 +1,11 @@
 import './style.css';
 import './polish.css';
 import {bindMenu} from './navigation.js';
-import {expertApplicationsPage,certificateSettingsPage,certificateQr} from './account-admin.js';
+import {expertApplicationsPage,certificateSettingsPage} from './account-admin.js';
 import {registrationPage,recoveryPage,signInPage} from './auth-pages.js';
 import Chart from 'chart.js/auto';
 import { initialize, api, login, logout, changePassword, friendly } from './client.js';
-import { $, $$, esc, pill, displayLabel, reportStatus, field, select, formValues, errorBox, showError, toast, confirm, pager, reportRows, reportTable, map, privatePhoto, download } from './ui.js';
+import { $, $$, esc, pill, displayLabel, reportStatus, field, select, formValues, errorBox, showError, toast, confirm, pager, reportRows, reportTable, map, privatePhoto, download, asset } from './ui.js';
 import { reportWizard, reportDraft } from './report-form.js';
 import {reportMapPage} from './report-map.js';
 import { checklistPage, adminPage } from './admin.js';
@@ -49,7 +49,7 @@ function shell(route) {
   const admin = viewer.role === 'system_admin', staff = viewer.role !== 'guardian';
   const links = [['dashboard', 'Dashboard'], ['reports', staff ? 'Reports' : 'My reports'], ...(viewer.role!=='system_admin' ? [['submit','Submit Report'],['badges','Badges']]:[]), ...(staff?[['verification','Review reports'],['history','Review history']]:[]),
     ['label', 'Clusters'], ['analytics', 'Analytics'], ['clusters', 'Health history'], ['growth', 'Growth timeline'],
-    ...(admin ? [['label', 'Administration'], ['checklist', 'Health checklist'], ['users', 'Users'], ['expert-applications','Expert applications'], ['certificate-settings','Certificate signer'], ['species', 'Species'], ['badge-settings', 'Badge settings'], ['audit', 'Audit logs']] : []),
+    ...(admin ? [['label', 'Administration'], ['checklist', 'Health checklist'], ['users', 'Users'], ['expert-applications','Expert applications'], ['certificate-settings','Certificate signer'], ['species', 'Species and Sites'], ['badge-settings', 'Badge settings'], ['audit', 'Audit logs']] : []),
     ['label', 'Account'], ['profile', 'Profile settings']];
   $('#app').innerHTML = `<a class="skip-link" href="#content">Skip to content</a><div class="shell"><aside class="sidebar" id="site-menu" aria-label="Main menu"><button class="menu-close outline" aria-label="Close menu">Close menu ×</button><a class="brand" href="#dashboard">♣ ManGROOVES</a><nav aria-label="Main navigation">${links.map(([key, label]) => key === 'label' ? `<span class="nav-label">${label}</span>` : `<a class="${route === key ? 'active' : ''}" href="#${key}" ${route === key ? 'aria-current="page"' : ''}>${label}</a>`).join('')}</nav></aside><button class="menu-backdrop" hidden tabindex="-1" aria-label="Close menu"></button><div class="shell-main"><header class="topbar"><div><button class="mobile-menu outline" aria-label="Open menu" aria-controls="site-menu" aria-expanded="false">☰ Menu</button></div><div class="user"><a class="icon-button" href="#notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></a><span class="avatar">${esc(viewer.first_name?.[0] ?? viewer.full_name[0])}</span><div class="user-name"><strong>${esc(viewer.full_name)}</strong><small>${esc(roleLabel[viewer.role])}</small></div><button class="outline" id="signout">Sign out</button></div></header><main class="workspace" id="content" tabindex="-1"><p class="loading">Loading…</p></main></div></div>`;
   cleanupMenu = bindMenu($('.shell'));
@@ -105,11 +105,11 @@ async function reportPage(node, id) {
   const rows = {'Location': r.cluster_name ?? r.sitio_name, 'Barangay': r.barangay_name, 'Coordinates': `${r.latitude}, ${r.longitude}`, 'Living mangroves': r.observed_alive_count,
     'Health score': r.health_score == null ? 'Needs expert review' : `${r.health_score} / ${r.health_max_score}`, 'Species': r.final_species_name ?? r.suggested_species_name ?? 'Unassigned', 'Submitted': r.submitted_at};
   set(node, `${title(r.report_code)}<div class="actions">${pill(reportStatus(r))}${pill(r.final_health ?? r.suggested_health)}${r.status === 'verified' && r.expert_id == null ? '<small>Verified automatically</small>' : ''}</div><div class="row" style="margin-top:20px"><section class="card"><img id="report-photo" class="preview-photo" alt="Field photo"><p>${esc(r.guardian_remarks ?? '')}</p></section><section class="card"><dl class="summary">${Object.entries(rows).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v ?? '—')}</dd>`).join('')}</dl>${r.cluster_id ? `<p><a href="#cluster/${r.cluster_id}">Health history</a> · <a href="#cluster/${r.cluster_id}?tab=growth">Growth timeline</a></p>` : ''}</section></div>
-    <section class="card" style="margin-top:20px"><h2>Checklist answers</h2>${r.observations.map(c => `<p><strong>${esc(c.name)}</strong><br>${c.options.map(o => `${esc(o.label)}${c.score_group === 'health' ? ` (${o.points == null ? 'Not scored' : `${o.points}/2`})` : ''}`).join(', ')}</p>`).join('')}</section>
+    <section class="card report-checklist" style="margin-top:20px"><h2>Checklist answers</h2><div class="answer-grid">${r.observations.map(c => `<article class="checklist-answer"><h3>${esc(c.name)}</h3><ul>${c.options.map(o => `<li><span>${esc(o.label)}</span>${c.score_group === 'health' ? `<small class="answer-score">${o.points == null ? 'Not scored' : `${o.points} / 2`}</small>` : ''}</li>`).join('')}</ul></article>`).join('')}</div></section>
     ${r.expert_feedback ? `<section class="card"><h2>Expert feedback</h2><p>${esc(r.expert_feedback)}</p></section>` : ''}
     ${canReview && r.status === 'pending' ? '<section class="card" style="margin-top:20px" id="review-area"><p>Loading review choices…</p></section>' : ''}
     ${staff ? `<section class="card" style="margin-top:20px"><h2>Review history</h2>${r.verification_history.length ? r.verification_history.map(v => `<p><strong>${esc(displayLabel(v.action))} · ${esc(v.verifier_name)}</strong><br>${esc(v.previous_health ?? 'Unknown')} → ${esc(v.new_health ?? 'Unconfirmed')}<br><small>${esc(v.created_at)}</small>${v.comment ? `<br>${esc(v.comment)}` : ''}</p>`).join('') : '<p>No reviews yet.</p>'}</section>` : ''}`);
-  back(); if (r.photo_url) privatePhoto($('#report-photo'), r.photo_url);
+  back(); $('#report-photo').closest('.row').classList.add('report-overview'); if (r.photo_url) privatePhoto($('#report-photo'), r.photo_url);
   if (!canReview || r.status !== 'pending') return;
   const catalog = await api('species.php');
   if (!node.isConnected) return;
@@ -164,8 +164,7 @@ async function profilePage(node) {
 }
 async function badgesPage(node) {
   const {badges} = await api('badges.php');
-  set(node, `${title('Your badges', 'Every verified observation helps.')}<div class="row">${badges.map(b => `<article class="card"><h2>${esc(b.badge_name)}</h2><p>${esc(b.description)}</p><div class="growth-bar"><span style="width:${b.progress_percent}%"></span></div><small>${b.current_value} / ${b.target_value}</small>${b.earned ? `<p>${pill('Earned')}</p><button class="outline certificate" data-id="${b.id}">Download certificate</button> <button class="outline certificate-qr" data-id="${b.id}">Show QR</button>` : ''}</article>`).join('')}</div>`); back();
-  $$('.certificate-qr').forEach(button=>button.onclick=()=>certificateQr(button));
+  set(node, `${title('Your badges', 'Earn recognition through verified observations.')}<div class="badge-gallery">${badges.map(b => `<article class="card badge-card ${b.earned?'earned':'in-progress'}"><img class="badge-emblem" src="${esc(asset(b.image_path||'img/badges/first-report.svg'))}" alt="${esc(b.badge_name)} badge" width="104" height="104"><div><p class="eyebrow">${b.earned?'Earned':'In progress'}</p><h2>${esc(b.badge_name)}</h2><p>${esc(b.description)}</p><div class="growth-bar" role="progressbar" aria-label="${esc(b.badge_name)} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0,Math.min(100,Number(b.progress_percent)||0))}"><span style="width:${Math.max(0,Math.min(100,Number(b.progress_percent)||0))}%"></span></div><p class="muted">${b.earned?'Achievement unlocked':`${b.current_value} / ${b.target_value}`}</p>${b.earned ? `<button class="outline certificate" data-id="${b.id}">Download certificate</button><small>The verification QR is inside your certificate.</small>` : ''}</div></article>`).join('')||'<p class="empty">No badge milestones are available yet.</p>'}</div>`); back();
   $$('.certificate').forEach(b => b.onclick = async () => { try { await download('certificate.php', 'ManGROOVES-certificate.pdf', {badge_id: b.dataset.id}); } catch (e) { toast(friendly(e)); } });
 }
 async function historyPage(node, query) {
@@ -177,7 +176,7 @@ async function historyPage(node, query) {
   if (!data.items.length && (query.q || query.action)) node.querySelector('.empty').textContent='No reviews match. Try another search or clear the filters.';
 }
 function privacyPage() {
-  $('#app').innerHTML = `<header class="public-header"><a class="brand" href="#home">♣ ManGROOVES</a><a class="button outline" href="#home">Back to home</a></header><main class="privacy card"><h1>Privacy notice</h1><p>ManGROOVES records your name, email, barangay, optional phone number, and field reports. Reports include a photo, location, checklist answers, and visit notes.</p><p>Your information is stored using Supabase. Guardians see their own private reports. Authorized experts and administrators can review reports and manage the monitoring program. Verified cluster summaries help the community follow site health.</p><p>Device location is requested automatically when you open the location step. On desktop, if unavailable, GeoJS may use your public IP address to show an approximate area. Approximate areas are never saved as exact report pins. You can search or place a pin yourself. Personal photo metadata is removed before new photos are stored.</p><p>Your password is handled by Supabase Auth. Your email address cannot be changed through this app. Ask the program administrator about access, corrections, or account removal.</p><p>Expert applicants enter a work or professional ID code for admin review. Only administrators can view the code. Older ID photos remain private. Field reports should only contain mangrove photos. Address searches are sent to Photon; do not enter private home details. Certificate QR links allow anyone with the link to download the certificate for 10 minutes.</p></main>`;
+  $('#app').innerHTML = `<header class="public-header"><a class="brand" href="#home">♣ ManGROOVES</a><a class="button outline" href="#home">Back to home</a></header><main class="privacy card"><h1>Privacy notice</h1><p>ManGROOVES records your name, email, barangay, optional phone number, and field reports. Reports include a photo, location, checklist answers, and visit notes.</p><p>Your information is stored using Supabase. Guardians see their own private reports. Authorized experts and administrators can review reports and manage the monitoring program. Verified cluster summaries help the community follow site health.</p><p>Device location is requested automatically when you open the location step. On desktop, if unavailable, GeoJS may use your public IP address to show an approximate area. Approximate areas are never saved as exact report pins. You can search or place a pin yourself. Personal photo metadata is removed before new photos are stored.</p><p>Your password is handled by Supabase Auth. Your email address cannot be changed through this app. Ask the program administrator about access, corrections, or account removal.</p><p>Expert applicants enter a work or professional ID code for admin review. Only administrators can view the code. Older ID photos remain private. Field reports should only contain mangrove photos. Address searches are sent to Photon; do not enter private home details. The QR inside each certificate opens a public verification page showing the recipient, badge, and award date. It does not reveal contact details or private reports.</p></main>`;
 }
 async function route() {
   cleanup(); cleanupMenu(); cleanup = () => {}; cleanupMenu = () => {};
@@ -217,7 +216,7 @@ async function route() {
       case 'checklist': return await checklistPage(node);
       case 'expert-applications':return await expertApplicationsPage(node,query);
       case 'certificate-settings':return await certificateSettingsPage(node);
-      case 'users': case 'species': case 'badge-settings': case 'audit': return await adminPage(node, name, query);
+      case 'users': case 'species': case 'badge-settings': case 'audit': cleanup=(await adminPage(node, name, query))??(()=>{});return;
       default: set(node, '<h1>Page not found</h1><a href="#dashboard">Back to dashboard</a>');
     }
   } catch (error) {
@@ -292,7 +291,7 @@ export async function renderEmbedded(name, node, query, user) {
     case 'checklist': return checklistPage(node);
     case 'expert-applications': return expertApplicationsPage(node,query);
     case 'certificate-settings': return certificateSettingsPage(node);
-    case 'users': case 'species': case 'badge-settings': case 'audit': return adminPage(node,name,query);
+    case 'users': case 'species': case 'badge-settings': case 'audit': cleanup=(await adminPage(node,name,query))??(()=>{});return;
     default: throw new Error('Page not found.');
   }
 }

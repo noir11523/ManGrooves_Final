@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 final class CloudRouter
 {
-    private const READ = ['configuration.php', 'explore.php', 'me.php', 'dashboard.php', 'profile.php', 'report-form.php', 'reports.php', 'report.php', 'previous-reports.php', 'clusters.php', 'cluster.php', 'verification.php', 'validation-history.php', 'checklist.php', 'analytics.php', 'badges.php', 'certificate-settings.php', 'expert-applications.php', 'notifications.php', 'users.php', 'species.php', 'badge-settings.php', 'audit.php', 'places.php'];
-    private const WRITE = ['send-registration-code.php', 'register.php', 'verify-email.php', 'resend-code.php', 'forgot-password.php', 'reset-password.php', 'complete-registration.php', 'profile.php', 'report-preview.php', 'review.php', 'certificate-link.php', 'expert-applications.php', 'notifications.php', 'users.php', 'species.php', 'badge-settings.php'];
+    private const READ = ['configuration.php', 'explore.php', 'me.php', 'dashboard.php', 'profile.php', 'report-form.php', 'reports.php', 'report.php', 'previous-reports.php', 'clusters.php', 'cluster.php', 'verification.php', 'validation-history.php', 'checklist.php', 'analytics.php', 'badges.php', 'certificate-settings.php', 'expert-applications.php', 'notifications.php', 'users.php', 'species.php', 'sites.php', 'badge-settings.php', 'audit.php', 'places.php'];
+    private const WRITE = ['send-registration-code.php', 'register.php', 'verify-email.php', 'resend-code.php', 'forgot-password.php', 'reset-password.php', 'complete-registration.php', 'profile.php', 'report-preview.php', 'review.php', 'certificate-link.php', 'expert-applications.php', 'notifications.php', 'users.php', 'species.php', 'sites.php', 'badge-settings.php'];
     private const PUBLIC_API = ['configuration.php', 'explore.php', 'send-registration-code.php', 'register.php', 'verify-email.php', 'resend-code.php', 'forgot-password.php', 'reset-password.php', 'complete-registration.php'];
     public static function dispatch(): void
     {
@@ -30,6 +30,12 @@ final class CloudRouter
         if ($path === '/privacy.php') {
             render('cloud/privacy', ['pageTitle' => 'Privacy notice', 'layout' => 'public']); return;
         }
+        if ($path === '/certificate-verify.php') {
+            $certificate = null; $verificationError = '';
+            try { $result = CloudClient::api('certificate-verify.php', query: ['code' => scalar_string($_GET['code'] ?? '')], anonymous: true); $certificate = $result['certificate'] ?? null; }
+            catch (CloudError $error) { $verificationError = $error->getMessage(); http_response_code($error->status); }
+            render('cloud/certificate-verify', ['pageTitle' => 'Verify certificate', 'layout' => 'public', 'certificate' => $certificate, 'verificationError' => $verificationError]); return;
+        }
         $public = ['/login.php' => ['login', 'Sign in'], '/register.php' => ['register', 'Create account'], '/forgot-password.php' => ['forgot-password', 'Reset password'], '/privacy.php' => ['privacy', 'Privacy notice'], '/explore.php' => ['explore', 'Explore mangrove sites']];
         if (isset($public[$path])) {
             [$page, $title] = $public[$path];
@@ -46,7 +52,7 @@ final class CloudRouter
             '/admin/report.php' => ['report', 'Report details'], '/admin/analytics.php' => ['analytics', 'Analytics'],
             '/admin/cluster.php' => ['cluster', 'Site visits'], '/admin/validation-history.php' => ['history', 'Review history'],
             '/admin/checklist.php' => ['checklist', 'Health checklist'], '/admin/users.php' => ['users', 'Users'],
-            '/admin/species.php' => ['species', 'Species'], '/admin/badges.php' => ['badge-settings', 'Badge settings'],
+            '/admin/species.php' => ['species', 'Species and Sites'], '/admin/badges.php' => ['badge-settings', 'Badge settings'],
             '/admin/audit.php' => ['audit', 'Audit log'], '/admin/expert-applications.php' => ['expert-applications', 'Expert applications'],
             '/admin/certificate-settings.php' => ['certificate-settings', 'Certificate signer'],
         ];

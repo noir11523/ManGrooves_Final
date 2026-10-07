@@ -214,7 +214,7 @@ For rollback, the explicit `-Backend firebase` and `-Backend legacy` options rem
 - Healthy auto-verifies; Not Sure goes to review. An expert can correct health/species and see validation history.
 - A guardian sees their own private reports/analytics. Other guardians cannot fetch their photos. Experts/admins see authorized aggregate data.
 - Check address suggestions and manual pins, separate Health history/Growth timeline pages, notifications, checklist editing and admin PDF export. Reviewed reports must leave Needs attention.
-- Configure the certificate signer. Download a certificate and scan its QR from another device. The link lasts 10 minutes; the downloaded PDF has no QR.
+- Configure the certificate signer. Download a certificate and scan the QR inside the PDF from another device. Confirm that the public verification page matches the recipient and badge, without exposing contact details or private reports.
 - Confirm no secret key appears in `web/dist` or the Flutter configuration. Check Supabase usage and storage quotas.
 
 Local checks available:
@@ -283,7 +283,7 @@ The updated release APK is `mobile/flutter_app/dist/ManGROOVES-Supabase.apk`, ve
 - Report labels use `Report #123`. The old stored IDs remain available for migration/audit history. Needs attention means a pending report; saving a review removes that tag.
 - Address suggestions use Photon/OpenStreetMap through the API. Choosing an address places a manual pin; the normal site-boundary checks still apply. If search is unavailable, users can tap the map. The public Photon service has no uptime guarantee; `GEOCODING_URL` can point to a compatible HTTPS service later.
 - Administrators set the certificate signer name/title and may upload an authorized PNG/JPG signature in **Certificate signer** on either client. The server will not invent a signer. Until one is configured, certificate downloads explain what is missing.
-- Certificate QR codes are generated inside the application without a third-party QR website. A link grants access to that certificate for 10 minutes. The QR appears beside the download controls, never in the downloaded PDF.
+- Certificate PDFs contain a locally generated QR code inside the certificate. Scanning it opens a public verification page with the recipient, badge, award date, and certificate code. It does not expose contact details or reports. Existing temporary download links still expire after 10 minutes; printed verification codes do not expire with those links.
 - Expert IDs and report photos use private Storage. Only administrators can retrieve application ID images. Guardians cannot retrieve another user's report photos.
 
 ## Free plan limits

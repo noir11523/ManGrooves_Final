@@ -1,7 +1,7 @@
 // Runs the complete HTTP workflow against real local PostgreSQL (PGlite).
 // Auth and Storage are explicit test doubles; hosted-provider testing is separate.
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {Readable} from 'node:stream';
 import {randomUUID,createHash} from 'node:crypto';
 import {databaseFixture} from './database-fixture.js';
@@ -253,6 +253,48 @@ try {
   await request(`certificate.php?badge_id=${award.id}`,guardianSession,null,200,true);
   assert.ok((await request('badge-settings.php',admin)).badges.some(b=>b.earned_count>0));
   pass('QR sharing has an explicit expiry and badge lists show real earned counts');
+  const earnedRecord=(await db.collection('user_badges').doc(`${guardian.id}_${award.id}`).get()).data();
+  const verifiedAward=await request(`certificate-verify.php?code=${earnedRecord.certificate_code}`);
+  assert.equal(verifiedAward.certificate.valid,true);assert.equal(verifiedAward.certificate.recipient,guardian.full_name);
+  assert.deepEqual(Object.keys(verifiedAward.certificate).sort(),['badge_name','certificate_code','earned_at','issuer','recipient','valid']);
+  await request('certificate-verify.php?code=invalid',null,null,404);
+  await request(`certificate-verify.php?code=MG-${randomUUID()}`,null,null,404);
+  await mkdir(new URL('../../tmp/report-sites/',import.meta.url),{recursive:true});
+  await writeFile(new URL('../../tmp/report-sites/certificate.pdf',import.meta.url),certificateBytes);
+  await writeFile(new URL('../../tmp/report-sites/certificate-code.txt',import.meta.url),earnedRecord.certificate_code);
+  pass('embedded certificate QR verifies an earned award publicly after temporary download expiry without exposing private fields');
+  await request('sites.php',guardianSession,null,403);await request('sites.php',expert,{},403);
+  const siteInput={name:'Coastal nursery',sitio_name:'Nursery boardwalk',barangay_id:1,center_lat:10.2833,center_lng:123.8833,radius_meters:100};
+  await request('sites.php',admin,{...siteInput,center_lat:0,center_lng:0},422);
+  await request('sites.php',admin,{...siteInput,center_lat:''},422);
+  const createdSite=(await request('sites.php',admin,siteInput)).site;
+  assert.equal(createdSite.sitio_name,siteInput.sitio_name);
+  assert.ok((await request('report-form.php',guardianSession)).clusters.some(s=>s.id===createdSite.id));
+  await request('sites.php',admin,siteInput,409);
+  const archivedSite=(await request('sites.php',admin,{...createdSite,active:0})).site;
+  assert.equal(archivedSite.active,0);
+  assert.ok(!(await request('report-form.php',guardianSession)).clusters.some(s=>s.id===createdSite.id));
+  assert.ok((await request('sites.php',admin)).sites.some(s=>s.id===createdSite.id));
+  await request('sites.php',admin,{...createdSite,name:'Outdated edit'},409);
+  await request('sites.php',admin,{...archivedSite,active:1,name:'Restored nursery'});
+  assert.ok((await request('report-form.php',guardianSession)).clusters.some(s=>s.name==='Restored nursery'));
+  pass('site management enforces administrator access, valid pins, unique active names, concurrent edits and reversible archiving');
+  const historicalSite=(await request('sites.php',admin)).sites.find(s=>s.id===saved.report.cluster_id);
+  const historicalReport=await request(`report.php?id=${firstId}`,guardianSession);
+  await request('sites.php',admin,{...historicalSite,active:0});
+  assert.deepEqual((await request(`report.php?id=${firstId}`,guardianSession)).report,historicalReport.report);
+  const archivedSubmission=await submission(guardianSession,{cluster_id:historicalSite.id,checklist_versions:Object.fromEntries(currentCriteria.map(c=>[c.id,c.version]))});
+  await request('submit-report.php',guardianSession,archivedSubmission.body,422);
+  pass('archiving a site preserves historical report details and prevents new submissions to that archived site');
+  const legacyCode=`MG-LEGACY-${guardian.id}-${award.id}`;
+  await db.collection('user_badges').doc(`${guardian.id}_${award.id}`).update({certificate_code:legacyCode});
+  await request(`certificate-verify.php?code=${legacyCode}`,null,null,404);
+  await Promise.all([request(`certificate.php?badge_id=${award.id}`,guardianSession,null,200,true),request(`certificate.php?badge_id=${award.id}`,guardianSession,null,200,true)]);
+  const upgradedAward=(await db.collection('user_badges').doc(`${guardian.id}_${award.id}`).get()).data();
+  assert.equal(upgradedAward.legacy_certificate_code,legacyCode);assert.match(upgradedAward.certificate_code,/^MG-[0-9a-f-]{36}$/);
+  assert.equal((await request(`certificate-verify.php?code=${upgradedAward.certificate_code}`)).certificate.valid,true);
+  assert.equal(upgradedAward.earned_at,earnedRecord.earned_at);
+  pass('imported badge certificates receive a stable unguessable QR code on download without changing the earned award');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

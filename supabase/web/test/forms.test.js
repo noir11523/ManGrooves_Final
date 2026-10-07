@@ -27,9 +27,9 @@ const bundle = await build({stdin: {contents: 'export * from "./report-form.js";
     b.onResolve({filter: /^leaflet$/}, () => ({path: 'map', namespace: 'stub'}));
     b.onLoad({filter: /.*/, namespace: 'stub'}, ({path}) => ({contents: path === 'client'
       ? 'export const api = (...args) => globalThis.testApi(...args); export const login = (...args) => globalThis.testLogin(...args); export const friendly = e => e.message; export const apiUrl = p => p;'
-      : `const layer = () => ({addTo(){return this},setLatLng(){return this},setRadius(){return this},getBounds(){return []},remove(){}});
-         export default {map(){return globalThis.testMap={events:{},getCenter(){return {lat:10.29,lng:123.89}},setView(point){this.center=point;return this},fitBounds(){return this},remove(){},on(k,f){this.events[k]=f;return this}}},
-         tileLayer:layer,circle:layer,marker:layer,divIcon:o=>o};` }));
+      : `const layer = (point) => ({point,events:{},on(k,f){this.events[k]=f;return this},getLatLng(){return {lat:this.point[0],lng:this.point[1]}},addTo(){return this},setLatLng(p){this.point=p;return this},setRadius(){return this},getBounds(){return []},remove(){}});
+         export default {map(){return globalThis.testMap={events:{},distance(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1])*111000},getCenter(){return {lat:10.29,lng:123.89}},setView(point){this.center=point;return this},fitBounds(){return this},remove(){},on(k,f){this.events[k]=f;return this}}},
+         tileLayer:layer,circle:layer,marker:p=>(globalThis.testMarker=layer(p)),divIcon:o=>o};` }));
   }}]});
 const ui = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const $ = selector => document.querySelector(selector);
@@ -38,6 +38,65 @@ const change = element => element.dispatchEvent(new Event('change', {bubbles: tr
 const set = (name, value) => { const input = $(`[name=${name}]`); input.value = value; change(input); };
 const submit = () => { const form = $('#report-form'); return form.onsubmit({preventDefault() {}, submitter: $('#next')}); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };
+
+test('photo controls, automatic site follow-up, racing requests and cancellation preserve the intended draft',async()=>{
+ const clusters=[{id:10,name:'Coastal nursery',sitio_name:'Nursery boardwalk',center_lat:10.2833,center_lng:123.8833},{id:11,name:'Estuary',center_lat:10.28,center_lng:123.88}];
+ const traits=Object.fromEntries(['root_type','leaf_shape','bark_texture'].map(k=>[k,[reference.species[0][k]]]));
+ let resolveVisits,fail=false;
+ globalThis.testApi=async(path,{query}={})=>{
+  if(path==='report-form.php')return {criteria:reference.criteria,clusters,traits,location:{}};
+  if(path==='previous-reports.php') {
+   if(fail)throw new Error('Connection interrupted.');
+   if(query.cluster_id==='11')return new Promise(resolve=>{resolveVisits=resolve});
+   return {reports:[{id:9,report_code:'MG-9',health:'Healthy'}]};
+  }
+  return {places:[]};
+ };
+ ui.reportDraft.reset();let dispose=await ui.reportWizard($('#page'),{}, {id:'site-test'});
+ try {
+  assert.equal($('[name=photo]').hasAttribute('capture'),false);assert.equal($('#camera-photo').getAttribute('capture'),'environment');
+  let camera=0,gallery=0;$('#camera-photo').click=()=>camera++;$('[name=photo]').click=()=>gallery++;
+  $('#take-photo').click();$('#choose-photo').click();assert.equal(camera,1);assert.equal(gallery,1);
+  set('cluster_id','10');await tick();assert.equal($('[name=sitio_name]').value,'Nursery boardwalk');
+  assert.equal(ui.reportDraft.fields.latitude,10.2833);assert.equal(ui.reportDraft.followup,true);assert.equal($('[name=parent_report_id]').value,'9');
+  set('cluster_id','11');assert.equal($('#next').disabled,true);
+  set('cluster_id','');assert.equal($('#next').disabled,false);assert.equal($('#followup-options').hidden,true);
+  resolveVisits({reports:[{id:88,report_code:'Old reply'}]});await tick();assert.equal(ui.reportDraft.followup,false);assert.equal(ui.reportDraft.fields.parent_report_id,'');
+  fail=true;set('cluster_id','10');await tick();assert.equal($('#next').disabled,true);assert.match($('#followup-options').textContent,/Retry previous visits/);
+  fail=false;$('#followup-options button').click();await tick();assert.equal($('#next').disabled,false);assert.equal(ui.reportDraft.followup,true);
+  await ui.reportDraft.flush();const cancelling=$('.page-head a').onclick({preventDefault(){}});await tick();closeConfirm('confirm');await cancelling;
+  assert.equal(location.hash,'#reports');dispose();ui.reportDraft.reset();
+  dispose=await ui.reportWizard($('#page'),{}, {id:'site-test'});
+  assert.equal($('[name=sitio_name]').value,'');assert.equal(ui.reportDraft.photo,null);assert.equal(ui.reportDraft.followup,false);
+ }finally{dispose();ui.reportDraft.reset();clearTimeout(ui.toast.timer);}
+});
+
+test('dragged report pin refreshes the name, clears a distant site and ignores an older reverse lookup',async()=>{
+ let lookups=[];
+ globalThis.testApi=async path=>path==='report-form.php'?{criteria:[],clusters:[{id:10,center_lat:10.2833,center_lng:123.8833,radius_meters:100}],location:{}}:new Promise(resolve=>lookups.push(resolve));
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,followup:true,fields:{cluster_id:'10',parent_report_id:'9',sitio_name:'Old site',latitude:10.2833,longitude:123.8833,location_source:'manual'}});
+ const dispose=await ui.reportWizard($('#page'),{});
+ try {
+  globalThis.testMarker.setLatLng([10.29,123.89]);globalThis.testMarker.events.dragend();
+  assert.equal(ui.reportDraft.fields.cluster_id,'');assert.equal(ui.reportDraft.followup,false);assert.match(ui.reportDraft.fields.sitio_name,/Pinned location/);
+  globalThis.testMarker.setLatLng([10.30,123.90]);globalThis.testMarker.events.dragend();
+  lookups[1]({places:[{label:'New shoreline'}]});await tick();assert.equal(ui.reportDraft.fields.sitio_name,'New shoreline');
+  lookups[0]({places:[{label:'Older shoreline'}]});await tick();assert.equal(ui.reportDraft.fields.sitio_name,'New shoreline');
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('site catalog filters and saves through the admin editor without leaving Sites',async()=>{
+ const sites=[{id:10,name:'Coastal nursery',sitio_name:'Boardwalk',barangay_name:'Inayawan',barangay_id:1,center_lat:10.2833,center_lng:123.8833,radius_meters:100,active:1,version:'v1'},{id:11,name:'Old site',active:0,center_lat:10.28,center_lng:123.88}];let saved;
+ globalThis.testApi=async(path,{body}={})=>{assert.equal(path,'sites.php');if(body){saved=body;return {message:'Saved'};}return {sites,barangays:reference.barangays};};
+ const dispose=await ui.adminPage($('#page'),'species',{tab:'sites'});
+ try {
+  const filters=$('.list-filters');filters.querySelector('[name=active]').value='1';filters.dispatchEvent(new Event('submit',{cancelable:true}));
+  assert.equal(document.querySelectorAll('tbody tr:not([hidden])').length,1);
+  $('.edit-site').click();const dialog=$('#admin-editor');dialog.querySelector('[name=name]').value='Renamed nursery';
+  const form=dialog.querySelector('form');await form.onsubmit({preventDefault(){},target:form,submitter:form.querySelector('[type=submit]')});await tick();
+  assert.equal(saved.name,'Renamed nursery');assert.equal(saved.version,'v1');assert.ok($('#add-site'));assert.equal($('#add'),null);
+ }finally{dispose?.();clearTimeout(ui.toast.timer);}
+});
 
 test('location buttons support automatic capture, approximate fallback, retry and keyboard manual selection',async()=>{
   const originalFetch=globalThis.fetch;

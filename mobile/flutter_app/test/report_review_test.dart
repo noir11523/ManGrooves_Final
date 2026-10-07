@@ -58,6 +58,27 @@ class _AreaApi extends _Api {
   }
 }
 
+class _SiteApi extends _Api {
+  @override
+  Future<Map<String, dynamic>> reportForm() async => {
+    ...await super.reportForm(),
+    'clusters': [
+      {
+        'id': 1,
+        'name': 'Coastal nursery',
+        'sitio_name': 'Nursery boardwalk',
+        'center_lat': 10.2833,
+        'center_lng': 123.8833,
+        'radius_meters': 100,
+      },
+    ],
+  };
+  @override
+  Future<Map<String, dynamic>> previousReports(int clusterId) async => {
+    'reports': [],
+  };
+}
+
 class _Api extends ApiClient {
   bool failSubmit = false;
   int submissions = 0;
@@ -228,6 +249,48 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets(
+    'selected site fills the location and Cancel clears the saved report only after confirmation',
+    (tester) async {
+      final drafts = _Drafts();
+      int exits = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: _SiteApi(),
+              draftOwner: 'cancel-test',
+              draftStore: drafts,
+              initialClusterId: 1,
+              onSubmitted: () {},
+              onExit: () => exits++,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(field('Sitio or location name'))
+            .controller!
+            .text,
+        'Nursery boardwalk',
+      );
+      expect(find.text('Previous report'), findsNothing);
+      await tester.enterText(field('Living mangroves observed'), '12');
+      await tester.pumpAndSettle();
+      expect(drafts.saved, isNotEmpty);
+      await tap(tester, find.widgetWithText(TextButton, 'Cancel'));
+      await tap(tester, find.text('Keep editing'));
+      expect(drafts.saved, isNotEmpty);
+      expect(exits, 0);
+      await tap(tester, find.widgetWithText(TextButton, 'Cancel'));
+      await tap(tester, find.widgetWithText(FilledButton, 'Cancel report'));
+      expect(drafts.saved, isEmpty);
+      expect(exits, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'mobile skips IP fallback after denial and retry can recover device location',
     (tester) async {
@@ -408,7 +471,7 @@ void main() {
   );
 
   testWidgets(
-    'review keeps edits, hides unused follow-up and sends only after final confirmation',
+    'review keeps edits, selects the eligible follow-up and sends only after final confirmation',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(360, 800);
@@ -453,11 +516,8 @@ void main() {
         EnginePhase.sendSemanticsUpdate,
         const Duration(seconds: 35),
       );
-      expect(find.text('Previous report'), findsNothing);
-      await tap(tester, find.text('This is a follow-up'));
       expect(find.text('Previous report'), findsOneWidget);
-      await tap(tester, find.text('This is a follow-up'));
-      expect(find.text('Previous report'), findsNothing);
+      expect(find.text('This is a follow-up'), findsNothing);
       await tap(tester, find.text('Gallery'));
       await tester.enterText(field('Sitio or location name'), 'Seaside');
       await tester.enterText(field('Living mangroves observed'), '12');
@@ -584,7 +644,7 @@ void main() {
       expect(api.previews, greaterThan(0));
       expect(submitted, 1);
       expect(api.sent!['guardian_remarks'], 'Updated note');
-      expect(api.sent!.containsKey('parent_report_id'), false);
+      expect(api.sent!['parent_report_id'], '7');
       expect(find.text('Back to dashboard'), findsNothing);
       tester
           .state<SubmitReportScreenState>(find.byType(SubmitReportScreen))

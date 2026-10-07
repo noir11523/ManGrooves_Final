@@ -30,7 +30,7 @@ $navigation = $role === 'guardian'
 if ($role === 'system_admin') {
     $navigation = array_merge($navigation, [
         ['Users', 'admin/users.php', 'bi-people-fill'],
-        ['Species', 'admin/species.php', 'bi-tree-fill'],
+        ['Species and Sites', 'admin/species.php', 'bi-tree-fill'],
         ['Health checklist', 'admin/checklist.php', 'bi-list-check'],
         ['Manage badges', 'admin/badges.php', 'bi-award-fill'],
         ['Audit log', 'admin/audit.php', 'bi-shield-lock-fill'],

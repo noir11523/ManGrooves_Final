@@ -79,6 +79,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   bool _requestingPermission = false;
   bool _permissionAsked = false;
   bool _loadingParents = false;
+  bool _parentsFailed = false;
   bool _confirmed = false;
   Map<String, dynamic>? _preview;
   String? _previewError;
@@ -292,14 +293,28 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (!clusterExists) {
         _clusterId = null;
         _parentReportId = null;
+        _followup = false;
       }
       if (_clusterId != null) {
+        if (_location == null) {
+          final site = _clusters.firstWhere((s) => s['id'] == _clusterId);
+          final point = _coordinates(site);
+          if (point != null) {
+            _location = ReportLocation.manual(
+              latitude: point.latitude,
+              longitude: point.longitude,
+            );
+            _sitio.text = '${site['sitio_name'] ?? site['name'] ?? ''}';
+            _locationMessage =
+                'Site selected. Check the pin before continuing.';
+          }
+        }
         await _loadPreviousReports(
           _clusterId!,
           preferredParentId: _parentReportId,
         );
       }
-      _error = null;
+      if (!_parentsFailed) _error = null;
       if (mounted) unawaited(_tryAutoCapture());
       if (_step == 3) await _fetchPreview();
     } catch (error) {
@@ -316,7 +331,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     int? preferredParentId,
   }) async {
     final request = ++_parentRequest;
-    if (mounted) setState(() => _loadingParents = true);
+    if (mounted) {
+      setState(() {
+        _loadingParents = true;
+        _parentsFailed = false;
+      });
+    }
     try {
       final response = await widget.api.previousReports(clusterId);
       if (!mounted || request != _parentRequest || _clusterId != clusterId) {
@@ -328,8 +348,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _previousReports = reports;
       _parentReportId = reports.any((item) => item['id'] == preferredParentId)
           ? preferredParentId
-          : null;
-      _followup = _followup || _parentReportId != null;
+          : reports.isEmpty
+          ? null
+          : reports.first['id'] as int;
+      _followup = _parentReportId != null;
     } catch (error) {
       if (!mounted || request != _parentRequest || _clusterId != clusterId) {
         return;
@@ -337,18 +359,35 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _error = error is ApiException
           ? error.message
           : 'Unable to load follow-up reports.';
+      _parentsFailed = true;
     }
     if (mounted) setState(() => _loadingParents = false);
   }
 
   Future<void> _selectCluster(int? clusterId) async {
+    _cancelGps();
     _parentRequest++;
     setState(() {
       _followup = false;
       _loadingParents = false;
+      _parentsFailed = false;
       _clusterId = clusterId;
       _parentReportId = null;
       _previousReports = [];
+      for (final site in _clusters) {
+        if (site['id'] != clusterId) continue;
+        final point = _coordinates(site);
+        if (point != null) {
+          _location = ReportLocation.manual(
+            latitude: point.latitude,
+            longitude: point.longitude,
+          );
+          _sitio.text = '${site['sitio_name'] ?? site['name'] ?? ''}';
+          _selectedPlaceLabel = null;
+          _locationMessage = 'Site selected. Check the pin before continuing.';
+          _locationNeedsRetry = false;
+        }
+      }
     });
     if (clusterId != null) await _loadPreviousReports(clusterId);
     await _saveDraft();
@@ -661,14 +700,39 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
       return;
     }
+    if (identical(location, _location)) {
+      setState(() => _locationMessage = 'Your selected pin is saved.');
+      return;
+    }
     setState(() {
       _location = location;
       _locationNeedsRetry = false;
       _locationMessage = 'Pin placed. Check the spot before continuing.';
       _selectedPlaceLabel = null;
       _error = null;
+      if (location.name != null) {
+        _sitio.text = location.name!;
+      } else {
+        _sitio.text =
+            'Pinned location (${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)})';
+      }
+      for (final site in _clusters) {
+        if (site['id'] != _clusterId) continue;
+        final center = _coordinates(site);
+        if (center != null &&
+            const Distance().as(LengthUnit.Meter, center, location.point) >
+                ((site['radius_meters'] as num?)?.toDouble() ?? 75)) {
+          _clusterId = null;
+          _parentReportId = null;
+          _previousReports = [];
+          _followup = false;
+          _parentRequest++;
+        }
+      }
     });
-    await _fillNearbyAddress(location);
+    if (location.name == null) {
+      await _fillNearbyAddress(location, replace: true);
+    }
     await _saveDraft();
   }
 
@@ -706,10 +770,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     });
   }
 
-  Future<void> _fillNearbyAddress(ReportLocation point) async {
-    if (!widget.api.supportsCloudAccounts || _sitio.text.trim().isNotEmpty) {
+  Future<void> _fillNearbyAddress(
+    ReportLocation point, {
+    bool replace = false,
+  }) async {
+    if (!widget.api.supportsCloudAccounts ||
+        (!replace && _sitio.text.trim().isNotEmpty)) {
       return;
     }
+    final requestedName = _sitio.text;
     try {
       final result = await widget.api.cloudRequest(
         'places.php',
@@ -718,7 +787,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           'longitude': '${point.longitude}',
         },
       );
-      if (!mounted || _location != point || _sitio.text.trim().isNotEmpty) {
+      if (!mounted || _location != point || _sitio.text != requestedName) {
         return;
       }
       final places = result['places'] as List? ?? [];
@@ -808,6 +877,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   void _nextFromSite() {
+    if (_parentsFailed) {
+      setState(() => _error = 'Retry previous visits before continuing.');
+      return;
+    }
+    if (_loadingParents) {
+      setState(() => _error = 'Checking your previous visits. Please wait.');
+      return;
+    }
     if (_followup && _parentReportId == null) {
       setState(() => _error = 'Choose the previous report.');
       return;
@@ -981,6 +1058,53 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
   }
 
+  Future<void> _cancelReport() async {
+    if (_busy) return;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel report?'),
+        content: const Text('This clears the saved draft and selected photo.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep editing'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel report'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    setState(() => _busy = true);
+    _clearingDraft = true;
+    _cancelGps();
+    try {
+      await _draftStore.flush();
+      if (_draftScope != null) await _draftStore.clear(_draftScope!);
+      if (!mounted) return;
+      setState(() {
+        _reset();
+        _lastDraft = null;
+        _draftStatus.value = '';
+        _locationMessage = null;
+        _locationNeedsRetry = false;
+        _areaCenter = null;
+        _areaAccuracy = null;
+      });
+      widget.onExit?.call();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not clear the saved draft. Try again.');
+      }
+    } finally {
+      _clearingDraft = false;
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   void _reset() {
     _placeTimer?.cancel();
     _placeRequest++;
@@ -1001,6 +1125,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     _followup = false;
     _parentRequest++;
     _loadingParents = false;
+    _parentsFailed = false;
     _clusterId = null;
     _parentReportId = null;
     _rootType = null;
@@ -1056,10 +1181,22 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _parentReportId == null ? 'New report' : 'Follow-up report',
-                  style: Theme.of(context).textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _parentReportId == null
+                            ? 'New report'
+                            : 'Follow-up report',
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _busy ? null : _cancelReport,
+                      child: const Text('Cancel'),
+                    ),
+                  ],
                 ),
                 const Text('Add details, review, then submit.'),
                 if (_draftScope != null)
@@ -1278,18 +1415,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               onChanged: _selectCluster,
             ),
             if (_loadingParents) const LinearProgressIndicator(),
+            if (_parentsFailed && _clusterId != null)
+              TextButton(
+                onPressed: () => _loadPreviousReports(_clusterId!),
+                child: const Text('Retry previous visits'),
+              ),
             if (_previousReports.isNotEmpty)
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('This is a follow-up'),
-                value: _followup,
-                onChanged: (value) {
-                  setState(() {
-                    _followup = value;
-                    if (!value) _parentReportId = null;
-                  });
-                  _draftEdited();
-                },
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'Follow-up visit · Your previous verified visit is selected.',
+                ),
               ),
             if (_followup) ...[
               const SizedBox(height: 12),

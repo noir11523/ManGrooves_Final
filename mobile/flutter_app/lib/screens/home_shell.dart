@@ -235,9 +235,16 @@ class _HomeShellState extends State<HomeShell> {
             ),
             if (_guardian)
               const NavigationDestination(
-                icon: Icon(Icons.add_a_photo_outlined),
-                selectedIcon: Icon(Icons.add_a_photo),
-                label: 'Submit Report',
+                icon: Icon(
+                  Icons.add_a_photo_outlined,
+                  semanticLabel: 'Submit report',
+                ),
+                selectedIcon: Icon(
+                  Icons.add_a_photo,
+                  semanticLabel: 'Submit report',
+                ),
+                label: '',
+                tooltip: 'Submit report',
               ),
             if (_guardian)
               const NavigationDestination(

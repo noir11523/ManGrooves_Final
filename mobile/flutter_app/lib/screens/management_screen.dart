@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../shared/list_filters.dart';
+import 'sites_screen.dart';
 
 class ManagementScreen extends StatefulWidget {
   const ManagementScreen({super.key, required this.api, required this.page});
@@ -34,7 +35,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
   String get _title => _users
       ? 'Users'
       : _species
-      ? 'Species'
+      ? 'Species and Sites'
       : 'Manage badges';
   @override
   void initState() {
@@ -401,7 +402,34 @@ class _ManagementScreenState extends State<ManagementScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(_title)),
+    appBar: AppBar(
+      title: Text(_title),
+      bottom: _species
+          ? PreferredSize(
+              preferredSize: const Size.fromHeight(52),
+              child: Row(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      'Species',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => SitesScreen(api: widget.api),
+                      ),
+                    ),
+                    child: const Text('Sites'),
+                  ),
+                ],
+              ),
+            )
+          : null,
+    ),
     body: RefreshIndicator(
       onRefresh: _load,
       child: ListView(

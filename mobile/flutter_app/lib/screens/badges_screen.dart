@@ -92,6 +92,69 @@ class _BadgesScreenState extends State<BadgesScreen> {
   }
 }
 
+class _BadgeEmblem extends CustomPainter {
+  const _BadgeEmblem(this.code, this.earned);
+  final String code;
+  final bool earned;
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / 100, size.height / 116);
+    final color = code.contains('gold')
+        ? const Color(0xFFB88B24)
+        : code.contains('silver')
+        ? const Color(0xFF647785)
+        : code.contains('bronze')
+        ? const Color(0xFF9B5E35)
+        : code.contains('species')
+        ? const Color(0xFF53382F)
+        : const Color(0xFF2D5A27);
+    final paint = Paint()..color = const Color(0xFF53382F);
+    canvas.drawPath(
+      Path()
+        ..moveTo(28, 3)
+        ..lineTo(50, 19)
+        ..lineTo(72, 3)
+        ..lineTo(81, 41)
+        ..lineTo(19, 41)
+        ..close(),
+      paint,
+    );
+    paint.color = const Color(0xFFD8C8AC);
+    canvas.drawCircle(const Offset(50, 63), 46, paint);
+    paint.color = const Color(0xFFF7F4EC);
+    canvas.drawCircle(const Offset(50, 63), 42, paint);
+    paint.color = earned ? color : color.withValues(alpha: .45);
+    canvas.drawCircle(const Offset(50, 63), 36, paint);
+    paint
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.4
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(
+      Path()
+        ..moveTo(50, 38)
+        ..lineTo(50, 81)
+        ..moveTo(50, 52)
+        ..quadraticBezierTo(38, 43, 30, 48)
+        ..moveTo(50, 63)
+        ..quadraticBezierTo(62, 54, 70, 59)
+        ..moveTo(50, 81)
+        ..lineTo(36, 94)
+        ..moveTo(50, 81)
+        ..lineTo(64, 94)
+        ..moveTo(50, 81)
+        ..lineTo(50, 97),
+      paint,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _BadgeEmblem old) =>
+      old.code != code || old.earned != earned;
+}
+
 class _Metric extends StatelessWidget {
   const _Metric(this.label, this.value);
   final String label;
@@ -126,14 +189,11 @@ class _BadgeCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: earned
-                    ? Colors.amber.shade100
-                    : Colors.grey.shade200,
-                child: Icon(
-                  earned ? Icons.workspace_premium : Icons.lock_outline,
-                  color: earned ? Colors.amber.shade900 : Colors.grey.shade600,
+              Semantics(
+                label: '${badge['badge_name']} badge',
+                child: CustomPaint(
+                  size: const Size(76, 88),
+                  painter: _BadgeEmblem('${badge['code'] ?? ''}', earned),
                 ),
               ),
               const SizedBox(width: 14),

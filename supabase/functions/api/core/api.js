@@ -7,9 +7,10 @@ import { filterRows } from './list-query.js';
 import { displayHealth, reportLabel, newest, reportList, verifiedNeedsAttention } from './analytics.js';
 import { readInput, sendImage } from './uploads.js';
 import {searchPlaces} from './places.js';
-import {certificateSettings,getCertificate,certificatePdf,shareCertificate,sharedCertificate} from './certificates.js';
+import {certificateSettings,getCertificate,certificatePdf,shareCertificate,sharedCertificate,verifyCertificate} from './certificates.js';
 import {emailAddress,emailCode,completeRegistration,expertApplications} from './registration.js';
 import {createStaff} from './staff.js';
+import {manageSites} from './sites.js';
 
 export function createApi({db, auth, bucket, projectId}) {
   const service = new Service(db, auth, bucket), app = express();
@@ -39,6 +40,10 @@ export function createApi({db, auth, bucket, projectId}) {
       const route = path(req);
       const migration = await service.get('meta', 'migration');
       if (migration?.status === 'running') throw new AppError('Data migration is in progress. Please try again shortly.', 503);
+      if(route==='certificate-verify.php'&&req.method==='GET') {
+        await service.limited(`certificate-verify:${req.ip}`,60);
+        return send(res,await verifyCertificate(service,req.query.code));
+      }
       if(route==='certificate-download.php'&&req.method==='GET') {
         await service.limited(`certificate-download:${req.ip}`,60);
         const bytes=await certificatePdf(service,await sharedCertificate(service,req.query.token));
@@ -203,6 +208,7 @@ export function createApi({db, auth, bucket, projectId}) {
           for (const r of analytics.high_risk) pdf.fontSize(11).text(`${r.report_code} - ${r.cluster_name ?? 'Unassigned'} - ${r.final_health}`);
           await pdf.end(); return;
         }
+        case 'sites.php': if(!get)only('POST');return send(res,await manageSites(service,user,post?req.body??{}:null));
         case 'badges.php': only('GET'); return send(res, await service.badges(user));
         case 'certificate.php': {
           only('GET');const bytes=await certificatePdf(service,await getCertificate(service,user,req.query));

@@ -89,6 +89,17 @@ export async function reportWizard(node, query, user = null) {
     node.innerHTML = `<div class="page-head"><div><p class="eyebrow">Mangrove report</p><h1>Submit Report</h1></div><a class="button outline" href="#reports">Close</a></div><div class="steps" aria-label="Report steps">${['Details', 'Location', 'Checklist', 'Review'].map((label, i) => `<span class="${draft.step === i ? 'active' : ''}" ${draft.step === i ? 'aria-current="step"' : ''}>${i + 1}. ${label}</span>`).join('')}</div><section class="card"><form id="report-form">${errorBox}<div id="step-body"></div><div class="actions"><button type="button" id="previous" class="outline" ${draft.step ? '' : 'hidden'}>${draft.step ? '← Back' : 'Cancel'}</button><button id="next" type="submit">${draft.step === 3 ? 'Submit Report' : 'Continue →'}</button></div></form></section>`;
     node.querySelector('.steps').insertAdjacentHTML('afterend', '<p id="draft-notice" class="notice" role="status" hidden></p>');
     status();
+    const cancelButton=node.querySelector('.page-head a');let handlingForm=false,cancelling=false;
+    cancelButton.textContent='Cancel';
+    cancelButton.onclick=async event=>{
+      event.preventDefault();
+      if(handlingForm||cancelling)return;
+      if(draft.dirty&&!await confirm('Cancel report?','This clears the saved draft and selected photo.'))return;
+      cancelling=true;
+      try{await flush();await storage.clear();draft.reset();dispose();location.hash='reports';}
+      catch(error){toast(friendly(error));}
+      finally{cancelling=false;}
+    };
     $('#previous').onclick = () => { save($('#report-form')); if (draft.step) { draft.step--; render().catch(e => toast(friendly(e))); } else location.hash = 'reports'; };
     if (draft.step === 0) await details();
     if (draft.step === 1) locationStep();
@@ -98,9 +109,9 @@ export async function reportWizard(node, query, user = null) {
     form.addEventListener('change', changed);
     form.addEventListener('input', changed);
     form.onsubmit = async event => {
-      event.preventDefault(); const button = $('#next'); if (button.disabled) return;
+      event.preventDefault(); const button = $('#next'); if (button.disabled||cancelling) return;
       const error = form.querySelector('.error'); error.textContent = ''; save(form);
-      button.disabled = true;
+      button.disabled = true;handlingForm=true;
       try {
         if (draft.step === 0 && !draft.photo) throw new Error('Add a photo from this visit.');
         if (draft.step === 0 && $('#followup').checked && !draft.fields.parent_report_id) throw new Error('Choose the previous report for this follow-up.');
@@ -121,13 +132,13 @@ export async function reportWizard(node, query, user = null) {
         const result = await api('submit-report.php', {body});
         draft.reset(); await storage.clear(); toast(result.message); location.hash = `report/${result.report.report_id ?? result.report.id}`;
       } catch (e) { if (node.isConnected) showError(error, friendly(e)); }
-      finally { button.disabled = false; }
+      finally { button.disabled = false;handlingForm=false; }
     };
   }
   async function details() {
-    $('#step-body').innerHTML = `<h2>What did you observe?</h2><label class="field"><span>Field photo</span><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" capture="environment" ${draft.photo ? '' : 'required'}><small>JPG, PNG, or WebP · Up to 5 MB</small></label><img id="photo-preview" class="preview-photo" alt="Your selected photo" ${draft.photo ? '' : 'hidden'}>
+    $('#step-body').innerHTML = `<h2>What did you observe?</h2><div class="field report-photo-picker"><span>Field photo</span><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden><input type="file" id="camera-photo" accept="image/*" capture="environment" hidden><div class="actions"><button type="button" class="outline" id="take-photo">Camera</button><button type="button" class="outline" id="choose-photo">Gallery</button></div><small>JPG, PNG, or WebP · Up to 5 MB</small></div><img id="photo-preview" class="preview-photo" alt="Your selected photo" ${draft.photo ? '' : 'hidden'}>
       <div class="row">${select('cluster_id', 'Site', [['', 'New site'], ...data.clusters.map(c => [c.id, c.name])], draft.fields.cluster_id)}${field('sitio_name', 'Location name', draft.fields.sitio_name, 'text', 'required maxlength="120" placeholder="Sitio or nearby landmark"')}</div>
-      <label class="check"><input type="checkbox" id="followup" name="followup" ${draft.fields.parent_report_id ? 'checked' : ''}><span>This is a follow-up visit</span></label><div id="followup-options" ${draft.fields.parent_report_id ? '' : 'hidden'}></div>
+      <input type="checkbox" id="followup" name="followup" hidden ${draft.fields.parent_report_id ? 'checked' : ''}><div id="followup-options" ${draft.fields.parent_report_id ? '' : 'hidden'}></div>
       <div class="row" style="margin-top:20px">${field('observed_alive_count', 'Living mangroves counted', draft.fields.observed_alive_count, 'number', 'required min="0" max="1000000" step="1"')}${select('root_type', 'Root type', [['', 'Choose root type'], ...data.traits.root_type.map(v => [v, v])], draft.fields.root_type, 'required')}${select('leaf_shape', 'Leaf shape', [['', 'Choose leaf shape'], ...data.traits.leaf_shape.map(v => [v, v])], draft.fields.leaf_shape, 'required')}${select('bark_texture', 'Bark texture', [['', 'Choose bark texture'], ...data.traits.bark_texture.map(v => [v, v])], draft.fields.bark_texture, 'required')}</div>
       <label class="field"><span>Notes (optional)</span><textarea name="guardian_remarks" maxlength="5000">${esc(draft.fields.guardian_remarks)}</textarea></label>`;
     const showPhoto = () => {
@@ -168,28 +179,63 @@ export async function reportWizard(node, query, user = null) {
       if (event.key === 'ArrowDown' && results.firstElementChild) { event.preventDefault(); results.firstElementChild.focus(); }
       if (event.key === 'Escape') { ++searchGeneration; clearTimeout(searchTimer); results.replaceChildren(); hint.textContent=''; }
     };
-    $('[name=photo]').onchange = event => {
+    $('#take-photo').onclick=()=>$('#camera-photo').click();
+    $('#choose-photo').onclick=()=>$('[name=photo]').click();
+    const photoSelected = event => {
       const photo = event.target.files[0]; if (!photo) return;
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(photo.type) || photo.size > 5 * 1024 * 1024) { event.target.value = ''; toast('Choose a JPG, PNG, or WebP photo under 5 MB.'); return; }
       draft.photo = photo; changed(); showPhoto();
     };
+    $('[name=photo]').onchange=photoSelected;$('#camera-photo').onchange=photoSelected;
     let generation = 0;
     const followups = async () => {
       const current = ++generation, target = $('#followup-options');
-      const enabled = $('#followup').checked, cluster = $('[name=cluster_id]').value;
-      target.hidden = !enabled;
-      if (!enabled) { target.innerHTML = ''; draft.fields.parent_report_id = ''; return; }
-      if (!cluster) { target.innerHTML = '<p class="notice">Choose an existing site above.</p>'; return; }
+      const cluster = $('[name=cluster_id]').value;
+      const preferred=draft.fields.parent_report_id,next=$('#next');
+      draft.fields.parent_report_id='';draft.followup=false;$('#followup').checked=false;
+      target.hidden = true;target.innerHTML='';
+      next.disabled=false;
+      if (!cluster) { changed();return; }
       target.innerHTML = '<p class="muted">Loading your previous visits…</p>';
-      const {reports} = await api('previous-reports.php', {query: {cluster_id: cluster}});
+      target.hidden=false;next.disabled=true;
+      let reports;
+      try { ({reports}=await api('previous-reports.php', {query: {cluster_id: cluster}})); }
+      catch(error) {
+        if(current!==generation||!target.isConnected)return;
+        target.innerHTML=`<p class="error" role="alert">${esc(friendly(error))}</p><button type="button" class="outline">Retry previous visits</button>`;
+        target.querySelector('button').onclick=followups;
+        return;
+      }
       if (current !== generation || !target.isConnected) return;
-      target.innerHTML = select('parent_report_id', 'Previous visit', [['', 'Choose your previous report'], ...reports.map(r => [r.id, `${r.report_code} · ${r.health}`])], draft.fields.parent_report_id, 'required');
-      if (!reports.length) target.insertAdjacentHTML('beforeend', '<p class="muted">No visits are available for a follow-up at this site.</p>');
+      next.disabled=false;
+      draft.followup=reports.length>0;$('#followup').checked=draft.followup;
+      draft.fields.parent_report_id=reports.some(r=>String(r.id)===String(preferred))?preferred:reports[0]?.id??'';
+      target.hidden=!draft.followup;
+      target.innerHTML=draft.followup?`<p class="notice">Follow-up visit · You have a verified report at this site.</p>${select('parent_report_id','Previous visit',reports.map(r=>[r.id,`${r.report_code} · ${r.health}`]),draft.fields.parent_report_id,'required')}`:'';
+      changed();
     };
     $('#followup').checked = draft.followup || Boolean(draft.fields.parent_report_id);
     $('#followup').onchange = () => followups().catch(e => toast(friendly(e)));
-    $('[name=cluster_id]').onchange = () => { draft.fields.parent_report_id = ''; followups().catch(e => toast(friendly(e))); };
-    if ($('#followup').checked) await followups();
+    $('[name=cluster_id]').onchange = () => {
+      draft.fields.parent_report_id='';
+      const site=data.clusters.find(c=>String(c.id)===$('[name=cluster_id]').value);
+      if(site){
+        stopGps();searchGeneration++;clearTimeout(searchTimer);results.replaceChildren();
+        placeInput.value=String(site.sitio_name||site.name).slice(0,120);
+        Object.assign(draft.fields,{sitio_name:placeInput.value,latitude:site.center_lat,longitude:site.center_lng,location_source:'manual',location_accuracy:'',location_selection:'site',selected_place_label:placeInput.value});
+        changed();
+      }
+      followups().catch(e=>toast(friendly(e)));
+    };
+    if (draft.fields.cluster_id) {
+      const site=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
+      if(!site){$('[name=cluster_id]').value='';draft.fields.cluster_id='';}
+      else if(!draft.fields.location_source){
+        placeInput.value=String(site.sitio_name||site.name).slice(0,120);
+        Object.assign(draft.fields,{sitio_name:placeInput.value,latitude:site.center_lat,longitude:site.center_lng,location_source:'manual',location_accuracy:'',location_selection:'site',selected_place_label:placeInput.value});
+      }
+      await followups();
+    }
   }
   function locationStep() {
     $('#step-body').innerHTML = `<h2>Where is the mangrove?</h2><p id="location-status" class="muted" role="status">${draft.fields.location_source ? 'Your selected pin is saved.' : 'Finding your location… Allow access if asked.'}</p><label class="field"><span>Find an address or landmark</span><input id="place-search" type="search" autocomplete="off" placeholder="Type a place name"><small>Choose a result, then check the pin.</small></label><div id="place-results" class="list" role="status"></div><div id="location-map" class="map large"></div><details><summary>Location details</summary><div class="row">${field('latitude', 'Latitude', draft.fields.latitude ?? '', 'number', 'required min="-90" max="90" step="any" readonly')}${field('longitude', 'Longitude', draft.fields.longitude ?? '', 'number', 'required min="-180" max="180" step="any" readonly')}</div><p class="muted">Location is detected automatically. The circle shows estimated accuracy. An approximate area needs an exact pin.</p></details>`;
@@ -225,25 +271,37 @@ export async function reportWizard(node, query, user = null) {
     let addressGeneration = 0, lastAddressAt = 0;
     async function address(lat, lng) {
       const generation = ++addressGeneration;
+      const requestedName=draft.fields.sitio_name;
       try {
         const result = await api('places.php', {query: {latitude: lat, longitude: lng}});
       if (stopped || draft.step !== 1 || canvas !== currentCanvas || generation !== addressGeneration || Math.abs(Number(draft.fields.latitude) - Number(lat)) > 0.0000001 || Math.abs(Number(draft.fields.longitude) - Number(lng)) > 0.0000001) return;
         const label = result.places?.[0]?.label;
         if (!label) return;
         $('#place-search').placeholder = label;
-        if (!draft.fields.sitio_name) { draft.fields.sitio_name = label.slice(0,120); locationInput.value = draft.fields.sitio_name; void persist(); }
+        if (draft.fields.sitio_name===requestedName) { draft.fields.sitio_name = label.slice(0,120); locationInput.value = draft.fields.sitio_name; void persist(); }
         $('#nearby-address').textContent = `Nearby address: ${label}. Check the map pin.`;
       } catch { /* A missing street label never changes the chosen coordinates. */ }
     }
     $('#location-status').insertAdjacentHTML('afterend', '<small id="nearby-address" class="muted"></small>');
     function choose(lat, lng, source, accuracy, restoring = false) {
       if (source === 'manual' && accuracyCircle) { accuracyCircle.remove(); accuracyCircle = null; }
-      if (!marker) marker = L.marker([lat, lng], {icon: L.divIcon({html: '<span style="display:block;background:#245b2b;border:3px solid white;border-radius:50%;width:22px;height:22px;box-shadow:0 1px 5px #0008"></span>', className: '', iconSize: [22, 22], iconAnchor: [11, 11]})}).addTo(canvas);
+      if (!marker) {
+        marker = L.marker([lat, lng], {draggable:true,icon: L.divIcon({html: '<span style="display:block;background:#245b2b;border:3px solid white;border-radius:50%;width:22px;height:22px;box-shadow:0 1px 5px #0008"></span>', className: '', iconSize: [22, 22], iconAnchor: [11, 11]})}).addTo(canvas);
+        marker.on('dragend',()=>{const point=marker.getLatLng();stopGps();choose(point.lat,point.lng,'manual',null);$('#location-status').textContent='Pin moved. Check the location name below.';});
+      }
       else marker.setLatLng([lat, lng]);
       draft.fields = {...draft.fields, latitude: lat, longitude: lng, location_source: source, location_accuracy: accuracy ?? ''};
       if (!restoring) { draft.fields.location_selection = source; draft.fields.selected_place_label = ''; }
       $('[name=latitude]').value = Number(lat).toFixed(7); $('[name=longitude]').value = Number(lng).toFixed(7);
       if (!restoring) {
+        if(source==='manual'){
+          draft.fields.sitio_name=`Pinned location (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)})`;
+          locationInput.value=draft.fields.sitio_name;
+          const site=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
+          if(site&&canvas.distance([lat,lng],[site.center_lat,site.center_lng])>Number(site.radius_meters||75)){
+            Object.assign(draft.fields,{cluster_id:'',parent_report_id:''});draft.followup=false;
+          }
+        }
         changed();
         if (source === 'manual' || Date.now() - lastAddressAt > 15000) { lastAddressAt = Date.now(); void address(lat, lng); }
       }
@@ -258,8 +316,8 @@ export async function reportWizard(node, query, user = null) {
         target.querySelectorAll('button').forEach(button=>button.onclick=()=>{
           const p=places[Number(button.dataset.index)];
           ++searchGeneration;clearTimeout(searchTimer);stopGps();
-          draft.fields.sitio_name=p.label.slice(0,120);
           choose(p.latitude,p.longitude,'manual',null);
+          draft.fields.sitio_name=p.label.slice(0,120);
           Object.assign(draft.fields,{location_selection:'search',selected_place_label:draft.fields.sitio_name});
           void persist();canvas.setView([p.latitude,p.longitude],18);target.innerHTML='';
           locationInput.value=draft.fields.sitio_name;$('#location-status').textContent='Check your pin below.';

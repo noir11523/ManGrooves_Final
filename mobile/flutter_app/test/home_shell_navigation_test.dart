@@ -166,7 +166,9 @@ void main() {
           await tester.tap(
             find.descendant(
               of: find.byType(NavigationBar),
-              matching: find.text(label),
+              matching: label == 'Submit Report'
+                  ? find.byTooltip('Submit report')
+                  : find.text(label),
             ),
           );
           await tester.pumpAndSettle();

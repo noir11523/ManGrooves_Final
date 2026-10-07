@@ -117,7 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             widget.api.supportsCloudAccounts) ...[
           for (final entry in const {
             'users': 'Users',
-            'species': 'Species',
+            'species': 'Species and Sites',
             'badge-settings': 'Manage badges',
           }.entries)
             ListTile(
