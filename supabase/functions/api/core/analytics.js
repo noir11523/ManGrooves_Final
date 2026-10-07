@@ -2,7 +2,7 @@ import { AppError, paginate, manilaDate } from './domain.js';
 
 export const newest = (a, b) => String(b.submitted_at ?? b.created_at).localeCompare(String(a.submitted_at ?? a.created_at)) || b.id - a.id;
 export const needsReview = r => r.status === 'pending';
-export const reportLabel = r => `Report #${r.report_id ?? r.id}`;
+export const reportLabel = r => r.report_number ? `Report #${r.report_number}` : (r.report_code?.startsWith('Report #') ? r.report_code : `Report #${r.report_id ?? r.id}`);
 export const displayHealth = r => r.final_health ?? r.suggested_health ?? 'Unknown';
 export const verifiedNeedsAttention = r => r.status === 'verified' && ['Stressed', 'At Risk', 'Unknown'].includes(displayHealth(r));
 export function reportList(rows, query = {}) {

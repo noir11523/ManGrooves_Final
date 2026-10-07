@@ -18,7 +18,7 @@ export async function readInput(req) {
         stream.on('limit', fail);
         stream.on('data', chunk => {
           totalBytes += chunk.length;
-          if (totalBytes > 8 * 1024 * 1024) fail();
+          if (totalBytes > 12 * 1024 * 1024) fail();
           if (!failed) chunks.push(chunk);
         });
         stream.on('end', () => { files[name] = Buffer.concat(chunks); done(); });
@@ -30,7 +30,7 @@ export async function readInput(req) {
     parser.on('close', async () => {
       try {
         await Promise.all(pending);
-        if (totalBytes > 8 * 1024 * 1024) throw new AppError('Keep each save under 8 MB. Save photos in smaller batches.');
+        if (totalBytes > 12 * 1024 * 1024) throw new AppError('Keep each save under 12 MB. Save photos in smaller batches.');
         if (failed) throw new AppError('Use photos under 5 MB and no more than 30 choice photos.');
         const input = fields.payload ? JSON.parse(fields.payload) : {...fields};
         if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('Invalid form data.');

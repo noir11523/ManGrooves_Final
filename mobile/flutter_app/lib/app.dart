@@ -17,6 +17,12 @@ class ManGroovesApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(fontSize: 16, height: 1.45),
+          bodyLarge: TextStyle(fontSize: 17, height: 1.45),
+          titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          labelLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
         colorScheme: ColorScheme.fromSeed(
           seedColor: forest,
           primary: forest,

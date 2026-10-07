@@ -115,7 +115,7 @@ class _Api extends ApiClient {
       },
       {
         'id': 2,
-        'report_code': 'MG-2',
+        'report_code': 'Report #7',
         'submitted_at': '2026-09-20',
         'health': 'Healthy',
         'observed_alive_count': 12,
@@ -225,7 +225,7 @@ void main() {
     (tester) async {
       await _phone(tester, ClusterTimelineScreen(api: _Api(), clusterId: 1));
       expect(find.text('Community observation'), findsOneWidget);
-      expect(find.text('View Report #2'), findsOneWidget);
+      expect(find.text('View Report #7'), findsOneWidget);
       expect(find.text('View Report #1'), findsNothing);
       expect(find.text('Growth timeline'), findsNothing);
       expect(find.byType(TabBar), findsNothing);

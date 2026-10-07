@@ -149,7 +149,9 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
                                       ),
                                     ),
                                   ),
-                                  child: Text('View Report #${shown[i]['id']}'),
+                                  child: Text(
+                                    'View ${shown[i]['report_code'] ?? 'report'}',
+                                  ),
                                 )
                               else
                                 const Text('Community observation'),

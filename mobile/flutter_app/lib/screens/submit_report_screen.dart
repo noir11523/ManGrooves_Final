@@ -56,6 +56,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   String? _leafShape;
   String? _barkTexture;
   XFile? _photo;
+  XFile? _closeupPhoto;
+  bool _pickingCloseup = false;
   ReportLocation? _location;
   String? _error;
   bool _busy = false;
@@ -111,6 +113,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     'followup': _followup,
     'step': _step,
     'photo_path': _photo?.path,
+    'closeup_photo_path': _closeupPhoto?.path,
+    'picking_closeup': _pickingCloseup,
+    'flow_version': 2,
     'picking_photo': _pickingPhoto,
     'location': _location?.fields,
     'form': _form,
@@ -140,6 +145,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     if (encoded == _lastDraft) return;
     _lastDraft = encoded;
     try {
+      if (_closeupPhoto != null) {
+        await _draftStore.save('$scope:closeup', {
+          'photo_path': _closeupPhoto!.path,
+        });
+        if (_draftStore.photoPath('$scope:closeup') != null) {
+          _closeupPhoto = XFile(_draftStore.photoPath('$scope:closeup')!);
+        }
+      }
       await _draftStore.save(scope, snapshot);
       if (_photo?.path == snapshot['photo_path'] &&
           _draftStore.photoPath(scope) != null) {
@@ -178,7 +191,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _previousReports = (draft['previous_reports'] as List? ?? [])
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
-      _step = (draft['step'] as int? ?? 0).clamp(0, 3);
+      _step = draft['flow_version'] == 2
+          ? (draft['step'] as int? ?? 0).clamp(0, 3)
+          : 0;
+      final closeup = await _draftStore.load('${_draftScope!}:closeup');
+      if (closeup?['photo_path'] != null) {
+        _closeupPhoto = XFile('${closeup!['photo_path']}');
+      }
       for (final entry in (draft['observations'] as Map? ?? {}).entries) {
         _observations['${entry.key}'] = List<int>.from(entry.value as List);
       }
@@ -217,7 +236,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _confirmed = false;
       if (draft['picking_photo'] == true && Platform.isAndroid) {
         final lost = await _picker.retrieveLostData();
-        if (lost.files?.isNotEmpty == true) _photo = lost.files!.first;
+        if (lost.files?.isNotEmpty == true) {
+          if (draft['picking_closeup'] == true) {
+            _closeupPhoto = lost.files!.first;
+          } else {
+            _photo = lost.files!.first;
+          }
+        }
       }
     } catch (_) {
       _draftStatus.value = 'Could not restore the draft. Check device storage.';
@@ -282,7 +307,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         if (previousVersions.isNotEmpty &&
             previousVersions['${c['id']}'] != c['version'] &&
             _step > 0) {
-          _step = 1;
+          _step = 2;
           _draftStatus.value = 'Draft restored. The checklist changed; check your answers again.';
         }
       }
@@ -296,6 +321,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _followup = false;
       }
       if (_clusterId != null) {
+        final selected = _clusters.firstWhere((s) => s['id'] == _clusterId);
+        _sitio.text = '${selected['sitio_name'] ?? selected['name'] ?? ''}';
         if (_location == null) {
           final site = _clusters.firstWhere((s) => s['id'] == _clusterId);
           final point = _coordinates(site);
@@ -393,7 +420,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     await _saveDraft();
   }
 
-  Future<void> _pickPhoto(ImageSource source) async {
+  Future<void> _pickPhoto(ImageSource source, {bool closeup = false}) async {
+    _pickingCloseup = closeup;
     _pickingPhoto = true;
     await _saveDraft();
     try {
@@ -404,7 +432,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         maxHeight: 2200,
         requestFullMetadata: false,
       );
-      if (image != null && mounted) setState(() => _photo = image);
+      if (image != null && mounted) {
+        setState(() {
+          if (closeup) {
+            _closeupPhoto = image;
+          } else {
+            _photo = image;
+          }
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(
@@ -730,6 +766,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         }
       }
     });
+    if (_clusterId != null) {
+      final selected = _clusters
+          .where((s) => s['id'] == _clusterId)
+          .firstOrNull;
+      if (selected != null) {
+        _sitio.text = '${selected['sitio_name'] ?? selected['name']}';
+      }
+    }
     if (location.name == null) {
       await _fillNearbyAddress(location, replace: true);
     }
@@ -774,11 +818,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     ReportLocation point, {
     bool replace = false,
   }) async {
-    if (!widget.api.supportsCloudAccounts ||
+    if (_clusterId != null ||
+        !widget.api.supportsCloudAccounts ||
         (!replace && _sitio.text.trim().isNotEmpty)) {
       return;
     }
     final requestedName = _sitio.text;
+    if (mounted) setState(() => _placeMessage = 'Finding the address…');
     try {
       final result = await widget.api.cloudRequest(
         'places.php',
@@ -794,9 +840,18 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (places.isNotEmpty) {
         final name = '${places.first['label']}';
         _sitio.text = name.length > 120 ? name.substring(0, 120) : name;
+        setState(() => _placeMessage = null);
+      } else {
+        setState(
+          () => _placeMessage = 'Address unavailable. Your pin is saved.',
+        );
       }
     } catch (_) {
-      /* Missing address labels do not change the selected pin. */
+      if (mounted && _location == point) {
+        setState(
+          () => _placeMessage = 'Address unavailable. Your pin is saved.',
+        );
+      }
     }
   }
 
@@ -813,7 +868,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     });
     _draftEdited();
     if (!widget.api.supportsCloudAccounts || value.trim().length < 3) return;
-    _placeTimer = Timer(const Duration(milliseconds: 700), () async {
+    _placeTimer = Timer(const Duration(milliseconds: 350), () async {
       if (mounted) setState(() => _placeMessage = 'Finding places...');
       try {
         final response = await widget.api.cloudRequest(
@@ -890,8 +945,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       return;
     }
     final alive = int.tryParse(_aliveCount.text.trim());
-    if (_photo == null) {
-      setState(() => _error = 'Take or select a current mangrove photo.');
+    if (_photo == null || _closeupPhoto == null) {
+      setState(() => _error = 'Add a site overview and a close-up photo.');
       return;
     }
     if (_location == null) {
@@ -912,24 +967,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
       return;
     }
-    setState(() {
-      _error = null;
-      _step = 1;
-    });
-    _draftEdited();
-  }
-
-  void _nextFromHealth() async {
-    for (final criterion in _criteria.where(
-      (item) => item['selection_mode'] == 'single',
-    )) {
-      final code = criterion['code'].toString();
-      if ((_observations[code] ?? const []).length != 1) {
-        setState(() => _error = 'Choose one answer for ${criterion['name']}.');
-        return;
-      }
-    }
-    if (!await _fetchPreview() || !mounted || _step != 1) return;
     setState(() {
       _error = null;
       _step = 2;
@@ -956,6 +993,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   void _review() async {
+    for (final criterion in _criteria.where(
+      (c) => c['selection_mode'] == 'single',
+    )) {
+      if ((_observations[criterion['code']] ?? []).length != 1) {
+        setState(() => _error = 'Choose one answer for ${criterion['name']}.');
+        return;
+      }
+    }
     if (_rootType == null || _leafShape == null || _barkTexture == null) {
       setState(() => _error = 'Choose the roots, leaves and bark.');
       return;
@@ -1017,6 +1062,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         'bark_texture': _barkTexture!,
         'observed_alive_count': _aliveCount.text,
         'field_confirmation': '1',
+        'photo_views': '2',
       };
       if (_clusterId != null) fields['cluster_id'] = '$_clusterId';
       if (_parentReportId != null) {
@@ -1026,9 +1072,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         fields: fields,
         observations: _observations,
         photoPath: _photo!.path,
+        closeupPhotoPath: _closeupPhoto?.path,
       );
       _clearingDraft = true;
-      if (_draftScope != null) await _draftStore.clear(_draftScope!);
+      if (_draftScope != null) {
+        await _draftStore.clear(_draftScope!);
+        await _draftStore.clear('${_draftScope!}:closeup');
+      }
       if (!mounted) return;
       final report = Map<String, dynamic>.from(response['report'] as Map);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1083,7 +1133,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     _cancelGps();
     try {
       await _draftStore.flush();
-      if (_draftScope != null) await _draftStore.clear(_draftScope!);
+      if (_draftScope != null) {
+        await _draftStore.clear(_draftScope!);
+        await _draftStore.clear('${_draftScope!}:closeup');
+      }
       if (!mounted) return;
       setState(() {
         _reset();
@@ -1132,6 +1185,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     _leafShape = null;
     _barkTexture = null;
     _photo = null;
+    _closeupPhoto = null;
     _location = null;
     _approximatePosition = null;
     _autoCaptureTried = false;
@@ -1233,27 +1287,27 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               onStepTapped: _busy
                   ? null
                   : (value) {
-                      if (value < _step) _editStep(value);
+                      if (value < _step || value <= 1) _editStep(value);
                     },
               controlsBuilder: (_, _) => const SizedBox.shrink(),
               steps: [
                 Step(
-                  title: Text(_step == 0 ? 'Site' : ''),
+                  title: Text(_step == 0 ? 'Photos' : ''),
                   isActive: _step >= 0,
                   state: _step > 0 ? StepState.complete : StepState.indexed,
+                  content: _photosStep(),
+                ),
+                Step(
+                  title: Text(_step == 1 ? 'Location' : ''),
+                  isActive: _step >= 1,
+                  state: _step > 1 ? StepState.complete : StepState.indexed,
                   content: _siteStep(),
                 ),
                 Step(
-                  title: Text(_step == 1 ? 'Health' : ''),
-                  isActive: _step >= 1,
-                  state: _step > 1 ? StepState.complete : StepState.indexed,
-                  content: _healthStep(),
-                ),
-                Step(
-                  title: Text(_step == 2 ? 'Details' : ''),
+                  title: Text(_step == 2 ? 'Checklist' : ''),
                   isActive: _step >= 2,
                   state: _step > 2 ? StepState.complete : StepState.indexed,
-                  content: _speciesStep(),
+                  content: _healthStep(),
                 ),
                 Step(
                   title: Text(_step == 3 ? 'Review' : ''),
@@ -1268,11 +1322,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     );
   }
 
-  Widget _siteStep() => Column(
+  Widget _photosStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _Section(
-        title: 'Photo',
+        title: 'Site overview',
+        subtitle: 'Show the whole mangrove and its surroundings.',
         child: Column(
           children: [
             if (_photo != null)
@@ -1317,6 +1372,74 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           ],
         ),
       ),
+      _Section(
+        title: 'Close-up',
+        subtitle: 'Show the leaves, roots, or damage clearly.',
+        child: Column(
+          children: [
+            if (_closeupPhoto != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: Image.file(
+                    File(_closeupPhoto!.path),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              )
+            else
+              Container(
+                height: 155,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8EEE5),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Center(
+                  child: Icon(Icons.add_a_photo_outlined, size: 46),
+                ),
+              ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _pickPhoto(ImageSource.camera, closeup: true),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Camera'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _pickPhoto(ImageSource.gallery, closeup: true),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Gallery'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (_photo == null || _closeupPhoto == null) {
+            setState(() => _error = 'Add both photos before continuing.');
+            return;
+          }
+          _editStep(1);
+        },
+        child: const Text('Continue'),
+      ),
+    ],
+  );
+
+  Widget _siteStep() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
       _Section(
         title: 'Location',
         child: Column(
@@ -1368,6 +1491,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             const SizedBox(height: 12),
             TextFormField(
               controller: _sitio,
+              readOnly: _clusterId != null,
               onChanged: _searchLocationName,
               decoration: const InputDecoration(
                 labelText: 'Sitio or location name',
@@ -1502,24 +1626,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const Text('Choose what you see.'),
-      const SizedBox(height: 12),
       ..._criteria.map(_criterionCard),
-      _assessment(),
-      Row(
-        children: [
-          Expanded(
-            child: OutlinedButton(onPressed: goBack, child: const Text('Back')),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: FilledButton(
-              onPressed: _previewBusy ? null : _nextFromHealth,
-              child: const Text('Continue'),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 24),
+      _speciesStep(),
     ],
   );
 
@@ -1603,7 +1711,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ...children,
+        ...children.map(
+          (child) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: DefaultTextStyle.merge(
+              style: const TextStyle(fontSize: 17, height: 1.5),
+              child: child,
+            ),
+          ),
+        ),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
@@ -1629,9 +1745,19 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       children: [
         const Text('Check your details. Tap Edit to make changes.'),
         const SizedBox(height: 12),
-        _reviewCard('Site', 0, [
+        _reviewCard('Photos', 0, [
           if (_photo != null)
-            Image.file(File(_photo!.path), height: 150, fit: BoxFit.contain),
+            Image.file(File(_photo!.path), height: 180, fit: BoxFit.contain),
+          const Text('Site overview'),
+          if (_closeupPhoto != null)
+            Image.file(
+              File(_closeupPhoto!.path),
+              height: 180,
+              fit: BoxFit.contain,
+            ),
+          const Text('Close-up'),
+        ]),
+        _reviewCard('Location', 1, [
           Text('Site: $cluster'),
           Text('Location: ${_sitio.text.trim()}'),
           if (_location != null)
@@ -1648,8 +1774,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           if (parent != null) Text('Follow-up to: $parent'),
         ]),
         _reviewCard(
-          'Health',
-          1,
+          'Checklist',
+          2,
           _criteria.map((criterion) {
             final selected = _observations['${criterion['code']}'] ?? [];
             final labels = (criterion['options'] as List? ?? [])
@@ -1707,29 +1833,108 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     );
   }
 
+  String _traitImage(String label, String value) {
+    final v = value.toLowerCase();
+    if (label == 'Root type') {
+      return v.contains('pneumat')
+          ? 'pencil-roots'
+          : v.contains('loop')
+          ? 'loop-roots'
+          : v.contains('rhizome')
+          ? 'rhizomes'
+          : 'prop-roots';
+    }
+    if (label == 'Leaf shape') {
+      return v.contains('lanceolate')
+          ? 'lanceolate'
+          : v.contains('obovate')
+          ? 'obovate'
+          : v.contains('dots')
+          ? 'elliptic-dots'
+          : v.contains('upward')
+          ? 'elliptic-upward'
+          : 'elliptic';
+    }
+    return v.contains('palm')
+        ? 'palm-bark'
+        : v.contains('smooth')
+        ? 'smooth-bark'
+        : v.contains('fissures')
+        ? 'fissured-bark'
+        : 'rough-bark';
+  }
+
   Widget _traitDropdown(
     String label,
     String? value,
     List<String> values,
     ValueChanged<String?> changed,
-  ) => DropdownButtonFormField<String>(
-    key: ValueKey('$label-$value'),
-    initialValue: value,
-    isExpanded: true,
-    decoration: InputDecoration(labelText: label),
-    items: values
-        .map(
-          (item) => DropdownMenuItem(
-            value: item,
-            child: Text(item, overflow: TextOverflow.ellipsis),
-          ),
-        )
-        .toList(),
-    onChanged: (value) {
-      changed(value);
-      _queuePreview();
-    },
-    validator: (selected) => selected == null ? 'Select $label.' : null,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(label, style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: values
+            .map(
+              (item) => SizedBox(
+                width: 145,
+                child: Semantics(
+                  selected: value == item,
+                  button: true,
+                  label: '$label: $item',
+                  child: InkWell(
+                    onTap: () {
+                      changed(item);
+                      _draftEdited();
+                      _queuePreview();
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: value == item
+                            ? const Color(0xFFE0EFD8)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: value == item
+                              ? const Color(0xFF285D30)
+                              : const Color(0xFFCED8C8),
+                          width: value == item ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Image.asset(
+                            'assets/traits/${_traitImage(label, item)}.png',
+                            height: 90,
+                            excludeFromSemantics: true,
+                          ),
+                          Text(
+                            item,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (value == item)
+                            const Icon(
+                              Icons.check_circle,
+                              color: Color(0xFF285D30),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    ],
   );
 
   Widget _criterionCard(Map<String, dynamic> criterion) {

@@ -1,3 +1,4 @@
+import {sharedSite,visibleSite} from './site-access.js';
 import express from 'express';
 import PDFDocument from '../pdf.js';
 import { randomUUID } from 'node:crypto';
@@ -62,7 +63,7 @@ export function createApi({db, auth, bucket, projectId}) {
         };
         if (req.query.summary_only === '1') return send(res, {summary: await summary()});
         const [totals,sites,species]=await Promise.all([summary(),service.rows('clusters'),service.rows('species')]);
-        const clusters = sites.filter(c => c.verified_count > 0).map(c => ({id: c.id, name: c.name,
+        const clusters = sites.filter(c => sharedSite(c) && c.verified_count > 0).map(c => ({id: c.id, name: c.name,
           latitude: c.center_lat, longitude: c.center_lng, latest_health: c.latest_health, barangay_name: c.barangay_name, verified_count: c.verified_count, species_id:c.species_id??null}));
         const catalog=species.filter(s=>Number(s.active)!==0).map(s=>({id:s.id,scientific_name:s.scientific_name,common_name:s.common_name,local_name:s.local_name,family:s.family,iucn_code:s.iucn_code}));
         return send(res, {clusters,species:catalog,summary:totals});
@@ -139,7 +140,7 @@ export function createApi({db, auth, bucket, projectId}) {
           only('POST'); requireRole(user, 'guardian', 'expert');
           await service.limited(`submit:${user.uid}`, 30);
           const {input, files} = await readInput(req);
-          const result = await service.submit(user, input, files.photo);
+          const result = await service.submit(user, input, files.photo, files.closeup_photo);
           return send(res, {report: result.result ?? result, message: result.message ?? 'Report already received.'}, 201);
         }
         case 'reports.php': only('GET'); return send(res, reportList(await service.reports(user), req.query));
@@ -147,7 +148,7 @@ export function createApi({db, auth, bucket, projectId}) {
         case 'photo.php': {
           only('GET'); const id = integer(req.query.id, 'report'), report = await service.get('reports', id);
           if (!report || (user.role === 'guardian' && report.user_id !== user.id)) throw new AppError('Photo not found.', 404);
-          return await sendImage(bucket, report.photo_path, res);
+          return await sendImage(bucket, req.query.view === 'closeup' ? report.closeup_photo_path : report.photo_path, res);
         }
         case 'previous-reports.php': {
           only('GET'); requireRole(user, 'guardian', 'expert'); const clusterId = integer(req.query.cluster_id, 'cluster');
@@ -163,7 +164,7 @@ export function createApi({db, auth, bucket, projectId}) {
         }
         case 'cluster.php': {
           only('GET'); const id = integer(req.query.id, 'cluster'), cluster = await service.get('clusters', id);
-          if (!cluster || (user.role === 'guardian' && cluster.barangay_id !== user.barangay_id)) throw new AppError('Cluster not found.', 404);
+          if (!cluster || !visibleSite(cluster,user) || (user.role === 'guardian' && cluster.barangay_id !== user.barangay_id)) throw new AppError('Cluster not found.', 404);
           const timeline = (await service.rows('reports', [['cluster_id', '==', id]])).filter(r => r.status === 'verified')
             .sort((a, b) => -newest(a, b)).map(r => {
               const canView = user.role !== 'guardian' || r.user_id === user.id;
@@ -269,7 +270,7 @@ export function createApi({db, auth, bucket, projectId}) {
         }
         case 'species.php': {
           if (get) return send(res, {species: user.role === 'system_admin' ? await service.rows('species') : await service.species()});
-          requireRole(user, 'system_admin'); const input = req.body ?? {}, id = input.id ? integer(input.id, 'species') : (await service.ids())[0];
+          requireRole(user, 'system_admin', 'expert'); const input = req.body ?? {}, id = input.id ? integer(input.id, 'species') : (await service.ids())[0];
           const fields = ['scientific_name', 'common_name', 'local_name', 'family', 'iucn_code', 'iucn_label', 'population_trend', 'root_type', 'leaf_shape', 'bark_texture'];
           const data = Object.fromEntries(fields.map(k => [k, text(input[k] ?? '', k.replaceAll('_', ' '), 255, ['scientific_name', 'common_name', 'root_type', 'leaf_shape', 'bark_texture'].includes(k))]));
           data.id = id; data.active = input.active === 0 ? 0 : 1;

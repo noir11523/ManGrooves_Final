@@ -261,6 +261,7 @@ class FirebaseApiClient extends ApiClient {
     required Map<String, String> fields,
     required Map<String, List<int>> observations,
     required String photoPath,
+    String? closeupPhotoPath,
   }) async {
     final request = http.MultipartRequest('POST', resolve('submit-report.php'));
     request.fields['payload'] = jsonEncode({
@@ -269,6 +270,11 @@ class FirebaseApiClient extends ApiClient {
       'checklist_versions': _checklistVersions,
     });
     request.files.add(await http.MultipartFile.fromPath('photo', photoPath));
+    if (closeupPhotoPath != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath('closeup_photo', closeupPhotoPath),
+      );
+    }
     return _multipart(request);
   }
 

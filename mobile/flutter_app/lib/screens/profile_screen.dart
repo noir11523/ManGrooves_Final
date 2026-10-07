@@ -113,6 +113,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
+        if (user['role'] == 'expert' && widget.api.supportsCloudAccounts)
+          ListTile(
+            title: const Text('Species and Sites'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    ManagementScreen(api: widget.api, page: 'species'),
+              ),
+            ),
+          ),
         if (user['role'] == 'system_admin' &&
             widget.api.supportsCloudAccounts) ...[
           for (final entry in const {

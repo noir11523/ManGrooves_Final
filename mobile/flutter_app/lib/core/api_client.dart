@@ -334,6 +334,7 @@ class ApiClient {
     required Map<String, String> fields,
     required Map<String, List<int>> observations,
     required String photoPath,
+    String? closeupPhotoPath,
   }) async {
     return _withConnectionRecovery(() async {
       final request = http.MultipartRequest('POST', _uri('submit-report.php'));
@@ -346,6 +347,11 @@ class ApiClient {
         }
       }
       request.files.add(await http.MultipartFile.fromPath('photo', photoPath));
+      if (closeupPhotoPath != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('closeup_photo', closeupPhotoPath),
+        );
+      }
 
       final streamed = await request.send().timeout(
         const Duration(seconds: 60),

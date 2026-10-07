@@ -288,6 +288,13 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
+    color: switch (label) {
+      'Verified' => const Color(0xFFE6F0DD),
+      'Pending' => const Color(0xFFFFF3D2),
+      'Rejected' || 'Needs attention' => const Color(0xFFF9E6DF),
+      'Clusters' => const Color(0xFFDDEDE8),
+      _ => const Color(0xFFE2ECF5),
+    },
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: onTap,
@@ -297,7 +304,10 @@ class _StatCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(icon, color: Theme.of(context).colorScheme.primary),
+            CircleAvatar(
+              backgroundColor: Colors.white.withValues(alpha: .7),
+              child: Icon(icon, color: Theme.of(context).colorScheme.primary),
+            ),
             Text(
               '${value ?? 0}',
               style: Theme.of(context).textTheme.headlineSmall

@@ -44,6 +44,7 @@ if (defined('MANGROOVES_CLOUD')) {
         $navigation[] = ['Review history', 'admin/validation-history.php', 'bi-clock-history'];
     }
     if ($role === 'expert') {
+        $navigation[] = ['Species and Sites', 'admin/species.php', 'bi-tree-fill'];
         array_splice($navigation, 2, 0, [['Submit Report', 'submit-report.php', 'bi-camera-fill']]);
         $navigation[] = ['My badges', 'badges.php', 'bi-award-fill'];
     }

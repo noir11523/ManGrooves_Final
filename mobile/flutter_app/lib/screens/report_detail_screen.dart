@@ -79,6 +79,20 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               ),
             ),
           ),
+        if (_report!['closeup_photo_url'] != null) ...[
+          const SizedBox(height: 12),
+          const Text(
+            'Close-up',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          Image.network(
+            widget.api.resolve('${_report!['closeup_photo_url']}').toString(),
+            headers: widget.api.imageHeaders,
+            height: 220,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => const Text('Photo unavailable.'),
+          ),
+        ],
         const SizedBox(height: 16),
         Wrap(
           spacing: 8,

@@ -48,17 +48,18 @@ test('photo controls, automatic site follow-up, racing requests and cancellation
   if(path==='previous-reports.php') {
    if(fail)throw new Error('Connection interrupted.');
    if(query.cluster_id==='11')return new Promise(resolve=>{resolveVisits=resolve});
-   return {reports:[{id:9,report_code:'MG-9',health:'Healthy'}]};
+   return {reports:[{id:9,report_code:'Report #1',health:'Healthy'}]};
   }
   return {places:[]};
  };
  ui.reportDraft.reset();let dispose=await ui.reportWizard($('#page'),{}, {id:'site-test'});
  try {
   assert.equal($('[name=photo]').hasAttribute('capture'),false);assert.equal($('#camera-photo').getAttribute('capture'),'environment');
-  let camera=0,gallery=0;$('#camera-photo').click=()=>camera++;$('[name=photo]').click=()=>gallery++;
-  $('#take-photo').click();$('#choose-photo').click();assert.equal(camera,1);assert.equal(gallery,1);
+  let camera=0,gallery=0;Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{camera++;throw Object.assign(new Error(),{name:'NotFoundError'});}}});$('[name=photo]').click=()=>gallery++;
+  $('#take-photo').click();$('#choose-photo').click();assert.equal(camera,1);assert.equal(gallery,1);await tick();
   set('cluster_id','10');await tick();assert.equal($('[name=sitio_name]').value,'Nursery boardwalk');
   assert.equal(ui.reportDraft.fields.latitude,10.2833);assert.equal(ui.reportDraft.followup,true);assert.equal($('[name=parent_report_id]').value,'9');
+  assert.equal(ui.reportDraft.fields.parent_report_code,'Report #1');
   set('cluster_id','11');assert.equal($('#next').disabled,true);
   set('cluster_id','');assert.equal($('#next').disabled,false);assert.equal($('#followup-options').hidden,true);
   resolveVisits({reports:[{id:88,report_code:'Old reply'}]});await tick();assert.equal(ui.reportDraft.followup,false);assert.equal(ui.reportDraft.fields.parent_report_id,'');
@@ -234,9 +235,9 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
   try {
     assert.equal($('#followup-options').hidden, true);
     const photo = new File(['test bytes'], 'field.jpg', {type: 'image/jpeg'});
-    Object.defineProperty($('[name=photo]'), 'files', {value: [photo]}); change($('[name=photo]'));
+    Object.defineProperty($('[name=photo]'), 'files', {value: [photo]}); change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[photo]});change($('[name=closeup_photo]'));
     set('sitio_name', 'First location'); set('observed_alive_count', '12');
-    for (const k of ['root_type', 'leaf_shape', 'bark_texture']) set(k, reference.species[0][k]);
+
     await submit(); assert.equal(ui.reportDraft.step, 1);
     assert.equal($('#gps').disabled,true);assert.ok($('#manual-pin'));assert.equal($('#approximate'),null);assert.equal(typeof gps,'function');
     gps({timestamp:Date.now(),coords: {latitude: 10.2833, longitude: 123.8833, accuracy: 180}});
@@ -246,6 +247,7 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
     globalThis.testMap.events.click({latlng: {lat: 10.2833, lng: 123.8833}});
     assert.equal(ui.reportDraft.fields.location_source, 'manual');
     await submit(); assert.equal(ui.reportDraft.step, 2);
+    for(const k of ['root_type','leaf_shape','bark_texture'])$(`[name=${k}]`).click();
     for (const c of reference.criteria.filter(c => c.selection_mode === 'single')) {
       $(`[name=obs_${c.code}][value="${c.options[0].id}"]`).click();
     }
@@ -289,9 +291,9 @@ test('report draft restores fields, photo, checklist and step after reload, isol
   try {
     assert.equal($('#discard-draft'),null);assert.equal($('#draft-status'),null);assert.equal($('#draft-notice').hidden,true);
     const photo = new File(['saved photo bytes'],'saved.jpg',{type:'image/jpeg'});
-    Object.defineProperty($('[name=photo]'),'files',{value:[photo]}); change($('[name=photo]'));
+    Object.defineProperty($('[name=photo]'),'files',{value:[photo]}); change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[photo]});change($('[name=closeup_photo]'));
     set('sitio_name','Saved coastal site');set('observed_alive_count','16');set('guardian_remarks','Remember this visit');
-    for(const k of ['root_type','leaf_shape','bark_texture'])set(k,reference.species[0][k]);
+
     await submit();
     assert.equal($('#gps').disabled,true); const oldGps = gps;
     gps({timestamp:Date.now()-60000,coords:{latitude:10.28,longitude:123.88,accuracy:2}});
@@ -303,6 +305,7 @@ test('report draft restores fields, photo, checklist and step after reload, isol
     assert.equal(ui.reportDraft.fields.location_source,'manual');
     assert.equal(Number(ui.reportDraft.fields.latitude),10.2833);
     await submit();
+    for(const k of ['root_type','leaf_shape','bark_texture'])$(`[name=${k}]`).click();
     for(const c of reference.criteria.filter(c=>c.selection_mode==='single'))$(`[name=obs_${c.code}][value="${c.options[0].id}"]`).click();
     await ui.reportDraft.flush(); dispose(); ui.reportDraft.reset();
     dispose = await ui.reportWizard($('#page'),{}, {id:'draft-a'});
@@ -341,8 +344,8 @@ test('details address selection becomes the next-step map pin and a restored dra
     await new Promise(r=>setTimeout(r,750));await tick();
     assert.match($('#details-places').textContent,/Pier 3/);$('#details-places button').click();
     assert.equal(input.value,'Pier 3, Cebu City');assert.equal(ui.reportDraft.fields.location_source,'manual');
-    const photo=new File(['photo'],'field.jpg',{type:'image/jpeg'});Object.defineProperty($('[name=photo]'),'files',{value:[photo]});change($('[name=photo]'));
-    set('observed_alive_count','12');for(const k of ['root_type','leaf_shape','bark_texture'])set(k,reference.species[0][k]);
+    const photo=new File(['photo'],'field.jpg',{type:'image/jpeg'});Object.defineProperty($('[name=photo]'),'files',{value:[photo]});change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[photo]});change($('[name=closeup_photo]'));
+    set('observed_alive_count','12');
     await submit();assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
     assert.equal($('#place-search').value,'Pier 3, Cebu City');
     assert.equal($('[name=latitude]').value,'10.3012345');assert.equal($('[name=longitude]').value,'123.9012345');

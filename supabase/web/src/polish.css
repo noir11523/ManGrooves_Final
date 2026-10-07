@@ -259,3 +259,21 @@ button:disabled { cursor: progress; }
   .report-table td .pill { justify-self:start; }.report-table td small { grid-column:2; margin:0; }
   .report-table td:last-child { display:block; padding-bottom:0; }.report-table td:last-child::before { display:none; }.report-table .button { display:block; text-align:center; }
 }
+
+/* Field work: legible labels, distinct photo views and compact review cards. */
+.field>span,.choice>span {font-size:1rem;font-weight:650;line-height:1.45}
+input,select,textarea {font-size:1rem;min-height:46px}
+.report-photo-picker {padding:18px;background:#f1f5ec;border:1px solid var(--border);border-radius:14px;margin:16px 0}
+.review-photos {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.review-photos figure {margin:0}.review-photos img {width:100%;height:210px;object-fit:contain;background:#edf3e8;border-radius:12px}
+.review-photos figcaption {font-weight:650;padding:8px 0}
+.summary-card {padding:22px;margin:18px 0;border:1px solid var(--border);border-radius:14px;background:#fff}
+.summary-card h3 {font-size:1.25rem}.summary-card p,.summary-card dl {font-size:1.05rem;line-height:1.65}
+.summary dd {overflow-wrap:anywhere}.choice img {object-fit:contain}
+.admin-table td {font-size:1rem}.admin-table small {font-size:.88rem;line-height:1.5}
+[aria-busy=true] {cursor:progress}
+.camera-dialog {width:min(620px,94vw);max-height:94dvh;overflow:auto;border:1px solid #ced8c8;border-radius:20px;padding:22px;color:#263a29;background:#fff}
+.camera-dialog::backdrop {background:#132118b3}.camera-dialog video {display:block;width:100%;max-height:60dvh;background:#17221b;border-radius:12px;margin-bottom:16px}
+@media(max-width:540px){.summary-card{padding:16px}.review-photos img{height:145px}.choice-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.choice{min-width:0}.choice span{overflow-wrap:anywhere}}
+
+.report-photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.report-photo-grid .preview-photo{width:100%;max-height:240px;object-fit:contain}.report-photo-grid .field{min-width:0}@media(max-width:540px){.report-photo-grid{grid-template-columns:1fr}}

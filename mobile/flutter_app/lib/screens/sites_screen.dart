@@ -61,6 +61,47 @@ class _SitesScreenState extends State<SitesScreen> {
     if (saved == true && mounted) await _load();
   }
 
+  Future<void> _action(Map<String, dynamic> site, String action) async {
+    final approve = action == 'approve';
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(approve ? 'Share this site?' : 'Delete this site?'),
+        content: Text(
+          approve
+              ? 'Add this site to everyone’s available sites in this barangay?'
+              : 'Remove this site from choices? Existing reports will be kept.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(approve ? 'Approve' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    try {
+      await widget.api.cloudRequest(
+        'sites.php',
+        body: {...site, 'action': action},
+      );
+      if (mounted) await _load();
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = error is ApiException
+              ? error.message
+              : 'Could not update this site.',
+        );
+      }
+    }
+  }
+
   Future<void> _archive(Map<String, dynamic> site) async {
     final active = site['active'] != 0;
     final yes = await showDialog<bool>(
@@ -184,11 +225,29 @@ class _SitesScreenState extends State<SitesScreen> {
                       ),
                       Text('${site['sitio_name'] ?? site['name']}'),
                       Text(
+                        'Added by ${site['created_by_name'] ?? 'Administrator'}',
+                      ),
+                      Text(
+                        site['visibility'] == 'personal'
+                            ? 'Personal site · Awaiting approval'
+                            : 'Shared site',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Text(
                         '${site['barangay_name']} · ${site['active'] == 0 ? 'Archived' : 'Active'}',
                       ),
                       Wrap(
                         spacing: 8,
                         children: [
+                          if (site['visibility'] == 'personal')
+                            FilledButton(
+                              onPressed: () => _action(site, 'approve'),
+                              child: const Text('Approve for everyone'),
+                            ),
+                          TextButton(
+                            onPressed: () => _action(site, 'delete'),
+                            child: const Text('Delete'),
+                          ),
                           TextButton(
                             onPressed: () => _edit(site),
                             child: const Text('Edit'),

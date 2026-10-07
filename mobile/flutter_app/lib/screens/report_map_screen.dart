@@ -270,7 +270,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Report #${item['id']}',
+                '${item['report_code'] ?? 'Report'}',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(
@@ -556,7 +556,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
           for (final item in items)
             Card(
               child: ListTile(
-                title: Text('Report #${item['id']}'),
+                title: Text('${item['report_code'] ?? 'Report'}'),
                 subtitle: Text(
                   '${statusLabel(item['status'])} · ${item['display_health']}\n${item['cluster_name'] ?? item['sitio_name'] ?? 'New site'}',
                 ),

@@ -15,7 +15,6 @@
                 <li class="nav-item"><a class="nav-link" href="<?= e(url('explore.php')) ?>">Explore</a></li>
                 <?php if ($isHomeNavigation): ?>
                     <?php if (!$authUser): ?>
-                        <li class="nav-item"><a class="nav-link" href="<?= e(url('login.php')) ?>">Sign in</a></li>
                         <li class="nav-item"><a class="btn btn-primary home-nav-join" href="<?= e(url('register.php')) ?>">Register</a></li>
                     <?php endif; ?>
                 <?php endif; ?>

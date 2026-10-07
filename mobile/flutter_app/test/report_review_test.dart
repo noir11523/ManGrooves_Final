@@ -164,6 +164,7 @@ class _Api extends ApiClient {
     required Map<String, String> fields,
     required Map<String, List<int>> observations,
     required String photoPath,
+    String? closeupPhotoPath,
   }) async {
     submissions++;
     sent = fields;
@@ -248,6 +249,11 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> openLocation(WidgetTester tester) async {
+  tester.widget<Stepper>(find.byType(Stepper)).onStepTapped!(1);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
     'selected site fills the location and Cancel clears the saved report only after confirmation',
@@ -269,6 +275,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await openLocation(tester);
       expect(
         tester
             .widget<TextField>(field('Sitio or location name'))
@@ -311,6 +318,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await openLocation(tester);
       expect(gps.requests, 1);
       expect(api.lookups, 0);
       expect(find.text('Find approximate area'), findsNothing);
@@ -367,6 +375,7 @@ void main() {
       }
 
       await open();
+      await openLocation(tester);
       gps.send(3, stale: true);
       await tester.pump();
       expect(
@@ -389,7 +398,10 @@ void main() {
       gps.send(1);
       await tester.pump();
       expect(find.textContaining('Manual pin: 10.301'), findsOneWidget);
-      final saved = drafts.saved.values.single;
+      final saved = drafts.saved.entries
+          .where((e) => !e.key.endsWith(':closeup'))
+          .single
+          .value;
       expect((saved['location'] as Map)['location_source'], 'manual');
       expect((saved['location'] as Map)['latitude'], '10.30123450');
       GeolocatorPlatform.instance = _DeniedGps();
@@ -442,6 +454,7 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
+      await openLocation(tester);
       gps.send(4, stale: true);
       await tester.pump();
       gps.send(500);
@@ -461,7 +474,11 @@ void main() {
         findsOneWidget,
       );
       expect(
-        (drafts.saved.values.single['location'] as Map)['location_accuracy'],
+        (drafts.saved.entries
+                .where((e) => !e.key.endsWith(':closeup'))
+                .single
+                .value['location']
+            as Map)['location_accuracy'],
         '9.00',
       );
       await tester.pumpWidget(const SizedBox.shrink());
@@ -516,10 +533,15 @@ void main() {
         EnginePhase.sendSemanticsUpdate,
         const Duration(seconds: 35),
       );
+      await tap(tester, find.text('Gallery').first);
+      await tap(tester, find.text('Gallery').last);
+      await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
       expect(find.text('Previous report'), findsOneWidget);
       expect(find.text('This is a follow-up'), findsNothing);
-      await tap(tester, find.text('Gallery'));
-      await tester.enterText(field('Sitio or location name'), 'Seaside');
+      expect(
+        tester.widget<TextField>(field('Sitio or location name')).readOnly,
+        isTrue,
+      );
       await tester.enterText(field('Living mangroves observed'), '12');
       await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
       await tap(tester, find.text('Green').first);
@@ -574,22 +596,8 @@ void main() {
             .value,
         false,
       );
-      await tap(tester, find.widgetWithText(FilledButton, 'Continue').last);
-      for (final label in ['Root type', 'Leaf shape', 'Bark texture']) {
-        final dropdown = find.byKey(ValueKey('$label-null'));
-        await tap(tester, dropdown);
-        await tap(
-          tester,
-          find
-              .text(
-                {
-                  'Root type': 'Prop',
-                  'Leaf shape': 'Oval',
-                  'Bark texture': 'Smooth',
-                }[label]!,
-              )
-              .last,
-        );
+      for (final choice in ['Prop', 'Oval', 'Smooth']) {
+        await tap(tester, find.text(choice).last);
       }
       await tester.enterText(field('Notes (optional)'), 'First note');
       await tap(tester, find.text('Review report'));
@@ -635,7 +643,13 @@ void main() {
       api.failSubmit = true;
       await tap(tester, find.widgetWithText(FilledButton, 'Submit'));
       expect(find.text('Connection interrupted. Try again.'), findsOneWidget);
-      expect(drafts.saved.values.single['guardian_remarks'], 'Updated note');
+      expect(
+        drafts.saved.entries
+            .where((e) => !e.key.endsWith(':closeup'))
+            .single
+            .value['guardian_remarks'],
+        'Updated note',
+      );
       api.failSubmit = false;
       await tap(tester, find.text('Submit report'));
       await tap(tester, find.widgetWithText(FilledButton, 'Submit'));

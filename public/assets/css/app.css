@@ -988,3 +988,11 @@ textarea {
     .home-page .cta-panel h2 br { display: none; }
     .home-page .public-footer .brand-copy { display: block; }
 }
+
+/* Account identity and mobile overflow should be easy to find and tap. */
+.user-menu strong {font-size:1rem;line-height:1.35}.user-menu small {font-size:.82rem;line-height:1.45}
+.mobile-bottom-nav {grid-template-columns:repeat(5,minmax(0,1fr))}
+.mobile-bottom-nav .mobile-nav-link {font-size:.75rem}
+.mobile-more {min-width:0}.mobile-more>.mobile-nav-link {width:100%;border:0;background:transparent;color:inherit}
+.mobile-more .dropdown-menu {width:min(300px,90vw);max-height:65dvh;overflow:auto}
+.mobile-more .dropdown-item {font-size:1rem;padding:12px 18px;white-space:normal}

@@ -17,7 +17,7 @@
                     <?php else: ?>
                         <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#authModal" data-auth-tab="register">Become a Coastal Guardian <i class="bi bi-arrow-right ms-2" aria-hidden="true"></i></button>
                     <?php endif; ?>
-                    <a class="btn btn-outline-light btn-lg" href="<?= e(url('explore.php')) ?>">Explore mangroves</a>
+                    <a class="btn btn-outline-light btn-lg" href="<?= e(url('login.php')) ?>">Sign in</a>
                 </div>
                 <p class="home-reassurance"><i class="bi bi-check2-circle" aria-hidden="true"></i> Guided field observations. Qualified expert review.</p>
 

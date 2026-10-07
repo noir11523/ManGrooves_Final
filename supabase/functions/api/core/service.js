@@ -1,3 +1,4 @@
+import {usableSite,visibleSite} from './site-access.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { Store } from './store.js';
 import { AppError, HEALTH_VALUES, classify, integer, matchSpecies, now, password, publicUser, requireRole, text, updateCriterion, validateLocation, distanceMeters, manilaDate } from './domain.js';
@@ -30,12 +31,12 @@ export class Service extends Store {
   async reports(user) { return this.rows('reports', user.role === 'guardian' ? [['user_id', '==', user.id]] : []); }
   async clusters(user) {
     return (await this.rows('clusters', user.role === 'guardian' ? [['barangay_id', '==', user.barangay_id ?? -1]] : []))
-      .map(c => ({...c, latitude: c.center_lat, longitude: c.center_lng}));
+      .filter(c => visibleSite(c,user)).map(c => ({...c, latitude: c.center_lat, longitude: c.center_lng}));
   }
   async form(user) {
     requireRole(user, 'guardian', 'expert');
     const [criteria, clusters, species, barangay] = await Promise.all([this.criteria(), this.clusters(user), this.species(), this.get('barangays', user.barangay_id)]);
-    return {criteria, clusters:clusters.filter(c=>Number(c.active)!==0), species, location: {barangay, max_distance_meters: 5000, max_gps_accuracy_meters: 100},
+    return {criteria, clusters:clusters.filter(c=>usableSite(c,user)), species, location: {barangay, max_distance_meters: 5000, max_gps_accuracy_meters: 100},
       traits: Object.fromEntries(['root_type', 'leaf_shape', 'bark_texture'].map(k => [k, [...new Set(species.map(s => s[k]).filter(Boolean))].sort()]))};
   }
   async preview(user, input) {
@@ -60,14 +61,14 @@ export class Service extends Store {
   async detail(user, id) {
     const report = await this.get('reports', id);
     if (!report || (user.role === 'guardian' && report.user_id !== user.id)) throw new AppError('Report not found.', 404);
-    const {photo_path, photo_sha256, submission_digest, uid, ...visible} = report;
+    const {photo_path, closeup_photo_path, photo_sha256, submission_digest, uid, ...visible} = report;
     const groups = new Map();
     for (const o of report.observation_snapshots ?? []) {
       if (!groups.has(o.criteria_code)) groups.set(o.criteria_code, {code: o.criteria_code, name: o.criteria_name, score_group: o.score_group, options: []});
       groups.get(o.criteria_code).options.push({label: o.option_label, points: o.option_code === 'unknown' ? null : o.points});
     }
     delete visible.observation_snapshots;
-    return {...visible, report_code:reportLabel(report), needs_attention:needsReview(report)?1:0, observations: [...groups.values()], photo_url: photo_path ? `photo.php?id=${id}` : null,
+    return {...visible, closeup_photo_url:closeup_photo_path ? `photo.php?id=${id}&view=closeup` : null, report_code:reportLabel(report), needs_attention:needsReview(report)?1:0, observations: [...groups.values()], photo_url: photo_path ? `photo.php?id=${id}` : null,
       verification_history: (await this.rows('verification_logs', [['report_id', '==', id]])).sort((a, b) => a.created_at.localeCompare(b.created_at))};
   }
   async profile(user, input) {
@@ -126,7 +127,7 @@ export class Service extends Store {
     } catch (error) { await Promise.all(created.map(path => this.bucket.file(path).delete().catch(() => {}))); throw error; }
     return {criteria: await this.criteria(), message: 'Checklist saved. New reports use these settings.'};
   }
-  async submit(user, input, photo) {
+  async submit(user, input, photo, closeupPhoto = null) {
     requireRole(user, 'guardian', 'expert');
     if (String(input.field_confirmation) !== '1') throw new AppError('Confirm the photo, location, and observations are from this visit.');
     const [criteria, catalog, barangay] = await Promise.all([this.criteria(), this.species(), this.get('barangays', user.barangay_id)]);
@@ -144,12 +145,17 @@ export class Service extends Store {
       root_type: text(input.root_type, 'the root type', 190), leaf_shape: text(input.leaf_shape, 'the leaf shape', 190),
       bark_texture: text(input.bark_texture, 'the bark texture', 255)};
     if (!Buffer.isBuffer(photo)) throw new AppError('Add a photo from this visit.');
+    if (input.photo_views === '2' && !Buffer.isBuffer(closeupPhoto)) throw new AppError('Add both a site overview and a close-up photo.');
+    const closeupHash=closeupPhoto ? createHash('sha256').update(closeupPhoto).digest('hex') : null;
     const hash = createHash('sha256').update(photo).digest('hex');
-    const digest = createHash('sha256').update(JSON.stringify({fields, location, requestedCluster, parentId, count, observations: classification.observations})).digest('hex');
+    const digest = createHash('sha256').update(JSON.stringify({fields, location, requestedCluster, parentId, count, observations: classification.observations, ...(closeupHash ? {closeupHash} : {})})).digest('hex');
     const claimRef = this.ref('photo_claims', `${user.id}_${hash}`);
     const existing = await claimRef.get();
     if (existing.exists) return this.repeatedSubmission(existing.data(), digest);
     const upload = await saveImage(this.bucket, photo, `reports/${user.id}`);
+    let closeupUpload;
+    try { if(closeupPhoto) closeupUpload=await saveImage(this.bucket,closeupPhoto,`reports/${user.id}`); }
+    catch(error){await this.bucket.file(upload.path).delete().catch(()=>{});throw error;}
     const ids = await this.ids(4), [id, clusterId, noticeId] = ids;
     let stored = false;
     try {
@@ -168,21 +174,23 @@ export class Service extends Store {
         const selected = requestedCluster ?? parent?.cluster_id;
         if (parent && selected !== parent.cluster_id) throw new AppError('Use the same cluster as the previous report.');
         let cluster = selected ? clusters.find(c => c.id === selected) : null;
-        if (selected && (!cluster || Number(cluster.active)===0)) throw new AppError('Choose an active site in your barangay.');
-        if (cluster) validateLocation(input, barangay, cluster);
+        if (selected && (!cluster || !usableSite(cluster,user))) throw new AppError('Choose an active site in your barangay.');
+        if (cluster) { validateLocation(input, barangay, cluster); fields.sitio_name=cluster.sitio_name||cluster.name; }
         // Lock in the version used for scoring; admin edits require a fresh preview.
         for (const c of criteria) {
           const fresh = await tx.get(this.ref('criteria', c.id));
           if (fresh.data()?.version !== c.version) throw new AppError('The checklist changed. Review your answers again.', 409);
         }
         const verified = classification.status === 'Healthy';
-        if (verified && !cluster) cluster = clusters.filter(c => Number(c.active)!==0 && distanceMeters(location.latitude, location.longitude, c.center_lat, c.center_lng) <= c.radius_meters)
-          .sort((a, b) => distanceMeters(location.latitude, location.longitude, a.center_lat, a.center_lng) - distanceMeters(location.latitude, location.longitude, b.center_lat, b.center_lng))[0] ?? null;
         const time = now(), best = matching.best;
-        if (verified && !cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: `${barangay.name} ${clusterId}`, barangay_id: user.barangay_id,
+        if (!cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: fields.sitio_name, visibility:'personal', created_by:user.id, created_by_name:user.full_name, active:1, barangay_id: user.barangay_id,
           barangay_name: barangay.name, center_lat: location.latitude, center_lng: location.longitude, radius_meters: 75, sitio_name: fields.sitio_name,
           initial_seedlings: count, verified_count: 0, latest_health: 'Unknown', rarity_level: 'Unassigned', created_at: time};
-        const report = {id, report_code: `Report #${id}`, user_id: user.id, uid: user.uid,
+        const sequenceRef=this.ref('meta',`report_sequence_${user.id}`), sequence=(await tx.get(sequenceRef)).data();
+        const history=sequence ? [] : await this.transactionRows(tx,'reports',[['user_id','==',user.id]]);
+        const report_number=(sequence?.last_number ?? Math.max(history.length,...history.map(r=>Number(r.report_number)||0)))+1;
+        tx.set(sequenceRef,{last_number:report_number});
+        const report = {id, report_number, report_code: `Report #${report_number}`, user_id: user.id, uid: user.uid,
           guardian_name: user.full_name, barangay_id: user.barangay_id, barangay_name: barangay.name, ...fields, ...location,
           cluster_id: cluster?.id ?? null, cluster_name: cluster?.name ?? null, parent_report_id: parentId, active_child_id: null,
           observed_alive_count: count, health_score: classification.health_score, health_max_score: 6, context_score: classification.context_score,
@@ -190,13 +198,14 @@ export class Service extends Store {
           suggested_species_id: best?.id ?? null, suggested_species_name: best?.scientific_name ?? null, species_confidence: best?.confidence ?? null,
           final_species_id: verified ? best?.id ?? null : null, final_species_name: verified ? best?.scientific_name ?? null : null,
           rarity_level: cluster?.rarity_level ?? 'Unassigned', status: verified ? 'verified' : 'pending', needs_attention: verified ? 0 : 1,
-          photo_path: upload.path, photo_sha256: hash, submission_digest: digest, observation_snapshots: classification.observations,
+          photo_path: upload.path, closeup_photo_path:closeupUpload?.path??null, photo_sha256: hash, submission_digest: digest, observation_snapshots: classification.observations,
           expert_id: null, expert_feedback: null, submitted_at: time, verified_at: verified ? time : null,
           next_followup_date: verified ? manilaDate(Date.now() + 30 * 86400000) : null};
         tx.create(this.ref('reports', id), report);
         tx.create(claimRef, {report_id: id, digest, report_code: report.report_code, status: report.status, cluster_id: report.cluster_id});
         tx.set(lockRef, {version: (lock.data()?.version ?? 0) + 1});
         if (parentRef) tx.update(parentRef, {active_child_id: id});
+        if(!verified && cluster.id===clusterId) tx.set(this.ref('clusters',cluster.id),cluster);
         if (verified) {
           tx.set(this.ref('clusters', cluster.id), {...cluster, verified_count: cluster.verified_count + 1,
             latest_health: report.final_health, latest_report_at: time, latest_report_id: id, observed_alive_count: count,
@@ -209,17 +218,17 @@ export class Service extends Store {
         return {report_id: id, report_code: report.report_code, status: report.status, cluster_id: report.cluster_id, new_badges: [], created: true};
       });
       stored = !!result.created;
-      if (!stored) await this.bucket.file(upload.path).delete().catch(() => {});
+      if (!stored) await Promise.all([upload.path,closeupUpload?.path].filter(Boolean).map(path=>this.bucket.file(path).delete().catch(()=>{})));
       delete result.created;
       return {result, message: result.status === 'verified' ? 'Healthy report verified.' : 'Report submitted for review.'};
-    } catch (error) { if (!stored) await this.bucket.file(upload.path).delete().catch(() => {}); throw error; }
+    } catch (error) { if (!stored) await Promise.all([upload.path,closeupUpload?.path].filter(Boolean).map(path=>this.bucket.file(path).delete().catch(()=>{}))); throw error; }
   }
   repeatedSubmission(claim, digest) {
     if (claim.digest !== digest) throw new AppError('This photo was already submitted. Use a new photo for a new visit.', 409);
-    return {report_id: claim.report_id, report_code: `Report #${claim.report_id}`, status: claim.status, cluster_id: claim.cluster_id, new_badges: []};
+    return {report_id: claim.report_id, report_code: claim.report_code ?? `Report #${claim.report_id}`, status: claim.status, cluster_id: claim.cluster_id, new_badges: []};
   }
   logReview(tx, report, reviewer, action, previous) {
-    tx.create(this.ref('verification_logs', randomUUID()), {report_id: report.id, report_code: report.report_code,
+    tx.create(this.ref('verification_logs', randomUUID()), {report_id: report.id, report_number: report.report_number ?? null, report_code: report.report_code,
       verifier_id: reviewer?.id ?? null, verifier_name: reviewer?.full_name ?? 'Automatic verification', reviewer: reviewer?.full_name ?? 'Automatic verification',
       action, previous_status: previous?.status ?? 'pending', new_status: report.status, status: report.status,
       previous_health: previous?.final_health ?? previous?.suggested_health ?? report.suggested_health, new_health: report.final_health, health: report.final_health,
@@ -251,9 +260,7 @@ export class Service extends Store {
       const rarity = action === 'correct' ? input.rarity_level || previous.rarity_level : previous.rarity_level;
       if (!['Common', 'Vulnerable', 'Rare', 'Unassigned'].includes(rarity)) throw new AppError('Choose a valid rarity level.');
       let cluster = clusters.find(c => c.id === previous.cluster_id);
-      if (action !== 'reject' && !cluster) cluster = clusters.filter(c => Number(c.active)!==0 && distanceMeters(previous.latitude, previous.longitude, c.center_lat, c.center_lng) <= c.radius_meters)
-        .sort((a, b) => distanceMeters(previous.latitude, previous.longitude, a.center_lat, a.center_lng) - distanceMeters(previous.latitude, previous.longitude, b.center_lat, b.center_lng))[0];
-      if (action !== 'reject' && !cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: `${previous.barangay_name} ${clusterId}`,
+      if (action !== 'reject' && !cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: previous.sitio_name, visibility:'personal',created_by:previous.user_id,created_by_name:previous.guardian_name,active:1,
         barangay_id: previous.barangay_id, barangay_name: previous.barangay_name, center_lat: previous.latitude, center_lng: previous.longitude,
         sitio_name: previous.sitio_name, radius_meters: 75, initial_seedlings: previous.observed_alive_count, verified_count: 0,
         latest_report_at: '', latest_health: 'Unknown', created_at: now()};

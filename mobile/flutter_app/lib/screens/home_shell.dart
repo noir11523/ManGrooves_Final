@@ -1,3 +1,8 @@
+import 'validation_history_screen.dart';
+import 'management_screen.dart';
+import 'checklist_screen.dart';
+import 'cloud_admin_screen.dart';
+
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -141,6 +146,72 @@ class _HomeShellState extends State<HomeShell> {
         appBar: AppBar(
           leading: _index == 0 ? null : BackButton(onPressed: back),
           actions: [
+            PopupMenuButton<String>(
+              tooltip: 'Menu',
+              icon: const Icon(Icons.menu),
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'account', child: Text('Account')),
+                if (!_guardian)
+                  const PopupMenuItem(
+                    value: 'history',
+                    child: Text('Review history'),
+                  ),
+                if (widget.api.supportsCloudAccounts && !_guardian)
+                  const PopupMenuItem(
+                    value: 'species',
+                    child: Text('Species and Sites'),
+                  ),
+                if (widget.api.supportsCloudAccounts &&
+                    _user['role'] == 'system_admin') ...const [
+                  PopupMenuItem(value: 'users', child: Text('Users')),
+                  PopupMenuItem(
+                    value: 'checklist',
+                    child: Text('Health checklist'),
+                  ),
+                  PopupMenuItem(
+                    value: 'badge-settings',
+                    child: Text('Manage badges'),
+                  ),
+                  PopupMenuItem(
+                    value: 'applications',
+                    child: Text('Expert applications'),
+                  ),
+                  PopupMenuItem(
+                    value: 'signer',
+                    child: Text('Certificate signer'),
+                  ),
+                ],
+                if (_user['role'] == 'expert')
+                  const PopupMenuItem(
+                    value: 'badges',
+                    child: Text('My badges'),
+                  ),
+              ],
+              onSelected: (choice) {
+                if (choice == 'account') {
+                  setState(() => _index = 4);
+                  return;
+                }
+                final Widget page = switch (choice) {
+                  'history' => ValidationHistoryScreen(api: widget.api),
+                  'checklist' => ChecklistScreen(api: widget.api),
+                  'applications' => CloudAdminScreen(api: widget.api),
+                  'signer' => CloudAdminScreen(
+                    api: widget.api,
+                    certificates: true,
+                  ),
+                  'badges' => Scaffold(
+                    appBar: AppBar(title: const Text('My badges')),
+                    body: BadgesScreen(api: widget.api),
+                  ),
+                  _ => ManagementScreen(api: widget.api, page: choice),
+                };
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(builder: (_) => page),
+                );
+              },
+            ),
             PopupMenuButton<String>(
               tooltip: 'Analytics and timelines',
               icon: const Icon(Icons.insights_outlined),

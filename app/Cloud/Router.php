@@ -60,8 +60,8 @@ final class CloudRouter
         [$page, $title] = $pages[$path];
         $user = Auth::requireLogin();
         if (in_array($page, ['submit', 'badges'], true)) Auth::requireRoles(['guardian', 'expert']);
-        if (in_array($page, ['verification', 'history'], true)) Auth::requireRoles(['expert', 'system_admin']);
-        if (in_array($page, ['checklist', 'users', 'species', 'badge-settings', 'audit', 'expert-applications', 'certificate-settings'], true)) Auth::requireRoles(['system_admin']);
+        if (in_array($page, ['verification', 'history', 'species'], true)) Auth::requireRoles(['expert', 'system_admin']);
+        if (in_array($page, ['checklist', 'users', 'badge-settings', 'audit', 'expert-applications', 'certificate-settings'], true)) Auth::requireRoles(['system_admin']);
         if ($page === 'reports' && isset($_GET['id'])) redirect('report-detail.php?id=' . (int) $_GET['id']);
         if ($page === 'dashboard') {
             $data = CloudClient::api('dashboard.php');

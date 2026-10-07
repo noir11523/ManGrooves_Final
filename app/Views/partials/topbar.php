@@ -12,16 +12,7 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
         <h1><?= e($displayTitle) ?></h1>
     </div>
     <div class="topbar-actions ms-auto">
-        <?php if ($mobileMoreItems): ?>
-        <div class="dropdown d-lg-none">
-            <button class="icon-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open menu"><i class="bi bi-list" aria-hidden="true"></i></button>
-            <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="max-height:75vh;overflow:auto">
-                <?php foreach ($mobileMoreItems as $entry): ?>
-                    <li><a class="dropdown-item" href="<?= e(url($entry[1])) ?>"><?= e($entry[0]) ?></a></li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
-        <?php endif; ?>
+
         <div class="dropdown d-lg-none">
             <button class="icon-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Analytics and timelines"><i class="bi bi-bar-chart" aria-hidden="true"></i></button>
             <ul class="dropdown-menu dropdown-menu-end shadow border-0">
