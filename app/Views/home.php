@@ -22,16 +22,6 @@
                 <p class="home-reassurance"><i class="bi bi-check2-circle" aria-hidden="true"></i> Guided field observations. Qualified expert review.</p>
 
             </div>
-            <aside class="home-observation" aria-label="Example mangrove observation">
-                <div class="home-observation-heading"><i class="bi bi-tree" aria-hidden="true"></i><span>Field observation</span><span class="home-example">Example</span></div>
-
-                <dl>
-                    <div><dt>Photo</dt><dd><i class="bi bi-camera" aria-hidden="true"></i> Captured</dd></div>
-                    <div><dt>Location</dt><dd>Geo-tagged</dd></div>
-                    <div><dt>Review</dt><dd><i class="bi bi-patch-check" aria-hidden="true"></i> Expert validated</dd></div>
-                </dl>
-
-            </aside>
         </div>
     </div>
 </section>
