@@ -28,6 +28,10 @@ Camera/gallery and GPS behavior were simulated; physical phone capture and field
 accuracy still depend on the device and permissions.
 
 APK SHA-256: `0292FA4B574648F6D54172C2889502691CD73A58955D986BE0DF13D4DEE02E3E`.
+Published at https://mangrooves-php.vercel.app. Final live checks confirmed the
+59,597,642-byte APK checksum, matching localhost/production assets, all six badge
+images, a valid existing award's public verification page, invalid-code 404s,
+private administration endpoints, and all three archived site records.
 Use `npm.cmd --prefix vercel run preview` and `http://127.0.0.1:8086` for the same
 prepared website and Supabase data as Vercel. The legacy MySQL/XAMPP application
 is a separate backend.
