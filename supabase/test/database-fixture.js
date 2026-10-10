@@ -11,6 +11,7 @@ export async function databaseFixture() {
   await pg.exec(await readFile(new URL('../migrations/202610020001_app.sql',import.meta.url),'utf8'));
   await pg.exec(await readFile(new URL('../migrations/202610020002_expert_applications.sql',import.meta.url),'utf8'));
   await pg.exec(await readFile(new URL('../migrations/202610050001_public_summary.sql',import.meta.url),'utf8'));
+  await pg.exec(await readFile(new URL('../migrations/202610100001_bounded_transaction_conflicts.sql',import.meta.url),'utf8'));
   const client={async rpc(name,args) {
     if(!/^app_[a-z_]+$/.test(name)) throw new Error('Bad test RPC');
     const entries=Object.entries(args), parameters=entries.map(([key],i)=>`${key} := $${i+1}`).join(',');

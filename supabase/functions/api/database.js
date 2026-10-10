@@ -28,7 +28,7 @@ class Transaction {
   async get(ref) { return this.db.read(ref,this); }
   expect(collection,id,revision) {
     const key=JSON.stringify([collection,id]);
-    if(this.expected.has(key) && this.expected.get(key).revision!==revision) throw Object.assign(new Error('Read changed'),{code:'40001'});
+    if(this.expected.has(key) && this.expected.get(key).revision!==revision) throw Object.assign(new Error('Read changed'),{code:'PT409'});
     this.expected.set(key,{collection,id,revision});
   }
   write(ref,data,mode) { this.writes.push({collection:ref.collection,id:ref.id,data,mode}); return this; }
@@ -59,7 +59,13 @@ export class Database {
   async runTransaction(callback) {
     for(let attempt=0;attempt<8;attempt++) {
       try { const tx=new Transaction(this); const result=await callback(tx); await tx.commit(); return result; }
-      catch(error) { if(error.code!=='40001'||attempt===7) throw error; await new Promise(r=>setTimeout(r,10*(attempt+1))); }
+      catch(error) {
+        // PT409 returns immediately through PostgREST. Re-read before retrying;
+        // replaying the same stale commit can never resolve a version conflict.
+        // Keep 40001 support during migration and for real serialization errors.
+        if(!['PT409','40001'].includes(error.code)||attempt===7) throw error;
+        await new Promise(r=>setTimeout(r,Math.min(250,10*2**attempt)+Math.random()*10));
+      }
     }
   }
 }
