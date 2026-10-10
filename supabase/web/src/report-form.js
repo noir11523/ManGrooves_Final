@@ -1,14 +1,15 @@
+import {traitLabels,traitHeadings,traitImage} from './trait-labels.js';
 import {capturePhoto} from './camera.js';
 import L from 'leaflet';
 import { api, apiUrl, friendly } from './client.js';
 import {ReportDraftStore} from './report-draft.js';
 import locationTools from '../../../public/assets/js/live-location.js';
-import { $, $$, esc, pill, field, select, formValues, errorBox, showError, toast, confirm, map, asset } from './ui.js';
+import { $, $$, esc, pill, speciesNames, field, select, formValues, errorBox, showError, toast, confirm, map, asset } from './ui.js';
 
 export const reportDraft = {
-  dirty: false, fields: {}, observations: {}, photo: null, closeupPhoto: null, step: 0, preview: null, followup: false,
+  dirty: false, fields: {}, observations: {}, photo: null, closeupPhoto: null, extraPhotos: [], step: 0, preview: null, followup: false,
   flush: async () => {},
-  reset() { this.dirty = false; this.fields = {}; this.observations = {}; this.photo = null; this.closeupPhoto = null; this.step = 0; this.preview = null; this.followup = false; this.checklistVersions = null; }
+  reset() { this.dirty = false; this.fields = {}; this.observations = {}; this.photo = null; this.closeupPhoto = null; this.extraPhotos = []; this.step = 0; this.preview = null; this.followup = false; this.checklistVersions = null; }
 };
 export async function reportWizard(node, query, user = null) {
   const data = await api('report-form.php');
@@ -17,15 +18,30 @@ export async function reportWizard(node, query, user = null) {
   const scope = user?.uid ?? user?.id;
   const storage = new ReportDraftStore(scope == null ? null : `${apiUrl('report-form.php')}:${scope}`);
   const closeupStorage=new ReportDraftStore(scope==null?null:`${apiUrl('report-form.php')}:${scope}:closeup`);
+  const extraStorage=Array.from({length:4},(_,i)=>new ReportDraftStore(scope==null?null:`${apiUrl('report-form.php')}:${scope}:extra${i}`));
+  const clearPhotos=async()=>{await closeupStorage.clear();await Promise.all(extraStorage.map(s=>s.clear()));};
+  let extraUrls=[];
   let draftMessage = '', saveWarning = '';
   let closeupUrl=null;
   if (scope != null || !draft.dirty || draft.owner !== scope) {
     draft.reset(); draft.fields = {cluster_id: query.cluster ?? '', parent_report_id: query.parent ?? '', sitio_name: '', observed_alive_count: '', guardian_remarks: '', root_type: '', leaf_shape: '', bark_texture: '', location_source: ''};
     for (const c of data.criteria) draft.observations[c.code] = [];
-    draft.followup = Boolean(query.parent);
+    draft.followup = Boolean(query.parent); draft.fields.submission_token=crypto.randomUUID();
     try {
-      const saved = await storage.load();
+      let saved = await storage.load();
+      const savedParent = String(saved?.fields?.parent_report_id ?? '');
+      if (saved && query.parent && savedParent !== String(query.parent)) {
+        if (!await confirm('Start this follow-up?', 'Your saved report draft is for a different visit. Replace it with a fresh observation for this follow-up?')) {
+          toast('Your saved draft is unchanged.');
+          location.hash = 'reports';
+          return () => {};
+        }
+        await storage.clear();
+        await clearPhotos();
+        saved = null;
+      }
       if (saved) {
+        draft.extraPhotos=(await Promise.all(extraStorage.map(s=>s.load()))).map(s=>s?.photo).filter(Boolean);
         draft.closeupPhoto=(await closeupStorage.load())?.photo??null;
         Object.assign(draft, {fields: saved.fields, observations: saved.observations, photo: saved.photo,
           step: Math.max(0, Math.min(3, Number(saved.step) || 0)), followup: Boolean(saved.followup), dirty: true});
@@ -36,6 +52,7 @@ export async function reportWizard(node, query, user = null) {
       }
     } catch { saveWarning = 'Could not restore your progress. Check device storage.'; }
   }
+  draft.fields.submission_token ||= crypto.randomUUID();
   draft.owner = scope;
   draft.checklistVersions = Object.fromEntries(data.criteria.map(c => [c.id, c.version]));
   let searchTimer, searchGeneration=0, locationGeneration=0;
@@ -53,7 +70,7 @@ export async function reportWizard(node, query, user = null) {
   const persist = async () => {
     if (!draft.dirty) return;
     const revision = ++saving;
-    try { await storage.save(draft); await closeupStorage.save({...draft,photo:draft.closeupPhoto}); if (revision !== saving) return; saveWarning = ''; }
+    try { await storage.save(draft); await closeupStorage.save({...draft,photo:draft.closeupPhoto}); await Promise.all(extraStorage.map((s,i)=>draft.extraPhotos[i]?s.save({...draft,photo:draft.extraPhotos[i]}):s.clear())); if (revision !== saving) return; saveWarning = ''; }
     catch { if (revision !== saving) return; saveWarning = 'Could not save your progress. Keep this page open and check device storage.'; }
     status();
   };
@@ -61,7 +78,7 @@ export async function reportWizard(node, query, user = null) {
   const save = form => {
     if (!form) return;
     const values = formValues(form);
-    for (const [key, value] of Object.entries(values)) if (key !== 'closeup_photo' && key !== 'photo' && !key.startsWith('obs_') && key !== 'followup') draft.fields[key] = value;
+    for (const [key, value] of Object.entries(values)) if (key !== 'closeup_photo' && key !== 'photo' && key !== 'extra_photos' && key !== 'count_unknown' && !key.startsWith('obs_') && key !== 'followup') draft.fields[key] = value;
     if (form.querySelector('#followup')) draft.followup = form.querySelector('#followup').checked;
   };
   const flush = async () => { save(node.querySelector('#report-form')); await persist(); };
@@ -79,7 +96,7 @@ export async function reportWizard(node, query, user = null) {
   };
   const leaving = () => { void flush(); };
   document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', leaving);
-  const dispose = () => { void flush(); stopped = true; clearTimeout(searchTimer);searchGeneration++;stopGps(); canvas?.remove(); canvas = null; if (photoUrl) URL.revokeObjectURL(photoUrl); if(closeupUrl) URL.revokeObjectURL(closeupUrl); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', leaving); draft.flush = async () => {}; };
+  const dispose = () => { void flush(); stopped = true; clearTimeout(searchTimer);searchGeneration++;stopGps(); canvas?.remove(); canvas = null; if (photoUrl) URL.revokeObjectURL(photoUrl); if(closeupUrl) URL.revokeObjectURL(closeupUrl); extraUrls.forEach(URL.revokeObjectURL); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', leaving); draft.flush = async () => {}; };
   async function render() {
     clearTimeout(searchTimer); searchGeneration++;
     stopGps(); canvas?.remove(); canvas = null; marker = null; accuracyCircle = null;
@@ -90,7 +107,7 @@ export async function reportWizard(node, query, user = null) {
       catch { draft.step = 2; draftMessage = 'Draft restored. Check the checklist before reviewing your report.'; }
     }
     if (stopped || !node.isConnected) return;
-    node.innerHTML = `<div class="page-head"><div><p class="eyebrow">Mangrove report</p><h1>Submit Report</h1></div><a class="button outline" href="#reports">Close</a></div><div class="steps" aria-label="Report steps">${['Details', 'Location', 'Checklist', 'Review'].map((label, i) => `<span class="${draft.step === i ? 'active' : ''}" ${draft.step === i ? 'aria-current="step"' : ''}>${i + 1}. ${label}</span>`).join('')}</div><section class="card"><form id="report-form">${errorBox}<div id="step-body"></div><div class="actions"><button type="button" id="previous" class="outline" ${draft.step ? '' : 'hidden'}>${draft.step ? '← Back' : 'Cancel'}</button><button id="next" type="submit">${draft.step === 3 ? 'Submit Report' : 'Continue →'}</button></div></form></section>`;
+    node.innerHTML = `<div class="page-head"><div><p class="eyebrow">Mangrove report</p><h1>Submit Report</h1></div><a class="button outline" href="#reports">Close</a></div><div class="steps" aria-label="Report steps">${['Details', 'Location', 'Observations', 'Review'].map((label, i) => `<span class="${draft.step === i ? 'active' : ''}" ${draft.step === i ? 'aria-current="step"' : ''}>${i + 1}. ${label}</span>`).join('')}</div><section class="card"><form id="report-form">${errorBox}<div id="step-body"></div><div class="actions"><button type="button" id="previous" class="outline" ${draft.step ? '' : 'hidden'}>${draft.step ? '← Back' : 'Cancel'}</button><button id="next" type="submit">${draft.step === 3 ? 'Submit Report' : 'Continue →'}</button></div></form></section>`;
     node.querySelector('.steps').insertAdjacentHTML('afterend', '<p id="draft-notice" class="notice" role="status" hidden></p>');
     status();
     const cancelButton=node.querySelector('.page-head a');let handlingForm=false,cancelling=false;
@@ -100,7 +117,7 @@ export async function reportWizard(node, query, user = null) {
       if(handlingForm||cancelling)return;
       if(draft.dirty&&!await confirm('Cancel report?','This clears the saved draft and selected photo.'))return;
       cancelling=true;
-      try{await flush();await storage.clear();await closeupStorage.clear();draft.reset();dispose();location.hash='reports';}
+      try{await flush();await storage.clear();await clearPhotos();draft.reset();dispose();location.hash='reports';}
       catch(error){toast(friendly(error));}
       finally{cancelling=false;}
     };
@@ -117,10 +134,12 @@ export async function reportWizard(node, query, user = null) {
       const error = form.querySelector('.error'); error.textContent = ''; save(form);
       button.disabled = true;handlingForm=true;
       try {
+        if (draft.step === 0 && draft.fields.count_unknown==='1' && !draft.fields.cluster_id) throw new Error('Choose a saved site when you are unable to count the mangroves.');
         if (draft.step === 0 && (!draft.photo || !draft.closeupPhoto)) throw new Error('Add a site overview and a close-up photo from this visit.');
         if (draft.step === 0 && $('#followup').checked && !draft.fields.parent_report_id) throw new Error('Choose the previous report for this follow-up.');
         if (draft.step === 1 && !['gps', 'manual'].includes(draft.fields.location_source)) throw new Error('Search for a place or tap the map to set your pin.');
         if (draft.step === 2) {
+          for(const key of Object.keys(traitHeadings))if(!draft.fields[key])throw new Error(`Choose ${traitHeadings[key]}.`);
           for (const c of data.criteria) {
             if (c.selection_mode === 'single' && draft.observations[c.code]?.length !== 1) throw new Error(`Choose an answer for ${c.name}.`);
           }
@@ -131,17 +150,17 @@ export async function reportWizard(node, query, user = null) {
         if (!(await confirm('Submit this report?', 'Check your summary first. This sends your photo, location, and answers.'))) return;
         const body = new FormData();
         body.set('payload', JSON.stringify({...draft.fields, observations: draft.observations, checklist_versions: draft.preview?.checklist_versions, field_confirmation: '1', photo_views:'2'}));
-        body.set('photo', draft.photo);body.set('closeup_photo',draft.closeupPhoto);
+        body.set('photo', draft.photo);body.set('closeup_photo',draft.closeupPhoto);draft.extraPhotos.forEach((photo,i)=>body.set(`extra_photo_${i}`,photo));
         await flush();
         const result = await api('submit-report.php', {body});
-        draft.reset(); await storage.clear();await closeupStorage.clear(); toast(result.message); location.hash = `report/${result.report.report_id ?? result.report.id}`;
+        draft.reset(); await storage.clear();await clearPhotos(); toast(result.message); location.hash = `report/${result.report.report_id ?? result.report.id}`;
       } catch (e) { if (node.isConnected) showError(error, friendly(e)); }
       finally { button.disabled = false;handlingForm=false; }
     };
   }
   async function details() {
     $('#step-body').innerHTML = `<h2>What did you observe?</h2><div class="field report-photo-picker"><span>Site overview</span><small>Step back to show the whole mangrove and surrounding site.</small><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden><input type="file" id="camera-photo" accept="image/*" capture="environment" hidden><div class="actions"><button type="button" class="outline" id="take-photo">Camera</button><button type="button" class="outline" id="choose-photo">Gallery</button></div><small>JPG, PNG, or WebP · Up to 5 MB</small></div><img id="photo-preview" class="preview-photo" alt="Your selected photo" ${draft.photo ? '' : 'hidden'}>
-      <div class="row">${select('cluster_id', 'Site', [['', 'New site'], ...data.clusters.map(c => [c.id, c.name])], draft.fields.cluster_id)}${field('sitio_name', 'Location name', draft.fields.sitio_name, 'text', 'required maxlength="120" placeholder="Sitio or nearby landmark"')}</div>
+      <div class="row">${select('cluster_id', 'Site', [['', 'New site'], ...data.clusters.map(c => [c.id, c.name])], draft.fields.cluster_id, draft.fields.parent_report_id?'disabled':'')}${field('sitio_name', 'Location name', draft.fields.sitio_name, 'text', 'required maxlength="120" placeholder="Sitio or nearby landmark"')}</div>${draft.fields.parent_report_id?'<p class="muted">This follow-up stays linked to its requested site.</p>':''}
       <input type="checkbox" id="followup" name="followup" hidden ${draft.fields.parent_report_id ? 'checked' : ''}><div id="followup-options" ${draft.fields.parent_report_id ? '' : 'hidden'}></div>
       <div class="row" style="margin-top:20px">${field('observed_alive_count', 'Living mangroves counted', draft.fields.observed_alive_count, 'number', 'required min="0" max="1000000" step="1"')}</div>
       <label class="field"><span>Notes (optional)</span><textarea name="guardian_remarks" maxlength="5000">${esc(draft.fields.guardian_remarks)}</textarea></label>`;
@@ -149,12 +168,33 @@ export async function reportWizard(node, query, user = null) {
     const photoGrid=document.createElement('div');photoGrid.className='report-photo-grid';
     const overview=node.querySelector('.report-photo-picker'),closeup=$('#closeup-preview').closest('.report-photo-picker');
     overview.before(photoGrid);photoGrid.append(overview,closeup);overview.append($('#photo-preview'));
+    photoGrid.insertAdjacentHTML('afterend', '<section class="extra-photo-picker"><h3>More views (optional)</h3><p>Up to 4 extra photos · 12 MB for all photos</p><div id="extra-previews" class="review-photos"></div><input id="extra-photos" name="extra_photos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden><div class="actions"><button type="button" class="outline" id="add-photos">+ Add photos</button><button type="button" class="outline" id="extra-camera">Camera</button></div></section>');
     const showPhoto = () => {
+      extraUrls.forEach(URL.revokeObjectURL);extraUrls=draft.extraPhotos.map(p=>URL.createObjectURL(p));
+      $('#extra-previews').innerHTML=extraUrls.map((url,i)=>`<figure><img class="inline-photo" src="${url}" alt="Additional photo ${i+1}"><button type="button" class="outline" data-remove-photo="${i}">Remove photo ${i+1}</button></figure>`).join('');
+      $$('[data-remove-photo]').forEach(button=>button.onclick=()=>{draft.extraPhotos.splice(Number(button.dataset.removePhoto),1);changed();showPhoto();});
+      $('#add-photos').disabled=$('#extra-camera').disabled=draft.extraPhotos.length>=4;
       if(closeupUrl)URL.revokeObjectURL(closeupUrl);
       if(draft.closeupPhoto){closeupUrl=URL.createObjectURL(draft.closeupPhoto);$('#closeup-preview').src=closeupUrl;$('#closeup-preview').hidden=false;}
       if (photoUrl) URL.revokeObjectURL(photoUrl);
       if (draft.photo) { photoUrl = URL.createObjectURL(draft.photo); $('#photo-preview').src = photoUrl; $('#photo-preview').hidden = false; }
     }; showPhoto();
+    const addPhotos=async files=>{
+      try {
+        if(draft.extraPhotos.length+files.length>4)throw new Error('Add up to four additional photos.');
+        for(const photo of files) {
+          if(!['image/jpeg','image/png','image/webp'].includes(photo.type)||photo.size>5*1024*1024)throw new Error('Choose JPG, PNG or WebP photos under 5 MB each.');
+        }
+        draft.extraPhotos.push(...files);changed();showPhoto();
+      } catch(error){toast(friendly(error));}
+    };
+    $('#add-photos').onclick=()=>$('#extra-photos').click();
+    $('#extra-photos').onchange=event=>{void addPhotos([...event.target.files]);event.target.value='';};
+    $('#extra-camera').onclick=async()=>{try{const photo=await capturePhoto();if(photo&&node.isConnected)await addPhotos([photo]);}catch(e){toast(friendly(e));}};
+    const countInput=$('[name=observed_alive_count]');
+    countInput.closest('.row').insertAdjacentHTML('afterend',`<label class="check"><input id="count-unknown" type="checkbox" ${draft.fields.count_unknown==='1'?'checked':''}>Unable to count — too many or not clearly visible</label><p class="muted">If you cannot count them, choose a saved site. The count will be recorded as unknown.</p>`);
+    const updateCount=()=>{const unknown=$('#count-unknown').checked;draft.fields.count_unknown=unknown?'1':'0';countInput.disabled=unknown;countInput.required=!unknown;};
+    updateCount();$('#count-unknown').onchange=()=>{updateCount();changed();};
     const placeInput = $('[name=sitio_name]');
     placeInput.autocomplete = 'off';placeInput.readOnly=Boolean(draft.fields.cluster_id);
     placeInput.setAttribute('aria-controls', 'details-places');
@@ -208,7 +248,7 @@ export async function reportWizard(node, query, user = null) {
       draft.fields.parent_report_id='';draft.fields.parent_report_code='';draft.followup=false;$('#followup').checked=false;
       target.hidden = true;target.innerHTML='';
       next.disabled=false;
-      if (!cluster) { changed();return; }
+      if (!cluster || !preferred) { changed();return; }
       target.innerHTML = '<p class="muted">Loading your previous visits…</p>';
       target.hidden=false;next.disabled=true;
       let reports;
@@ -221,10 +261,11 @@ export async function reportWizard(node, query, user = null) {
       }
       if (current !== generation || !target.isConnected) return;
       next.disabled=false;
-      draft.followup=reports.length>0;$('#followup').checked=draft.followup;
+      draft.followup=reports.some(r=>String(r.id)===String(preferred));$('#followup').checked=draft.followup;
       draft.fields.parent_report_id=reports.some(r=>String(r.id)===String(preferred))?preferred:reports[0]?.id??'';
-      target.hidden=!draft.followup;
-      target.innerHTML=draft.followup?`<p class="notice">Follow-up visit · You have a verified report at this site.</p>${select('parent_report_id','Previous visit',reports.map(r=>[r.id,`${r.report_code} · ${r.health}`]),draft.fields.parent_report_id,'required')}`:'';
+      target.hidden=false;
+      if(!draft.followup){target.innerHTML='<p class="notice">This follow-up is no longer available. Return to the report to check its status.</p>';next.disabled=true;return;}
+      target.innerHTML=draft.followup?`<p class="notice">Follow-up visit · An expert requested a new observation.</p>${select('parent_report_id','Previous visit',reports.map(r=>[r.id,`${r.report_code} · ${r.health}`]),draft.fields.parent_report_id,'required')}`:'';
       const rememberVisit = () => {
         const selected=target.querySelector('[name=parent_report_id]')?.value;
         draft.fields.parent_report_code=reports.find(r=>String(r.id)===String(selected))?.report_code??'';
@@ -397,15 +438,29 @@ export async function reportWizard(node, query, user = null) {
     if (!draft.fields.location_source) startLocation();
   }
 
-  function traitImage(key,value) {
-    const v=value.toLowerCase();
-    if(key==='root_type')return v.includes('pneumat')?'pencil-roots':v.includes('loop')?'loop-roots':v.includes('rhizome')?'rhizomes':'prop-roots';
-    if(key==='leaf_shape')return v.includes('lanceolate')?'lanceolate':v.includes('obovate')?'obovate':v.includes('dots')?'elliptic-dots':v.includes('upward')?'elliptic-upward':'elliptic';
-    return v.includes('palm')?'palm-bark':v.includes('smooth')?'smooth-bark':v.includes('fissures')?'fissured-bark':'rough-bark';
-  }
+  let selectedCategory=0;
   function checklist() {
     $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Leaf color, pests, and roots determine the health score. Choose Not Sure when you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Health score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p>${c.guide_image ? `<img class="guide" src="${esc(asset(c.guide_image))}" alt="${esc(c.name)} guide">` : ''}<div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
-    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. These diagrams are a guide.</p>${Object.entries({root_type:'Root type',leaf_shape:'Leaf shape',bark_texture:'Bark texture'}).map(([key,label])=>`<fieldset class="choice-group"><legend>${label}</legend><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''} required><img src="${asset('img/traits/'+traitImage(key,value)+'.svg')}" alt=""><span>${esc(value)}</span></label>`).join('')}</div></fieldset>`).join('')}`);
+    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. These diagrams are a guide.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${label}</legend><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}><img src="${esc(asset(data.trait_images?.[key]?.[value]||'img/traits/'+traitImage(key,value)+'.svg'))}" alt=""><span>${esc(traitLabels[value]||value)}</span></label>`).join('')}</div></fieldset>`).join('')}`);
+    const body=$('#step-body'), groups=[...body.querySelectorAll('fieldset.choice-group')];
+    const tabs=document.createElement('div');tabs.className='observation-categories';tabs.setAttribute('aria-label','Observation categories');
+    tabs.innerHTML=groups.map((group,i)=>`<button type="button" class="outline" data-category="${i}">${esc(group.querySelector('legend').childNodes[0].textContent)}</button>`).join('');
+    body.prepend(tabs);body.classList.add('observation-catalog');
+    const showCategory=index=>{selectedCategory=index;groups.forEach((g,i)=>g.hidden=i!==index);tabs.querySelectorAll('button').forEach((b,i)=>{b.classList.toggle('selected',i===index);b.setAttribute('aria-pressed',String(i===index));});};
+    tabs.querySelectorAll('button').forEach((button,i)=>button.onclick=()=>showCategory(i));showCategory(Math.min(selectedCategory,groups.length-1));
+    // Expand a tile before selecting it; keyboard users retain the native inputs.
+    for(const choice of body.querySelectorAll('.choice')) {
+      const source=choice.querySelector('img');
+      if(!source)choice.insertAdjacentHTML('afterbegin',`<img src="${asset('img/traits/elliptic.svg')}" alt="Sample illustration">`);
+      const image=choice.querySelector('img');image.alt ||= 'Tap to enlarge';
+      const preview=document.createElement('button');preview.type='button';preview.className='choice-preview';preview.textContent='Enlarge';choice.append(preview);
+      const open=event=>{event.preventDefault();event.stopPropagation();
+        const dialog=document.createElement('dialog');dialog.className='observation-preview';
+        dialog.innerHTML=`<h2>${esc(choice.querySelector('span').textContent)}</h2><img src="${esc(image.src)}" alt="Feature preview"><div class="actions"><button type="button" class="outline" data-cancel>Cancel</button><button type="button" data-select>Select this choice</button></div>`;
+        node.append(dialog);dialog.onclose=()=>dialog.remove();dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();dialog.querySelector('[data-select]').onclick=()=>{const input=choice.querySelector('input');input.checked=input.type==='checkbox'?!input.checked:true;input.dispatchEvent(new Event('change',{bubbles:true}));dialog.close();};dialog.showModal();
+      };
+      choice.onclick=event=>{if(event.target===choice.querySelector('input')&&event.detail===0)return;open(event);};
+    }
     for (const c of data.criteria) {
       const inputs = $$(`[name=obs_${c.code}]`);
       inputs.forEach(input => input.onchange = () => {
@@ -417,9 +472,11 @@ export async function reportWizard(node, query, user = null) {
   }
   function summary() {
     const c = draft.preview?.classification, species = draft.preview?.species?.best;
-    $('#step-body').innerHTML = `<h2>Review your report</h2><p>Check everything below. You can still make changes.</p><section class="summary-card report-review"><h3>Details <button type="button" class="link edit" data-step="0">Edit</button></h3><div class="review-photos"><figure><img id="summary-photo" class="inline-photo" alt="Site overview"><figcaption>Site overview</figcaption></figure><figure><img id="summary-closeup" class="inline-photo" alt="Close-up"><figcaption>Close-up</figcaption></figure></div><dl class="summary"><dt>Location name</dt><dd>${esc(draft.fields.sitio_name)}</dd><dt>Living mangroves</dt><dd>${esc(draft.fields.observed_alive_count)}</dd><dt>Species assessment</dt><dd>${esc(species?.scientific_name ?? 'Needs identification')}</dd><dt>Notes</dt><dd>${esc(draft.fields.guardian_remarks || 'None')}</dd>${draft.fields.parent_report_id ? `<dt>Follow-up</dt><dd>${esc(draft.fields.parent_report_code || 'Previous visit')}</dd>` : ''}</dl></section><section class="summary-card"><h3>Location <button type="button" class="link edit" data-step="1">Edit</button></h3><p>${esc(draft.fields.latitude)}, ${esc(draft.fields.longitude)} · ${draft.fields.location_source === 'gps' ? `Device location (about ${Math.round(Number(draft.fields.location_accuracy))} m)` : 'Manual pin'}</p></section><section class="summary-card"><h3>Checklist <button type="button" class="link edit" data-step="2">Edit</button></h3>${pill(c?.status ?? 'Unknown')}<p>${c?.health_score == null ? 'An expert will review the uncertain answers.' : `${c.health_score} / 6 health points. ${c.status === 'Healthy' ? 'This report will be verified automatically.' : 'An expert will review this report.'}`}</p>${data.criteria.map(criterion => `<p><strong>${esc(criterion.name)}:</strong> ${criterion.options.filter(o => draft.observations[criterion.code]?.includes(o.id)).map(o => esc(o.label)).join(', ') || 'None selected'}</p>`).join('')}</section><label class="check"><input type="checkbox" id="field-confirm" required><span>This photo, location, and checklist describe my field visit.</span></label>`;
+    $('#step-body').innerHTML = `<h2>Review your report</h2><p>Check everything below. You can still make changes.</p><section class="summary-card report-review"><h3>Details <button type="button" class="link edit" data-step="0">Edit</button></h3><div class="review-photos"><figure><img id="summary-photo" class="inline-photo" alt="Site overview"><figcaption>Site overview</figcaption></figure><figure><img id="summary-closeup" class="inline-photo" alt="Close-up"><figcaption>Close-up</figcaption></figure></div><dl class="summary"><dt>Location name</dt><dd>${esc(draft.fields.sitio_name)}</dd><dt>Living mangroves</dt><dd>${draft.fields.count_unknown==='1'?'Unable to count':esc(draft.fields.observed_alive_count)}</dd><dt>Species name</dt><dd>${speciesNames(species)}</dd><dt>Notes</dt><dd>${esc(draft.fields.guardian_remarks || 'None')}</dd>${draft.fields.parent_report_id ? `<dt>Follow-up</dt><dd>${esc(draft.fields.parent_report_code || 'Previous visit')}</dd>` : ''}</dl></section><section class="summary-card"><h3>Location <button type="button" class="link edit" data-step="1">Edit</button></h3><p>${esc(draft.fields.latitude)}, ${esc(draft.fields.longitude)} · ${draft.fields.location_source === 'gps' ? `Device location (about ${Math.round(Number(draft.fields.location_accuracy))} m)` : 'Manual pin'}</p></section><section class="summary-card"><h3>Observations <button type="button" class="link edit" data-step="2">Edit</button></h3>${pill(c?.status ?? 'Unknown')}<p>${c?.health_score == null ? 'An expert will review the uncertain answers.' : `${c.health_score} / 6 health points. An expert will review this report.`}</p>${data.criteria.map(criterion => `<p><strong>${esc(criterion.name)}:</strong> ${criterion.options.filter(o => draft.observations[criterion.code]?.includes(o.id)).map(o => esc(o.label)).join(', ') || 'None selected'}</p>`).join('')}</section><label class="check"><input type="checkbox" id="field-confirm" required><span>This photo, location, and observations describe my field visit.</span></label>`;
     if (draft.photo) { if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = URL.createObjectURL(draft.photo); $('#summary-photo').src = photoUrl; }
     if(draft.closeupPhoto){if(closeupUrl)URL.revokeObjectURL(closeupUrl);closeupUrl=URL.createObjectURL(draft.closeupPhoto);$('#summary-closeup').src=closeupUrl;}
+    extraUrls.forEach(URL.revokeObjectURL);extraUrls=draft.extraPhotos.map(p=>URL.createObjectURL(p));
+    $('#summary-photo').closest('.review-photos').insertAdjacentHTML('beforeend',extraUrls.map((url,i)=>`<figure><img class="inline-photo" src="${url}" alt="Additional photo ${i+1}"><figcaption>Additional photo ${i+1}</figcaption></figure>`).join(''));
     $$('.edit').forEach(button => button.onclick = () => { draft.step = Number(button.dataset.step); render().catch(e => toast(friendly(e))); });
     // The confirmation checkbox does not invalidate an already checked preview.
     $('#field-confirm').addEventListener('change', event => event.stopPropagation());

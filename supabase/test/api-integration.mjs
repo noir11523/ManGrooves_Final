@@ -52,7 +52,8 @@ const select = (code, option) => reference.criteria.find(c => c.code === code).o
 const healthy = {leaf_color: [1], leaf_condition: [4], pests: [8], roots: [11], bark_trunk: [15], bio_indicators: [], negative_signs: []};
 let color = 10;
 async function submission(user, changes = {}, photo) {
-  const bytes = photo ?? Buffer.concat([fixture.subarray(0,2), Buffer.from([255,254,0,3,++color]),fixture.subarray(2)]);
+  const bytes = photo ?? Buffer.from(fixture);
+  if (!photo) bytes[25] = Math.min(255, bytes[25] + (color++ % 100)); // Make each test image's JPEG pixels distinct.
   const fields = {latitude: 10.2833, longitude: 123.8833, location_source: 'gps', location_accuracy: 10, sitio_name: 'Test shoreline',
     observed_alive_count: 10, root_type: reference.species[0].root_type, leaf_shape: reference.species[0].leaf_shape, bark_texture: reference.species[0].bark_texture,
     field_confirmation: '1', observations: healthy, checklist_versions: Object.fromEntries(reference.criteria.map(c => [c.id, c.version])), ...changes};
@@ -127,12 +128,26 @@ try {
   for (const route of ['checklist.php', 'verification.php', 'validation-history.php', 'users.php', 'audit.php', 'export-analytics.php']) await request(route, guardian, null, 403);
   pass('guardian cannot access staff/admin endpoints');
   const form = await request('report-form.php', guardian); assert.equal(form.criteria.length, 7); pass('reference forms are available');
+  for (const user of [guardian, expert]) await request('trait-images.php', user, null, 403);
+  const trait = 'root_type', value = form.traits[trait][0];
+  const traitEdit = new FormData();traitEdit.set('payload',JSON.stringify({trait,value}));traitEdit.set('photo',new Blob([fixture],{type:'image/jpeg'}),'feature.jpg');
+  const traitSaved = await request('trait-images.php',admin,traitEdit);
+  const traitPath = traitSaved.trait_images[trait][value];
+  assert.equal((await request('report-form.php',guardian)).trait_images[trait][value],traitPath);
+  assert.equal((await request(traitPath.replace('../mobile-api/',''),null,null,200,true))[0],255);
+  await request('trait-images.php',guardian,{trait,value,remove:true},403);
+  const traitRestored = await request('trait-images.php',admin,{trait,value,remove:true});
+  assert.equal(traitRestored.trait_images[trait][value],undefined);
+  assert.deepEqual((await request('report-form.php',guardian)).traits,form.traits);
+  pass('only administrators can replace and restore feature images while canonical species values remain unchanged');
   const preview = await request('report-preview.php', guardian, {observations: healthy, ...reference.species[0], checklist_versions: Object.fromEntries(reference.criteria.map(c => [c.id, c.version]))}); assert.equal(preview.classification.status, 'Healthy'); pass('cloud score preview');
   await request('report-preview.php', guardian, {observations: healthy, checklist_versions: {}}, 409); pass('preview cannot score unseen checklist changes');
   const stale = await submission(guardian, {checklist_versions: {}}); await request('submit-report.php', guardian, stale.body, 409); pass('stale checklist submission rejected');
   const invalidGps = await submission(guardian, {location_accuracy: 180}); await request('submit-report.php', guardian, invalidGps.body, 422); pass('approximate GPS cannot silently become a precise report pin');
+  const uncountedWithoutSite = await submission(guardian, {count_unknown: '1', observed_alive_count: ''});
+  await request('submit-report.php', guardian, uncountedWithoutSite.body, 422); pass('an unknown mangrove count requires a saved site');
   const first = await submission(guardian), saved = await request('submit-report.php', guardian, first.body, 201), firstId = saved.report.report_id;
-  assert.equal(saved.report.status, 'verified'); assert.ok(saved.report.cluster_id); pass('healthy report auto-verifies and creates a cluster');
+  assert.equal(saved.report.status, 'pending'); assert.ok(saved.report.cluster_id); pass('every new report enters staff review and a new site stays personal');
   const repeat = await submission(guardian, {}, first.bytes), repeated = await request('submit-report.php', guardian, repeat.body, 201);
   assert.equal(repeated.report.report_id, firstId); pass('retry does not create a duplicate report');
   const conflicting = await submission(guardian, {observed_alive_count: 9}, first.bytes); await request('submit-report.php', guardian, conflicting.body, 409); pass('reused photo with different report data rejected');
@@ -146,6 +161,17 @@ try {
   await request('sites.php',guardian,{...personalSite,action:'approve'},403);
   await request('sites.php',expert,{id:personalSite.id,version:personalSite.version??'',action:'approve'});
   assert.ok((await request('report-form.php',other)).clusters.some(s=>s.id===personalSite.id));
+  await request('review.php',expert,{report_id:firstId,action:'confirm',needs_follow_up:true,follow_up_note:'Recheck the site on the next visit.'});
+  const reviewedFirst=(await request(`report.php?id=${firstId}`,guardian)).report;
+  assert.equal(reviewedFirst.status,'verified');assert.equal(reviewedFirst.needs_follow_up,true);
+  const verifiedStats=(await request('dashboard.php',guardian)).stats;assert.equal(verifiedStats.total_reports,1);assert.equal(verifiedStats.pending_reports,0);assert.equal(verifiedStats.needs_attention,1);
+  pass('staff verification updates verified totals and creates an explicit follow-up request');
+  const unknownCount=await submission(guardian,{cluster_id:saved.report.cluster_id,count_unknown:'1',observed_alive_count:''});
+  const unknownSaved=await request('submit-report.php',guardian,unknownCount.body,201);
+  assert.equal(unknownSaved.report.status,'pending');
+  const unknownDetail=(await request(`report.php?id=${unknownSaved.report.report_id}`,guardian)).report;
+  assert.equal(unknownDetail.count_unknown,true);assert.equal(unknownDetail.observed_alive_count,null);
+  pass('unable-to-count observations are saved as unknown, never as zero');
   pass('personal sites remain private until staff approval; creator metadata and first report number are retained');
   const community = await request(`cluster.php?id=${saved.report.cluster_id}`, other); assert.equal(community.timeline[0].can_view_details, false); assert.equal(community.timeline[0].photo_url, null); pass('community timeline omits another guardian’s private photo');
   const personal = await request('analytics.php?date_from=2026-01-01&date_to=2100-01-01', other); assert.equal(personal.analytics.verification.total, 0); pass('guardian analytics is scoped to the signed-in account');
@@ -159,7 +185,8 @@ try {
   const pdf = await request('export-analytics.php', admin, null, 200, true); assert.equal(pdf.subarray(0, 4).toString(), '%PDF'); pass('administrator PDF export');
   await request('certificate-settings.php',admin,{signer_name:'Sample Coordinator',signer_title:'Program Coordinator'});
   const badges = await request('badges.php', guardian); assert.equal(badges.badges[0].earned, true); const certificate = await request('certificate.php?badge_id=1', guardian, null, 200, true); assert.equal(certificate.subarray(0, 4).toString(), '%PDF'); pass('earned badge and certificate');
-  const follow = await submission(guardian, {cluster_id: saved.report.cluster_id, parent_report_id: firstId}); const following = await request('submit-report.php', guardian, follow.body, 201); assert.equal(following.report.cluster_id, saved.report.cluster_id); pass('follow-up preserves the original cluster');
+  const follow = await submission(guardian, {cluster_id: saved.report.cluster_id, parent_report_id: firstId}); const following = await request('submit-report.php', guardian, follow.body, 201); assert.equal(following.report.cluster_id, saved.report.cluster_id);assert.equal(following.report.status,'pending');
+  const followDetail=(await request(`report.php?id=${firstId}`,guardian)).report;assert.equal(followDetail.active_child_id,following.report.report_id);assert.equal(followDetail.observation_history.length,2);pass('follow-up links only to its explicit parent and starts a fresh pending review');
   const unavailable = await submission(guardian, {cluster_id: saved.report.cluster_id, parent_report_id: firstId}); await request('submit-report.php', guardian, unavailable.body, 422); pass('duplicate active follow-up rejected');
   const criterion = structuredClone(form.criteria[0]); criterion.name = 'Leaf colors'; criterion.options.push({id: -1, kind: 'standard', label: 'Mixed green', points: 1});
   const savedChecklist = await request('checklist.php', admin, criterion); const fresh = savedChecklist.criteria.find(c => c.id === criterion.id); assert.ok(fresh.options.some(o => o.label === 'Mixed green')); pass('administrator can add and rename choices');
@@ -184,7 +211,7 @@ try {
   // Checklist was edited earlier; obtain the current versions before sending.
   const currentCriteria=(await request('report-form.php',expert)).criteria;const expertFields=JSON.parse(expertReport.body.get('payload'));expertFields.checklist_versions=Object.fromEntries(currentCriteria.map(c=>[c.id,c.version]));expertReport.body.set('payload',JSON.stringify(expertFields));
   const own=await request('submit-report.php',expert,expertReport.body,201);await request('review.php',expert,{report_id:own.report.report_id,action:'reject',expert_feedback:'Own report'},403);pass('experts can submit but cannot review their own reports');
-  const attention=await request('reports.php?needs_attention=1',admin);assert.ok(attention.items.every(r=>r.status==='pending'));assert.ok(!attention.items.some(r=>r.id===pending.report.report_id));pass('reviewed reports leave Needs attention everywhere');
+  const attention=await request('reports.php?needs_attention=1',admin);assert.ok(attention.items.every(r=>r.status==='verified'));assert.ok(attention.items.some(r=>r.id===pending.report.report_id));pass('Needs attention contains only verified reports with a health concern');
   await request('certificate-settings.php',{...guardian,token:(await signIn(guardian.email,'newpassword12')).idToken},null,403);
   await request('certificate-settings.php',admin,{signer_name:'Sample Coordinator',signer_title:'Program Coordinator'});
   const certificateBadges=(await request('badges.php',{...guardian,token:(await signIn(guardian.email,'newpassword12')).idToken})).badges,award=certificateBadges.find(b=>b.earned);assert.ok(award);

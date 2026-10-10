@@ -205,6 +205,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                                 )
                               : ReportDetailScreen(
                                   api: widget.api,
+                                  manageFollowUp: true,
                                   reportId: report['id'] as int,
                                 ),
                         ),
@@ -273,6 +274,8 @@ class ReviewReportScreen extends StatefulWidget {
 
 class _ReviewReportScreenState extends State<ReviewReportScreen> {
   final _feedback = TextEditingController();
+  final _followUpNote = TextEditingController();
+  bool _needsFollowUp = false;
   Map<String, dynamic>? _report;
   String? _health;
   int? _speciesId;
@@ -359,6 +362,8 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
         'rarity_level': _rarity,
 
         'expert_feedback': _feedback.text,
+        'needs_follow_up': _needsFollowUp,
+        'follow_up_note': _followUpNote.text,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -379,6 +384,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
   @override
   void dispose() {
     _feedback.dispose();
+    _followUpNote.dispose();
     super.dispose();
   }
 
@@ -424,7 +430,10 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
           ),
         if (_report!['closeup_photo_url'] != null) ...[
           const SizedBox(height: 12),
-          const Text('Close-up', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          const Text(
+            'Close-up',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
           Image.network(
             widget.api.resolve('${_report!['closeup_photo_url']}').toString(),
             headers: widget.api.imageHeaders,
@@ -433,6 +442,17 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
             errorBuilder: (_, _, _) => const Text('Photo unavailable.'),
           ),
         ],
+        for (final path in _report!['extra_photo_urls'] as List? ?? [])
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Image.network(
+              widget.api.resolve('$path').toString(),
+              headers: widget.api.imageHeaders,
+              height: 220,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const Text('Photo unavailable.'),
+            ),
+          ),
         const SizedBox(height: 14),
         Card(
           child: Padding(
@@ -451,7 +471,9 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                 Text(
                   'Location: ${_report!['latitude']}, ${_report!['longitude']}',
                 ),
-                Text('Living mangroves: ${_report!['observed_alive_count']}'),
+                Text(
+                  'Living mangroves: ${_report!['observed_alive_count'] ?? 'Unable to count'}',
+                ),
                 const Divider(height: 24),
                 Text('Suggested health: ${_report!['suggested_health']}'),
                 Text(
@@ -461,7 +483,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                 ),
                 const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
                 Text(
-                  'Suggested species: ${_report!['suggested_species_name'] ?? 'Needs manual identification'}',
+                  'Species name: ${speciesNames(_report!).isEmpty ? 'Needs manual identification' : speciesNames(_report!)}',
                 ),
                 Text(
                   'Species trait match: ${_report!['species_confidence'] ?? 0}%. This is a suggestion.',
@@ -524,7 +546,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                       (item) => DropdownMenuItem<int?>(
                         value: item['id'] as int,
                         child: Text(
-                          '${item['common_name']} (${item['scientific_name']})',
+                          speciesNames(item),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -552,9 +574,29 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    'Saving this review removes the Needs attention tag.',
+                    'Verified results determine whether this site needs attention.',
                   ),
                 ),
+                CheckboxListTile(
+                  value: _needsFollowUp,
+                  onChanged: _busy
+                      ? null
+                      : (v) => setState(() => _needsFollowUp = v ?? false),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Needs follow-up'),
+                ),
+                if (_needsFollowUp)
+                  TextField(
+                    controller: _followUpNote,
+                    enabled: !_busy,
+                    maxLength: 1000,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Follow-up note (optional)',
+                      hintText:
+                          'Why does this mangrove need another observation?',
+                    ),
+                  ),
                 TextField(
                   controller: _feedback,
                   enabled: !_busy,

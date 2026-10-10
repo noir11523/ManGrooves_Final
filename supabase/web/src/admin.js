@@ -1,4 +1,5 @@
 import {adminList} from './admin-lists.js';
+import {traitImage} from './trait-labels.js';
 import {sitesPage,catalogTabs} from './sites-page.js';
 import { api, friendly } from './client.js';
 import { $, $$, esc, field, select, formValues, errorBox, showError, toast, confirm, pager, asset } from './ui.js';
@@ -9,9 +10,40 @@ const specials = ['unknown', 'all_of_the_above', 'none_of_the_above'];
 const labels = { unknown: 'Not Sure', all_of_the_above: 'All of the above', none_of_the_above: 'None of the above'};
 export async function checklistPage(node) {
   const {criteria} = await api('checklist.php');
+  let traitData={};
+  try{traitData=await api('trait-images.php');}catch{}
   if (!node.isConnected) return;
   node.innerHTML = `${head('Health checklist', 'Edit questions, photos, and choices. Existing reports keep their original answers.')}<p class="notice">Health uses leaf color, pests, and roots: 6 Healthy · 3–5 Stressed · 0–2 At Risk. All of the above uses the lowest health score. Not Sure is unscored and requires review.</p><div id="criteria"></div>`;
   const root = $('#criteria'); let temporaryId = -1;
+  node.querySelector('.page-head').insertAdjacentHTML('afterend','<section class="card trait-image-editors"><h2>Species feature pictures</h2><p>Replace the sample illustration shown for each species feature.</p><div id="trait-editors"></div></section>');
+  const traitRoot=$('#trait-editors'),traitHead={root_type:'Klase sa Gamot (Root Type)',leaf_shape:'Porma sa Dahon (Leaf Shape)',bark_texture:'Hitsura sa Panit sa Punoan (Bark Texture)'};
+  for(const [key,values] of Object.entries(traitData.traits??{}))for(const value of values){
+    const sample='img/traits/'+traitImage(key,value)+'.svg';
+    const image=traitData.trait_images?.[key]?.[value]||sample,row=document.createElement('div');
+    row.className='trait-image-editor';
+    const label=document.createElement('strong');label.textContent=(traitHead[key]||key)+' · '+value;
+    const preview=document.createElement('img');preview.src=asset(image);preview.alt='Current sample for '+value;
+    const input=document.createElement('input');input.type='file';input.accept='image/jpeg,image/png,image/webp';input.setAttribute('aria-label','Replace sample picture for '+value);
+    const actions=document.createElement('div');actions.className='actions';
+    const save=document.createElement('button');save.type='button';save.textContent='Save picture';
+    const status=document.createElement('p');status.setAttribute('role','status');
+    actions.append(save);
+    const remove=document.createElement('button');
+    remove.type='button';remove.className='outline';remove.textContent='Use sample illustration';remove.hidden=!traitData.trait_images?.[key]?.[value];actions.append(remove);
+    row.append(label,preview,input,actions,status);traitRoot.append(row);
+    save.onclick=async()=>{
+      const file=input.files[0];
+      if(!file||!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){status.textContent='Choose a JPG, PNG, or WebP image under 5 MB.';return;}
+      save.disabled=true;const body=new FormData();body.set('payload',JSON.stringify({action:'trait_image',trait:key,value}));body.set('photo',file);
+      try{const saved=await api('trait-images.php',{body});traitData.trait_images=saved.trait_images;preview.src=asset(saved.trait_images[key][value]);remove.hidden=false;status.textContent='Picture saved.';input.value='';}
+      catch(error){status.textContent=friendly(error);}finally{save.disabled=false;}
+    };
+    remove.addEventListener('click',async()=>{
+      remove.disabled=true;
+      try{const saved=await api('trait-images.php',{body:{action:'trait_image',trait:key,value,remove:true}});traitData.trait_images=saved.trait_images;preview.src=asset(sample);remove.hidden=true;remove.disabled=false;status.textContent='Sample illustration restored.';}
+      catch(error){status.textContent=friendly(error);remove.disabled=false;}
+    });
+  }
   const query = {}, rows = [];
   root.insertAdjacentHTML('beforebegin', listFilters(query, [], 'Checklist name or question'));
   root.insertAdjacentHTML('afterend', '<p class="empty filter-empty" hidden>No checklist questions match.</p>');

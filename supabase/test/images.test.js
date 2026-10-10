@@ -10,6 +10,8 @@ test('Edge-compatible image sanitizer handles raster types and strips private JP
    assert.throws(()=>cleanImage(bytes.subarray(0,bytes.length-20)));
  }
  const jpeg=await readFile(new URL('fixtures/photo.jpg',import.meta.url)),secret=Buffer.from('private GPS location');
+ const resolutionVariant=Buffer.from(jpeg);resolutionVariant[13]=1;resolutionVariant.writeUInt16BE(600,14);resolutionVariant.writeUInt16BE(300,16);
+ assert.deepEqual(cleanImage(resolutionVariant).bytes,cleanImage(jpeg).bytes,'ignore harmless JFIF print-density differences');
  const header=Buffer.from([255,225,0,secret.length+2]);
  const result=cleanImage(Buffer.concat([jpeg.subarray(0,2),header,secret,jpeg.subarray(2)]));
  assert.equal(result.bytes.includes(secret),false);

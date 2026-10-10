@@ -1,3 +1,8 @@
+import 'dart:math';
+
+import '../core/trait_labels.dart';
+import '../core/display_text.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -23,6 +28,7 @@ class SubmitReportScreen extends StatefulWidget {
     this.active = true,
     this.draftOwner,
     this.draftStore,
+    this.handleSystemBack = true,
   });
 
   final ApiClient api;
@@ -33,6 +39,7 @@ class SubmitReportScreen extends StatefulWidget {
   final bool active;
   final String? draftOwner;
   final ReportDraftStore? draftStore;
+  final bool handleSystemBack;
 
   @override
   State<SubmitReportScreen> createState() => SubmitReportScreenState();
@@ -57,6 +64,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   String? _barkTexture;
   XFile? _photo;
   XFile? _closeupPhoto;
+  final List<XFile> _extraPhotos = [];
+  bool _pickingExtra = false;
+  bool _countUnknown = false;
+  int _category = 0;
+  String _submissionToken = List.generate(
+    24,
+    (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
   bool _pickingCloseup = false;
   ReportLocation? _location;
   String? _error;
@@ -104,6 +119,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     'sitio_name': _sitio.text,
     'selected_place_label': _selectedPlaceLabel,
     'observed_alive_count': _aliveCount.text,
+    'count_unknown': _countUnknown ? '1' : '0',
+    'submission_token': _submissionToken,
     'guardian_remarks': _remarks.text,
     'root_type': _rootType,
     'leaf_shape': _leafShape,
@@ -115,6 +132,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     'photo_path': _photo?.path,
     'closeup_photo_path': _closeupPhoto?.path,
     'picking_closeup': _pickingCloseup,
+    'picking_extra': _pickingExtra,
+    'extra_count': _extraPhotos.length,
     'flow_version': 2,
     'picking_photo': _pickingPhoto,
     'location': _location?.fields,
@@ -153,6 +172,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           _closeupPhoto = XFile(_draftStore.photoPath('$scope:closeup')!);
         }
       }
+      for (var i = 0; i < 4; i++) {
+        if (i < _extraPhotos.length) {
+          await _draftStore.save('$scope:extra$i', {
+            'photo_path': _extraPhotos[i].path,
+          });
+          final path = _draftStore.photoPath('$scope:extra$i');
+          if (path != null) _extraPhotos[i] = XFile(path);
+        } else {
+          await _draftStore.clear('$scope:extra$i');
+        }
+      }
       await _draftStore.save(scope, snapshot);
       if (_photo?.path == snapshot['photo_path'] &&
           _draftStore.photoPath(scope) != null) {
@@ -178,6 +208,23 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     try {
       final draft = await _draftStore.load(_draftScope!);
       if (draft == null || !mounted) return;
+      if (widget.initialParentReportId != null &&
+          draft['parent_report_id'] != widget.initialParentReportId) {
+        return;
+      }
+      _countUnknown = draft['count_unknown'] == '1';
+      _submissionToken =
+          draft['submission_token']?.toString() ?? _submissionToken;
+      for (
+        var i = 0;
+        i < (draft['extra_count'] as int? ?? 0).clamp(0, 4);
+        i++
+      ) {
+        final extra = await _draftStore.load('${_draftScope!}:extra$i');
+        if (extra?['photo_path'] != null) {
+          _extraPhotos.add(XFile('${extra!['photo_path']}'));
+        }
+      }
       _sitio.text = draft['sitio_name']?.toString() ?? '';
       _selectedPlaceLabel = draft['selected_place_label'] as String?;
       _aliveCount.text = draft['observed_alive_count']?.toString() ?? '';
@@ -237,7 +284,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (draft['picking_photo'] == true && Platform.isAndroid) {
         final lost = await _picker.retrieveLostData();
         if (lost.files?.isNotEmpty == true) {
-          if (draft['picking_closeup'] == true) {
+          if (draft['picking_extra'] == true && _extraPhotos.length < 4) {
+            _extraPhotos.add(lost.files!.first);
+          } else if (draft['picking_closeup'] == true) {
             _closeupPhoto = lost.files!.first;
           } else {
             _photo = lost.files!.first;
@@ -357,6 +406,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     int clusterId, {
     int? preferredParentId,
   }) async {
+    if (preferredParentId == null) return;
     final request = ++_parentRequest;
     if (mounted) {
       setState(() {
@@ -375,10 +425,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _previousReports = reports;
       _parentReportId = reports.any((item) => item['id'] == preferredParentId)
           ? preferredParentId
-          : reports.isEmpty
-          ? null
-          : reports.first['id'] as int;
-      _followup = _parentReportId != null;
+          : null;
+      _followup = true;
+      if (_parentReportId == null) {
+        _parentsFailed = true;
+        _error =
+            'This follow-up is no longer available. Check the original report.';
+      }
     } catch (error) {
       if (!mounted || request != _parentRequest || _clusterId != clusterId) {
         return;
@@ -416,11 +469,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         }
       }
     });
-    if (clusterId != null) await _loadPreviousReports(clusterId);
+
     await _saveDraft();
   }
 
-  Future<void> _pickPhoto(ImageSource source, {bool closeup = false}) async {
+  Future<void> _pickPhoto(
+    ImageSource source, {
+    bool closeup = false,
+    bool extra = false,
+  }) async {
+    if (extra && _extraPhotos.length >= 4) return;
+    _pickingExtra = extra;
     _pickingCloseup = closeup;
     _pickingPhoto = true;
     await _saveDraft();
@@ -434,7 +493,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
       if (image != null && mounted) {
         setState(() {
-          if (closeup) {
+          if (extra) {
+            _extraPhotos.add(image);
+          } else if (closeup) {
             _closeupPhoto = image;
           } else {
             _photo = image;
@@ -959,7 +1020,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       setState(() => _error = 'Enter the sitio or location name.');
       return;
     }
-    if (alive == null || alive < 0 || (_clusterId == null && alive < 1)) {
+    if (_countUnknown && _clusterId == null) {
+      setState(
+        () => _error = 'Choose a saved site when you are unable to count.',
+      );
+      return;
+    }
+    if (!_countUnknown &&
+        (alive == null || alive < 0 || (_clusterId == null && alive < 1))) {
       setState(
         () => _error = _clusterId == null
             ? 'A new site needs at least one living mangrove.'
@@ -1061,6 +1129,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         'leaf_shape': _leafShape!,
         'bark_texture': _barkTexture!,
         'observed_alive_count': _aliveCount.text,
+        'count_unknown': _countUnknown ? '1' : '0',
+        'submission_token': _submissionToken,
         'field_confirmation': '1',
         'photo_views': '2',
       };
@@ -1073,20 +1143,22 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         observations: _observations,
         photoPath: _photo!.path,
         closeupPhotoPath: _closeupPhoto?.path,
+        extraPhotoPaths: _extraPhotos.map((p) => p.path).toList(),
       );
       _clearingDraft = true;
       if (_draftScope != null) {
         await _draftStore.clear(_draftScope!);
         await _draftStore.clear('${_draftScope!}:closeup');
+        for (var i = 0; i < 4; i++) {
+          await _draftStore.clear('${_draftScope!}:extra$i');
+        }
       }
       if (!mounted) return;
       final report = Map<String, dynamic>.from(response['report'] as Map);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            report['status'] == 'verified'
-                ? 'Report ${report['report_code']} was automatically verified as Healthy.'
-                : 'Submitted ${report['report_code']} for expert or admin review.',
+            'Submitted ${report['report_code']} for expert or admin review.',
           ),
         ),
       );
@@ -1136,6 +1208,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (_draftScope != null) {
         await _draftStore.clear(_draftScope!);
         await _draftStore.clear('${_draftScope!}:closeup');
+        for (var i = 0; i < 4; i++) {
+          await _draftStore.clear('${_draftScope!}:extra$i');
+        }
       }
       if (!mounted) return;
       setState(() {
@@ -1186,6 +1261,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     _barkTexture = null;
     _photo = null;
     _closeupPhoto = null;
+    _extraPhotos.clear();
+    _countUnknown = false;
+    _submissionToken = List.generate(
+      24,
+      (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
     _location = null;
     _approximatePosition = null;
     _autoCaptureTried = false;
@@ -1224,100 +1305,120 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         child: FilledButton.tonal(onPressed: _loadForm, child: Text(_error!)),
       );
     }
-    return Form(
-      key: _formKey,
-      onChanged: _draftEdited,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
+    final compactSteps =
+        MediaQuery.sizeOf(context).width < 460 ||
+        MediaQuery.textScalerOf(context).scale(16) > 20;
+    const stepNames = ['Photos', 'Location', 'Observations', 'Review'];
+    return PopScope(
+      canPop: !widget.handleSystemBack,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && widget.handleSystemBack) goBack();
+      },
+      child: Form(
+        key: _formKey,
+        onChanged: _draftEdited,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _parentReportId == null
+                              ? 'New report'
+                              : 'Follow-up report',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _busy ? null : _cancelReport,
+                        child: const Text('Cancel'),
+                      ),
+                    ],
+                  ),
+                  const Text('Add details, review, then submit.'),
+                  if (compactSteps)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        _parentReportId == null
-                            ? 'New report'
-                            : 'Follow-up report',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                        '${_step + 1}. ${stepNames[_step]}',
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
-                    TextButton(
-                      onPressed: _busy ? null : _cancelReport,
-                      child: const Text('Cancel'),
+                  if (_draftScope != null)
+                    ValueListenableBuilder<String>(
+                      valueListenable: _draftStatus,
+                      builder: (_, text, _) => text.isEmpty
+                          ? const SizedBox.shrink()
+                          : Text(
+                              text,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                    ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(11),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(color: Colors.red.shade900),
+                      ),
                     ),
                   ],
-                ),
-                const Text('Add details, review, then submit.'),
-                if (_draftScope != null)
-                  ValueListenableBuilder<String>(
-                    valueListenable: _draftStatus,
-                    builder: (_, text, _) => text.isEmpty
-                        ? const SizedBox.shrink()
-                        : Text(
-                            text,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Stepper(
+                type: StepperType.horizontal,
+                currentStep: _step,
+                onStepTapped: _busy
+                    ? null
+                    : (value) {
+                        if (value < _step || value <= 1) _editStep(value);
+                      },
+                controlsBuilder: (_, _) => const SizedBox.shrink(),
+                steps: [
+                  Step(
+                    title: Text(!compactSteps && _step == 0 ? 'Photos' : ''),
+                    isActive: _step >= 0,
+                    state: _step > 0 ? StepState.complete : StepState.indexed,
+                    content: _photosStep(),
                   ),
-                if (_error != null) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(11),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12),
+                  Step(
+                    title: Text(!compactSteps && _step == 1 ? 'Location' : ''),
+                    isActive: _step >= 1,
+                    state: _step > 1 ? StepState.complete : StepState.indexed,
+                    content: _siteStep(),
+                  ),
+                  Step(
+                    title: Text(
+                      !compactSteps && _step == 2 ? 'Observations' : '',
                     ),
-                    child: Text(
-                      _error!,
-                      style: TextStyle(color: Colors.red.shade900),
-                    ),
+                    isActive: _step >= 2,
+                    state: _step > 2 ? StepState.complete : StepState.indexed,
+                    content: _healthStep(),
+                  ),
+                  Step(
+                    title: Text(!compactSteps && _step == 3 ? 'Review' : ''),
+                    isActive: _step >= 3,
+                    content: _reviewStep(),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          Expanded(
-            child: Stepper(
-              type: StepperType.horizontal,
-              currentStep: _step,
-              onStepTapped: _busy
-                  ? null
-                  : (value) {
-                      if (value < _step || value <= 1) _editStep(value);
-                    },
-              controlsBuilder: (_, _) => const SizedBox.shrink(),
-              steps: [
-                Step(
-                  title: Text(_step == 0 ? 'Photos' : ''),
-                  isActive: _step >= 0,
-                  state: _step > 0 ? StepState.complete : StepState.indexed,
-                  content: _photosStep(),
-                ),
-                Step(
-                  title: Text(_step == 1 ? 'Location' : ''),
-                  isActive: _step >= 1,
-                  state: _step > 1 ? StepState.complete : StepState.indexed,
-                  content: _siteStep(),
-                ),
-                Step(
-                  title: Text(_step == 2 ? 'Checklist' : ''),
-                  isActive: _step >= 2,
-                  state: _step > 2 ? StepState.complete : StepState.indexed,
-                  content: _healthStep(),
-                ),
-                Step(
-                  title: Text(_step == 3 ? 'Review' : ''),
-                  isActive: _step >= 3,
-                  content: _reviewStep(),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1424,6 +1525,53 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           ],
         ),
       ),
+      _Section(
+        title: 'More views (optional)',
+        subtitle: 'Up to 4 extra photos · 12 MB for all photos',
+        child: Column(
+          children: [
+            for (var i = 0; i < _extraPhotos.length; i++)
+              Row(
+                children: [
+                  Expanded(
+                    child: Image.file(
+                      File(_extraPhotos[i].path),
+                      height: 100,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove photo ${i + 1}',
+                    onPressed: () {
+                      setState(() => _extraPhotos.removeAt(i));
+                      _draftEdited();
+                    },
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _extraPhotos.length < 4
+                      ? () => _pickPhoto(ImageSource.gallery, extra: true)
+                      : null,
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  label: const Text('Add photos'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _extraPhotos.length < 4
+                      ? () => _pickPhoto(ImageSource.camera, extra: true)
+                      : null,
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: const Text('Camera'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
       FilledButton(
         onPressed: () {
           if (_photo == null || _closeupPhoto == null) {
@@ -1508,17 +1656,40 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ..._placeSuggestions.map(
-              (place) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.place_outlined),
-                title: Text('${place['label']}'),
-                onTap: () => _selectPlace(place),
+              (place) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Material(
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: () => _selectPlace(place),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.place_outlined),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '${place['label']}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.north_east, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
               key: ValueKey('cluster-$_clusterId'),
               initialValue: _clusterId,
+              onChanged: _parentReportId != null ? null : _selectCluster,
               decoration: const InputDecoration(labelText: 'Site'),
               isExpanded: true,
               items: [
@@ -1536,8 +1707,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                   ),
                 ),
               ],
-              onChanged: _selectCluster,
             ),
+            if (_parentReportId != null)
+              const Text('This follow-up stays linked to its requested site.'),
             if (_loadingParents) const LinearProgressIndicator(),
             if (_parentsFailed && _clusterId != null)
               TextButton(
@@ -1591,13 +1763,29 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 ),
             ],
             const SizedBox(height: 12),
+            CheckboxListTile(
+              value: _countUnknown,
+              onChanged: (v) {
+                setState(() => _countUnknown = v ?? false);
+                _draftEdited();
+              },
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Unable to count'),
+              subtitle: const Text(
+                'Too many or not clearly visible. Choose a saved site; this count will be recorded as unknown.',
+              ),
+            ),
             TextFormField(
               controller: _aliveCount,
+              enabled: !_countUnknown,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'Living mangroves observed',
               ),
               validator: (value) {
+                if (_countUnknown) {
+                  return _clusterId == null ? 'Choose a saved site.' : null;
+                }
                 final number = int.tryParse(value ?? '');
                 if (number == null || number < 0) {
                   return 'Enter a whole number of living mangroves.';
@@ -1612,7 +1800,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         ),
       ),
       if (widget.onExit != null)
-        OutlinedButton(onPressed: widget.onExit, child: const Text('Back')),
+        OutlinedButton(onPressed: goBack, child: const Text('Back')),
       FilledButton.icon(
         onPressed: _gettingLocation ? null : _nextFromSite,
         icon: const Icon(Icons.arrow_forward),
@@ -1626,7 +1814,28 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const Text('Choose what you see.'),
-      ..._criteria.map(_criterionCard),
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var i = 0; i < _criteria.length + 3; i++)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(
+                    i < _criteria.length
+                        ? '${_criteria[i]['name']}'
+                        : ['Roots', 'Leaves', 'Bark'][i - _criteria.length],
+                  ),
+                  selected: _category == i,
+                  onSelected: (_) => setState(() => _category = i),
+                ),
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      if (_category < _criteria.length) _criterionCard(_criteria[_category]),
       _speciesStep(),
     ],
   );
@@ -1635,34 +1844,38 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _assessment(),
-      _Section(
-        title: 'Species traits',
-        subtitle: 'Choose the roots, leaves and bark you see.',
-        child: Column(
-          children: [
-            _traitDropdown(
-              'Root type',
-              _rootType,
-              _traits('root_type'),
-              (value) => setState(() => _rootType = value),
-            ),
-            const SizedBox(height: 12),
-            _traitDropdown(
-              'Leaf shape',
-              _leafShape,
-              _traits('leaf_shape'),
-              (value) => setState(() => _leafShape = value),
-            ),
-            const SizedBox(height: 12),
-            _traitDropdown(
-              'Bark texture',
-              _barkTexture,
-              _traits('bark_texture'),
-              (value) => setState(() => _barkTexture = value),
-            ),
-          ],
+      if (_category >= _criteria.length)
+        _Section(
+          title: 'Species traits',
+          subtitle: 'Choose the roots, leaves and bark you see.',
+          child: Column(
+            children: [
+              if (_category == _criteria.length + 0)
+                _traitDropdown(
+                  'Root type',
+                  _rootType,
+                  _traits('root_type'),
+                  (value) => setState(() => _rootType = value),
+                ),
+              const SizedBox(height: 12),
+              if (_category == _criteria.length + 1)
+                _traitDropdown(
+                  'Leaf shape',
+                  _leafShape,
+                  _traits('leaf_shape'),
+                  (value) => setState(() => _leafShape = value),
+                ),
+              const SizedBox(height: 12),
+              if (_category == _criteria.length + 2)
+                _traitDropdown(
+                  'Bark texture',
+                  _barkTexture,
+                  _traits('bark_texture'),
+                  (value) => setState(() => _barkTexture = value),
+                ),
+            ],
+          ),
         ),
-      ),
       _Section(
         title: 'Notes',
         child: Column(
@@ -1756,6 +1969,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               fit: BoxFit.contain,
             ),
           const Text('Close-up'),
+          for (final photo in _extraPhotos)
+            Image.file(File(photo.path), height: 180, fit: BoxFit.contain),
         ]),
         _reviewCard('Location', 1, [
           Text('Site: $cluster'),
@@ -1770,11 +1985,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                   ? 'Device location (+/-${_location!.accuracy!.round()} m)'
                   : 'Manual pin',
             ),
-          Text('Living mangroves: ${_aliveCount.text.trim()}'),
+          Text(
+            'Living mangroves: ${_countUnknown ? 'Unable to count' : _aliveCount.text.trim()}',
+          ),
           if (parent != null) Text('Follow-up to: $parent'),
         ]),
         _reviewCard(
-          'Checklist',
+          'Observations',
           2,
           _criteria.map((criterion) {
             final selected = _observations['${criterion['code']}'] ?? [];
@@ -1800,7 +2017,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         ]),
         _assessment(),
         const Text(
-          'Healthy reports are verified automatically. Others go for review.',
+          'Every report is Pending until an expert or administrator verifies it.',
         ),
         CheckboxListTile(
           value: _confirmed,
@@ -1872,7 +2089,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   ) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text(label, style: Theme.of(context).textTheme.titleMedium),
+      Text(
+        traitHeadings[label] ?? label,
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
       const SizedBox(height: 8),
       Wrap(
         spacing: 8,
@@ -1884,9 +2104,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 child: Semantics(
                   selected: value == item,
                   button: true,
-                  label: '$label: $item',
+                  label:
+                      '${traitHeadings[label] ?? label}: ${traitLabels[item] ?? item}',
                   child: InkWell(
-                    onTap: () {
+                    onTap: () async {
+                      if (!await _enlargeChoice(
+                            traitLabels[item] ?? item,
+                            () => _traitPhoto(label, item, 320),
+                          ) ||
+                          !mounted) {
+                        return;
+                      }
                       changed(item);
                       _draftEdited();
                       _queuePreview();
@@ -1908,15 +2136,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                       ),
                       child: Column(
                         children: [
-                          Image.asset(
-                            'assets/traits/${_traitImage(label, item)}.png',
-                            height: 90,
-                            excludeFromSemantics: true,
-                          ),
+                          _traitPhoto(label, item, 120),
                           Text(
-                            item,
+                            traitLabels[item] ?? item,
                             style: const TextStyle(
-                              fontSize: 15,
+                              fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1937,111 +2161,169 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     ],
   );
 
+  Widget _traitPhoto(String label, String value, double height) {
+    final key = {
+      'Root type': 'root_type',
+      'Leaf shape': 'leaf_shape',
+      'Bark texture': 'bark_texture',
+    }[label];
+    final path = (_form?['trait_images'] as Map?)?[key]?[value];
+    if (path != null) {
+      return Image.network(
+        _assetUrl('$path'),
+        height: height,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => Image.asset(
+          'assets/traits/${_traitImage(label, value)}.png',
+          height: height,
+        ),
+      );
+    }
+    return Image.asset(
+      'assets/traits/${_traitImage(label, value)}.png',
+      height: height,
+      fit: BoxFit.contain,
+    );
+  }
+
+  Future<bool> _enlargeChoice(String label, Widget Function() image) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(label),
+          content: SingleChildScrollView(
+            child: SizedBox(width: 400, child: image()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Select this choice'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
   Widget _criterionCard(Map<String, dynamic> criterion) {
-    final code = criterion['code'].toString();
-    final selected = _observations[code] ?? <int>[];
-    final options = (criterion['options'] as List? ?? const [])
-        .map((item) => Map<String, dynamic>.from(item as Map))
+    final code = '${criterion['code']}',
+        selected = _observations[code] ?? <int>[];
+    final options = (criterion['options'] as List)
+        .map((o) => Map<String, dynamic>.from(o as Map))
         .toList();
     final single = criterion['selection_mode'] == 'single';
-    final guideImage = criterion['guide_image']?.toString();
+    Widget picture(Map option, double height) {
+      final path = option['image_path'] ?? criterion['guide_image'];
+      if (path != null) {
+        return Image.network(
+          _assetUrl('$path'),
+          height: height,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) =>
+              Image.asset('assets/traits/elliptic.png', height: height),
+        );
+      }
+      return Image.asset(
+        'assets/traits/elliptic.png',
+        height: height,
+        fit: BoxFit.contain,
+      );
+    }
+
     return _Section(
-      title: criterion['name']?.toString() ?? 'Health check',
-      subtitle: single
-          ? criterion['question_text']?.toString()
-          : '${criterion['question_text']} Choose all that apply.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (guideImage != null && guideImage.isNotEmpty) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                _assetUrl(guideImage),
-                height: 150,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-          if (single)
-            RadioGroup<int>(
-              groupValue: selected.isEmpty ? null : selected.first,
-              onChanged: (value) {
-                setState(
-                  () => _observations[code] = value == null ? [] : [value],
-                );
-                _queuePreview();
-              },
-              child: Column(
-                children: options
-                    .map(
-                      (option) => RadioListTile<int>(
-                        value: option['id'] as int,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(option['label']?.toString() ?? ''),
-                        subtitle: option['image_path'] == null
-                            ? null
-                            : Image.network(
-                                _assetUrl('${option['image_path']}'),
-                                height: 90,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, _, _) =>
-                                    const SizedBox.shrink(),
-                              ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            )
-          else
-            ...options.map((option) {
-              final id = option['id'] as int;
-              return CheckboxListTile(
-                value: selected.contains(id),
-                contentPadding: EdgeInsets.zero,
-                title: Text(option['label']?.toString() ?? ''),
-                subtitle: option['image_path'] == null
-                    ? null
-                    : Image.network(
-                        _assetUrl('${option['image_path']}'),
-                        height: 90,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                      ),
-                controlAffinity: ListTileControlAffinity.leading,
-                onChanged: (checked) {
-                  setState(() {
-                    final values = List<int>.from(selected);
-                    const aggregateCodes = [
-                      'none_of_the_above',
-                      'all_of_the_above',
-                      'unknown',
-                    ];
-                    if (checked == true) {
-                      if (aggregateCodes.contains(option['code'])) {
-                        values.clear();
+      title: '${criterion['name']}',
+      subtitle:
+          '${criterion['question_text']}${single ? '' : ' Choose all that apply.'}',
+      child: LayoutBuilder(
+        builder: (context, space) => Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: options.map((option) {
+            final id = option['id'] as int, active = selected.contains(id);
+            return SizedBox(
+              width: space.maxWidth < 250
+                  ? space.maxWidth
+                  : (space.maxWidth - 12) / 2,
+              child: Semantics(
+                key: ValueKey('observation-$code-$id'),
+                selected: active,
+                button: true,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () async {
+                    if (!await _enlargeChoice(
+                          '${option['label']}',
+                          () => picture(option, 320),
+                        ) ||
+                        !mounted) {
+                      return;
+                    }
+                    setState(() {
+                      final values = single
+                          ? <int>[]
+                          : List<int>.from(selected);
+                      const special = [
+                        'unknown',
+                        'all_of_the_above',
+                        'none_of_the_above',
+                      ];
+                      if (!single && active) {
+                        values.remove(id);
                       } else {
-                        final aggregateIds = options
-                            .where(
-                              (item) => aggregateCodes.contains(item['code']),
-                            )
-                            .map((item) => item['id']);
-                        values.removeWhere(aggregateIds.contains);
+                        if (special.contains(option['code'])) {
+                          values.clear();
+                        } else {
+                          final ids = options
+                              .where((o) => special.contains(o['code']))
+                              .map((o) => o['id'])
+                              .toSet();
+                          values.removeWhere(ids.contains);
+                        }
+                        values.add(id);
                       }
-                    }
-                    checked == true ? values.add(id) : values.remove(id);
-                    _observations[code] = values.toSet().toList();
-                    if (checked == true) {
+                      _observations[code] = values;
                       _resolveObservationConflict(code, '${option['code']}');
-                    }
-                  });
-                  _queuePreview();
-                },
-              );
-            }),
-        ],
+                    });
+                    _queuePreview();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: active ? const Color(0xFFE0EFD8) : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: active
+                            ? const Color(0xFF285D30)
+                            : const Color(0xFFCED8C8),
+                        width: active ? 2 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        picture(option, 125),
+                        Text(
+                          '${option['label']}',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Icon(
+                          active ? Icons.check_circle : Icons.zoom_in,
+                          color: const Color(0xFF285D30),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -2147,7 +2429,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               child: Text('$_previewError Tap to retry.'),
             ),
           if (health == null && !_previewBusy && _previewError == null)
-            const Text('Answer the checklist to see the result.'),
+            const Text('Choose your observations to see the result.'),
           if (health != null) ...[
             Text(
               health['health_score'] == null
@@ -2165,14 +2447,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               style: TextStyle(fontSize: 12),
             ),
             const Text(
-              'Species assessment',
+              'Species name',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             if (_rootType != null && _leafShape != null && _barkTexture != null)
               Text(
                 species == null
                     ? 'Species unclear. An expert can identify it.'
-                    : 'Species: ${species['scientific_name']} (${species['confidence']}% trait match)',
+                    : '${speciesNames(species)} (${species['confidence']}% trait match)',
               ),
           ],
         ],

@@ -16,7 +16,7 @@ class Query {
   constructor(db, collection, filter={}, after='', size=500) { Object.assign(this,{db,collection,filter,after,size}); }
   doc(id) { return new Reference(this.db,this.collection,id); }
   where(field,op,value) {
-    if(op!=='==' || !/^[a-z_]+$/.test(field)) throw new Error('Unsupported query');
+    if(op!=='==' || !/^[a-z][a-z0-9_]*$/.test(field)) throw new Error('Unsupported query');
     return new Query(this.db,this.collection,{...this.filter,[field]:value},this.after,this.size);
   }
   limit(size) { return new Query(this.db,this.collection,this.filter,this.after,size); }

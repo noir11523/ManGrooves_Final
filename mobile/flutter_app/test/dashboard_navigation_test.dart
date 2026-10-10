@@ -61,7 +61,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Verified'));
+        await tester.tap(find.text('Verified reports'));
         await tester.pumpAndSettle();
         expect(api.status, 'verified');
         expect(find.text('No reports match this filter.'), findsOneWidget);

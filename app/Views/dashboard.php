@@ -8,8 +8,7 @@ $extraHead = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/
 $pageScripts = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>'
     . '<script src="' . e(asset('js/maps.js')) . '"></script>';
 $statCards = [
-    ['label' => 'Total reports', 'value' => $stats['total_reports'] ?? 0, 'icon' => 'bi-files', 'tone' => 'primary', 'href' => url('reports.php')],
-    ['label' => 'Verified', 'value' => $stats['verified_reports'] ?? 0, 'icon' => 'bi-patch-check', 'tone' => 'success', 'href' => url('reports.php?status=verified')],
+    ['label' => 'Verified reports', 'value' => $stats['total_reports'] ?? 0, 'icon' => 'bi-files', 'tone' => 'primary', 'href' => url('reports.php?status=verified')],
     ['label' => 'Pending', 'value' => $stats['pending_reports'] ?? 0, 'icon' => 'bi-hourglass-split', 'tone' => 'warning', 'href' => url('reports.php?status=pending')],
     ['label' => 'Rejected', 'value' => $stats['rejected_reports'] ?? 0, 'icon' => 'bi-x-circle', 'tone' => 'danger', 'href' => url('reports.php?status=rejected')],
     ['label' => 'Needs attention', 'value' => $stats['needs_attention'] ?? 0, 'icon' => 'bi-exclamation-triangle', 'tone' => 'danger', 'href' => url('reports.php?needs_attention=1')],
@@ -47,24 +46,21 @@ $statCards = [
 <?php if ($isGuardian && $reminders): ?>
     <section class="mb-4" aria-labelledby="followup-heading">
         <div class="d-flex align-items-center justify-content-between mb-2">
-            <h2 class="h4 mb-0" id="followup-heading">Follow-up reminders</h2>
-            <span class="badge text-bg-warning"><?= count($reminders) ?> due</span>
+            <h2 class="h4 mb-0" id="followup-heading">Follow-up requests</h2>
+            <span class="badge text-bg-warning"><?= count($reminders) ?> requested</span>
         </div>
         <div class="row g-3">
             <?php foreach ($reminders as $reminder): ?>
-                <?php $overdue = $reminder['due_state'] === 'overdue'; ?>
                 <div class="col-lg-6">
-                    <article class="alert <?= $overdue ? 'alert-danger' : 'alert-warning' ?> mb-0 h-100">
+                    <article class="alert alert-warning mb-0 h-100">
                         <div class="d-flex justify-content-between gap-3 align-items-start">
                             <div>
                                 <h3 class="h6 mb-1"><?= e($reminder['cluster_name']) ?></h3>
                                 <p class="mb-0 small">
-                                    <?= $overdue
-                                        ? 'Overdue by ' . number_format(abs((int) $reminder['days_until_due'])) . ' day(s)'
-                                        : 'Due ' . ((int) $reminder['days_until_due'] === 0 ? 'today' : 'in ' . (int) $reminder['days_until_due'] . ' day(s)') ?>
+                                    <?= e($reminder['follow_up_note'] ?? 'Awaiting follow-up') ?>
                                 </p>
                             </div>
-                            <a class="btn btn-sm <?= $overdue ? 'btn-danger' : 'btn-warning' ?>" href="<?= e(url('submit-report.php?parent=' . $reminder['id'])) ?>">Submit follow-up</a>
+                            <a class="btn btn-sm btn-warning" href="<?= e(url('submit-report.php?parent=' . $reminder['id'] . '&cluster=' . $reminder['cluster_id'])) ?>">Submit follow-up</a>
                         </div>
                     </article>
                 </div>
@@ -88,7 +84,7 @@ $statCards = [
                     <a class="list-group-item list-group-item-action py-3" href="<?= e(url('reports.php?id=' . $report['id'])) ?>">
                         <div class="d-flex justify-content-between gap-2">
                             <strong><?= e($report['report_code']) ?></strong>
-                            <span class="badge <?= e(report_status_class((string) $report['status'])) ?>"><?= e($report['status'] === 'pending' && !empty($report['needs_attention']) ? 'Needs attention' : ucfirst((string) $report['status'])) ?></span>
+                            <span class="badge <?= e(report_status_class((string) $report['status'])) ?>"><?= e(ucfirst((string) $report['status'])) ?></span>
                         </div>
                         <div class="small text-body-secondary mt-1"><?= e(($report['cluster_name'] ?? '') ?: ($report['species_name'] ?? '') ?: 'New observation site') ?></div>
                         <div class="small mt-1"><span class="badge <?= e(health_class((string) $report['display_health'])) ?>"><?= e($report['display_health']) ?></span> · <?= e(format_datetime((string) $report['submitted_at'], 'M j, Y')) ?></div>

@@ -31,7 +31,7 @@ before(async()=>{
     if(!users[role])return send({ok:false,message:'Sign in again.'},401);
     if(endpoint==='me.php')return send({ok:true,user:users[role]});
     if(endpoint==='notifications.php')return send({ok:true,unread:2,items:[]});
-    if(endpoint==='dashboard.php')return send({ok:true,user:users[role],stats:{total_reports:1,verified_reports:1},latest_reports:[{id:10,report_code:'Report #10',status:'verified',cluster_name:'Coast',display_health:'Healthy',submitted_at:'2026-10-03'}],reminders:[],clusters:[]});
+    if(endpoint==='dashboard.php')return send({ok:true,user:users[role],stats:{total_reports:1,verified_reports:1},latest_reports:[{id:10,report_code:'Report #10',status:'verified',cluster_name:'Coast',display_health:'Healthy',submitted_at:'2026-10-03'}],reminders:role==='guardian'?[{id:10,cluster_id:1,cluster_name:'Coast',follow_up_note:'Check the roots on your next visit.'}]:[],clusters:[]});
     if(endpoint==='logout.php'||endpoint==='account-security.php')return send({ok:true});
     return send({ok:true,items:[],page:1,pages:1,total:0});
   });
@@ -86,6 +86,14 @@ test('private JSON reads use one authoritative API call and still reject disable
   try { assert.equal((await b.request('/cloud-api.php?route=reports.php')).res.status,403); }
   finally { disabled=false; }
 });
+test('the PHP dashboard renders explicit follow-up requests and image restoration reaches the API',async()=>{
+  const {b}=await login();const dashboard=await b.request('/dashboard.php');
+  assert.equal(dashboard.res.status,200);assert.match(dashboard.text,/Check the roots on your next visit/);
+  assert.match(dashboard.text,/submit-report\.php\?parent=10&amp;cluster=1/);assert.doesNotMatch(dashboard.text,/Overdue|days until/i);
+  const staff=(await login('admin')).b;
+  const restored=await staff.request('/cloud-api.php?route=trait-images.php',{trait:'root_type',value:'Prop roots',remove:true});
+  assert.equal(restored.res.status,200);assert.equal(calls.at(-1).endpoint,'trait-images.php');
+});
 test('map security policy allows the actual tile provider',async()=>{
   const b=await browser(),{res}=await b.request('/login.php');
   const source=await readFile(new URL('../../supabase/web/src/ui.js',import.meta.url),'utf8');
@@ -124,10 +132,10 @@ test('all roles keep account actions in the top bar and reachable mobile navigat
     assert.equal(topbar.querySelectorAll('a[href="/settings.php"]').length,1,role);
     assert.equal(topbar.querySelectorAll('a[href="/notifications.php"]').length,1,role);
     assert.equal(topbar.querySelector('.notification-count').textContent,'2');
-    const bottom=[...doc.querySelectorAll('.mobile-bottom-nav a')].map(a=>a.getAttribute('href'));
+    const bottom=[...doc.querySelectorAll('.mobile-bottom-nav > a')].map(a=>a.getAttribute('href'));
     if(role==='guardian')assert.equal(doc.querySelector('.mobile-bottom-nav a[href="/submit-report.php"] span').textContent,'Submit Report');
     if(role!=='admin')assert.equal(sidebar.querySelector('a[href="/submit-report.php"] span').textContent,'Submit Report');
-    const more=[...topbar.querySelector('[aria-label="Open menu"]').parentElement.querySelectorAll('a')].map(a=>a.getAttribute('href'));
+    const more=[...topbar.querySelector('[aria-label="Account menu"]').parentElement.querySelectorAll('a')].map(a=>a.getAttribute('href'));
     assert.equal(new Set(bottom).size,bottom.length,role);
     assert.equal(more.some(href=>bottom.includes(href)||href==='/analytics.php'),false,role);
     const insights=topbar.querySelector('[aria-label="Analytics and timelines"]').parentElement;

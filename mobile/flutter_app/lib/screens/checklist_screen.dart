@@ -16,6 +16,9 @@ class ChecklistScreen extends StatefulWidget {
 
 class _ChecklistScreenState extends State<ChecklistScreen> {
   List<Map<String, dynamic>>? _criteria;
+  Map<String, dynamic>? _traitData;
+  final _imagePicker = ImagePicker();
+  String? _savingTrait;
   String? _error;
   String _query = '';
   List<Map<String, dynamic>> get _filteredCriteria => (_criteria ?? [])
@@ -41,6 +44,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               .toList();
           _error = null;
         });
+      }
+      if (widget.api.supportsCloudAccounts) {
+        try {
+          final data = await widget.api.traitImages();
+          if (mounted) setState(() => _traitData = data);
+        } catch (_) {
+          if (mounted) setState(() => _traitData = null);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -70,6 +81,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (_traitData != null) _traitEditor(),
                 const Card(
                   child: ExpansionTile(
                     title: Text('Health scoring guide'),
@@ -120,6 +132,157 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             ),
           ),
   );
+
+  Widget _traitEditor() {
+    final traits = Map<String, dynamic>.from(
+      _traitData?['traits'] as Map? ?? const {},
+    );
+    final images = Map<String, dynamic>.from(
+      _traitData?['trait_images'] as Map? ?? const {},
+    );
+    const headings = {
+      'root_type': 'Klase sa Gamot (Root Type)',
+      'leaf_shape': 'Porma sa Dahon (Leaf Shape)',
+      'bark_texture': 'Hitsura sa Panit sa Punoan (Bark Texture)',
+    };
+    return Card(
+      child: ExpansionTile(
+        title: const Text('Species feature pictures'),
+        subtitle: const Text('Replace the sample illustrations.'),
+        children: [
+          for (final entry in traits.entries)
+            for (final value in entry.value as List)
+              Builder(
+                builder: (context) {
+                  final trait = entry.key,
+                      item = '$value',
+                      group = Map<String, dynamic>.from(
+                        images[trait] as Map? ?? const {},
+                      ),
+                      path = group[item]?.toString();
+                  final busy = _savingTrait == '$trait|$item';
+                  return ListTile(
+                    leading: path == null
+                        ? const Icon(Icons.image_outlined)
+                        : Image.network(
+                            widget.api.resolve(path).toString(),
+                            headers: widget.api.imageHeaders,
+                            width: 58,
+                            height: 58,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) =>
+                                const Icon(Icons.broken_image_outlined),
+                          ),
+                    title: Text(
+                      '${headings[trait] ?? trait} · $item',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Replace sample picture',
+                          onPressed: busy
+                              ? null
+                              : () async {
+                                  final file = await _imagePicker.pickImage(
+                                    source: ImageSource.gallery,
+                                    imageQuality: 85,
+                                    maxWidth: 1600,
+                                    maxHeight: 1600,
+                                    requestFullMetadata: false,
+                                  );
+                                  if (file == null || !context.mounted) return;
+                                  setState(() => _savingTrait = '$trait|$item');
+                                  try {
+                                    final updated = await widget.api
+                                        .saveTraitImage(
+                                          trait: trait,
+                                          value: item,
+                                          photoPath: file.path,
+                                        );
+                                    if (context.mounted) {
+                                      setState(() => _traitData = updated);
+                                    }
+                                  } catch (error) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                error is ApiException
+                                                    ? error.message
+                                                    : 'Could not save the sample picture.',
+                                              ),
+                                            ),
+                                          );
+                                    }
+                                  } finally {
+                                    if (context.mounted) {
+                                      setState(() => _savingTrait = null);
+                                    }
+                                  }
+                                },
+                          icon: busy
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.edit_outlined),
+                        ),
+                        if (path != null)
+                          IconButton(
+                            tooltip: 'Restore sample illustration',
+                            onPressed: busy
+                                ? null
+                                : () async {
+                                    setState(
+                                      () => _savingTrait = '$trait|$item',
+                                    );
+                                    try {
+                                      final updated = await widget.api
+                                          .saveTraitImage(
+                                            trait: trait,
+                                            value: item,
+                                            remove: true,
+                                          );
+                                      if (context.mounted) {
+                                        setState(() => _traitData = updated);
+                                      }
+                                    } catch (error) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  error is ApiException
+                                                      ? error.message
+                                                      : 'Could not restore the sample picture.',
+                                                ),
+                                              ),
+                                            );
+                                      }
+                                    } finally {
+                                      if (context.mounted) {
+                                        setState(() => _savingTrait = null);
+                                      }
+                                    }
+                                  },
+                            icon: const Icon(Icons.restart_alt),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ChecklistEditor extends StatefulWidget {

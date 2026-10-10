@@ -4,7 +4,7 @@ export const newest = (a, b) => String(b.submitted_at ?? b.created_at).localeCom
 export const needsReview = r => r.status === 'pending';
 export const reportLabel = r => r.report_number ? `Report #${r.report_number}` : (r.report_code?.startsWith('Report #') ? r.report_code : `Report #${r.report_id ?? r.id}`);
 export const displayHealth = r => r.final_health ?? r.suggested_health ?? 'Unknown';
-export const verifiedNeedsAttention = r => r.status === 'verified' && ['Stressed', 'At Risk', 'Unknown'].includes(displayHealth(r));
+export const verifiedNeedsAttention = r => r.status === 'verified' && (['Stressed', 'At Risk', 'Unknown'].includes(displayHealth(r)) || (!!r.needs_follow_up && !r.active_child_id));
 export function reportList(rows, query = {}) {
   const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0,10) === value;
   for (const key of ['date_from','date_to']) if (query[key] && !validDate(query[key])) throw new AppError('Choose valid dates.');
@@ -12,22 +12,23 @@ export function reportList(rows, query = {}) {
   return paginate(rows.filter(r => (!query.status || r.status === query.status)
     && (!query.health || displayHealth(r) === query.health)
     && (!query.cluster_id || r.cluster_id === Number(query.cluster_id))
-    && (query.needs_attention !== '1' || needsReview(r))
+    && (query.needs_attention !== '1' || verifiedNeedsAttention(r))
     && (query.verified_attention !== '1' || verifiedNeedsAttention(r))
     && (!query.date_from || manilaDate(r.submitted_at) >= query.date_from)
     && (!query.date_to || manilaDate(r.submitted_at) <= query.date_to)
-    && (!String(query.q ?? '').trim() || `${reportLabel(r)} ${r.report_code ?? ''} ${r.guardian_name ?? ''} ${r.cluster_name ?? ''} ${r.sitio_name ?? ''} ${r.barangay_name ?? ''} ${r.final_species_name ?? r.suggested_species_name ?? ''}`.toLowerCase().includes(String(query.q).trim().toLowerCase())))
+    && (!String(query.q ?? '').trim() || `${reportLabel(r)} ${r.report_code ?? ''} ${r.guardian_name ?? ''} ${r.cluster_name ?? ''} ${r.sitio_name ?? ''} ${r.barangay_name ?? ''} ${r.species_local_name ?? ''} ${r.species_common_name ?? ''} ${r.final_species_name ?? r.suggested_species_name ?? ''}`.toLowerCase().includes(String(query.q).trim().toLowerCase())))
     .sort(query.sort === 'oldest' ? (a,b)=>-newest(a,b) : newest).map(r => ({id: r.id, report_code: reportLabel(r), cluster_id: r.cluster_id,
       guardian_name: r.guardian_name,
       cluster_name: r.cluster_name, barangay_name: r.barangay_name, sitio_name: r.sitio_name,
       latitude: r.latitude, longitude: r.longitude, status: r.status, display_health: displayHealth(r),
       health: displayHealth(r), final_health: r.final_health, suggested_health: r.suggested_health,
-      submitted_at: r.submitted_at, needs_attention: needsReview(r) ? 1 : 0, species_name: r.final_species_name ?? r.suggested_species_name})), query.page);
+      submitted_at: r.submitted_at, needs_attention: verifiedNeedsAttention(r) ? 1 : 0, needs_follow_up:!!r.needs_follow_up, active_child_id:r.active_child_id??null,
+      can_follow_up:r.status==='verified'&&!!r.needs_follow_up&&!r.active_child_id&&!!r.cluster_id, species_local_name:r.species_local_name??null, species_common_name:r.species_common_name??null, species_name: r.final_species_name ?? r.suggested_species_name})), query.page);
 }
 export function dashboardStats(rows, clusters) {
-  return {total_reports: rows.length, verified_reports: rows.filter(r => r.status === 'verified').length,
+  return {total_reports: rows.filter(r=>r.status==='verified').length, verified_reports: rows.filter(r => r.status === 'verified').length,
     pending_reports: rows.filter(r => r.status === 'pending').length, rejected_reports: rows.filter(r => r.status === 'rejected').length,
-    needs_attention: rows.filter(r => needsReview(r)).length, map_clusters: clusters.length,
+    needs_attention: rows.filter(verifiedNeedsAttention).length, map_clusters: clusters.length,
     species: new Set(rows.filter(r => r.status === 'verified' && r.final_species_id).map(r => r.final_species_id)).size};
 }
 export function analyticsForUser(user, rows, clusters, query = {}) {
@@ -70,11 +71,11 @@ export function analyticsForUser(user, rows, clusters, query = {}) {
     }
     month.survival_rate = denominator ? Math.round(numerator / denominator * 1000) / 10 : null;
   }
-  const high_risk = filtered.filter(needsReview).map(r => ({id: r.id, report_code: r.report_code,
+  const high_risk = filtered.filter(verifiedNeedsAttention).map(r => ({id: r.id, report_code: r.report_code,
     cluster_name: r.cluster_name, final_health: r.final_health, barangay_name: r.barangay_name}));
   return {scope: user.role === 'guardian' ? 'personal' : 'all_users', capabilities: {can_view_survival: canSurvive, can_export_pdf: canSurvive},
     filters: {date_from: from, date_to: to, barangay_id: query.barangay_id ?? null, species_id: query.species_id ?? null},
-    verification: {total: filtered.length, pending: filtered.filter(r => r.status === 'pending').length,
+    verification: {total: verified.length, pending: filtered.filter(r => r.status === 'pending').length,
       verified: verified.length, rejected: filtered.filter(r => r.status === 'rejected').length,
       corrected: verified.filter(r => r.corrected).length}, health, clusters: visibleClusters,
     map: visibleClusters, growth: [...months.values()].sort((a, b) => a.month.localeCompare(b.month)), high_risk, high_risk_total: high_risk.length,

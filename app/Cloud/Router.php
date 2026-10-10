@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 final class CloudRouter
 {
-    private const READ = ['configuration.php', 'explore.php', 'me.php', 'dashboard.php', 'profile.php', 'report-form.php', 'reports.php', 'report.php', 'previous-reports.php', 'clusters.php', 'cluster.php', 'verification.php', 'validation-history.php', 'checklist.php', 'analytics.php', 'badges.php', 'certificate-settings.php', 'expert-applications.php', 'notifications.php', 'users.php', 'species.php', 'sites.php', 'badge-settings.php', 'audit.php', 'places.php'];
-    private const WRITE = ['send-registration-code.php', 'register.php', 'verify-email.php', 'resend-code.php', 'forgot-password.php', 'reset-password.php', 'complete-registration.php', 'profile.php', 'report-preview.php', 'review.php', 'certificate-link.php', 'expert-applications.php', 'notifications.php', 'users.php', 'species.php', 'sites.php', 'badge-settings.php'];
+    private const READ = ['configuration.php', 'explore.php', 'me.php', 'dashboard.php', 'profile.php', 'report-form.php', 'reports.php', 'report.php', 'previous-reports.php', 'clusters.php', 'cluster.php', 'verification.php', 'validation-history.php', 'checklist.php', 'trait-images.php', 'analytics.php', 'badges.php', 'certificate-settings.php', 'expert-applications.php', 'notifications.php', 'users.php', 'species.php', 'sites.php', 'badge-settings.php', 'audit.php', 'places.php'];
+    private const WRITE = ['send-registration-code.php', 'register.php', 'verify-email.php', 'resend-code.php', 'forgot-password.php', 'reset-password.php', 'complete-registration.php', 'profile.php', 'report-preview.php', 'review.php', 'certificate-link.php', 'expert-applications.php', 'notifications.php', 'users.php', 'species.php', 'sites.php', 'badge-settings.php', 'trait-images.php'];
     private const PUBLIC_API = ['configuration.php', 'explore.php', 'send-registration-code.php', 'register.php', 'verify-email.php', 'resend-code.php', 'forgot-password.php', 'reset-password.php', 'complete-registration.php'];
     public static function dispatch(): void
     {
@@ -65,10 +65,6 @@ final class CloudRouter
         if ($page === 'reports' && isset($_GET['id'])) redirect('report-detail.php?id=' . (int) $_GET['id']);
         if ($page === 'dashboard') {
             $data = CloudClient::api('dashboard.php');
-            foreach ($data['reminders'] as &$reminder) {
-                $reminder['days_until_due'] = (int) (new DateTimeImmutable('today'))->diff(new DateTimeImmutable($reminder['next_followup_date']))->format('%r%a');
-            }
-            unset($reminder);
             render('dashboard', ['pageTitle' => $title, 'user' => $user, 'stats' => $data['stats'], 'latestReports' => $data['latest_reports'], 'reminders' => $data['reminders']]);
             return;
         }

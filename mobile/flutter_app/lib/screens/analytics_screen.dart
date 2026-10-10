@@ -148,10 +148,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            mainAxisExtent: 145,
+            mainAxisExtent: MediaQuery.textScalerOf(context).scale(16) > 20
+                ? 195
+                : 160,
             children: [
-              _AnalyticsStat('Total reports', '${verification['total'] ?? 0}'),
+              _AnalyticsStat(
+                'Verified reports',
+                '${verification['total'] ?? 0}',
+              ),
+              _AnalyticsStat('Pending', '${verification['pending'] ?? 0}'),
               _AnalyticsStat('Rejected', '${verification['rejected'] ?? 0}'),
+              _AnalyticsStat(
+                'Needs attention',
+                '${_analytics!['high_risk_total'] ?? 0}',
+              ),
               if (canViewSurvival)
                 _AnalyticsStat(
                   'Overall survival',
@@ -159,15 +169,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ? 'N/A'
                       : '${_analytics!['overall_survival']}%',
                 ),
-              _AnalyticsStat(
-                'Pending review',
-                '${verification['pending'] ?? 0}',
-              ),
-              _AnalyticsStat('Verified', '${verification['verified'] ?? 0}'),
-              _AnalyticsStat(
-                'Needs review',
-                '${_analytics!['high_risk_total'] ?? 0}',
-              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -290,7 +291,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ],
           const SizedBox(height: 20),
           Text(
-            'Sites needing attention',
+            'Verified reports needing attention',
             style: Theme.of(context).textTheme.titleLarge
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
@@ -299,7 +300,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(18),
-                child: Text('No verified high-risk sites in this period.'),
+                child: Text(
+                  'No verified reports need attention in this period.',
+                ),
               ),
             )
           else
@@ -342,7 +345,7 @@ class _AnalyticsStat extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
         ],
       ),
     ),

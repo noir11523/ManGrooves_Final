@@ -246,7 +246,12 @@ class FirebaseApiClient extends ApiClient {
     Map<String, dynamic> data,
     Map<String, String> images,
   ) async {
-    final request = http.MultipartRequest('POST', resolve('checklist.php'));
+    final request = http.MultipartRequest(
+      'POST',
+      resolve(
+        data['action'] == 'trait_image' ? 'trait-images.php' : 'checklist.php',
+      ),
+    );
     request.fields['payload'] = jsonEncode(data);
     for (final entry in images.entries) {
       request.files.add(
@@ -262,6 +267,7 @@ class FirebaseApiClient extends ApiClient {
     required Map<String, List<int>> observations,
     required String photoPath,
     String? closeupPhotoPath,
+    List<String> extraPhotoPaths = const [],
   }) async {
     final request = http.MultipartRequest('POST', resolve('submit-report.php'));
     request.fields['payload'] = jsonEncode({
@@ -270,6 +276,11 @@ class FirebaseApiClient extends ApiClient {
       'checklist_versions': _checklistVersions,
     });
     request.files.add(await http.MultipartFile.fromPath('photo', photoPath));
+    for (var i = 0; i < extraPhotoPaths.length; i++) {
+      request.files.add(
+        await http.MultipartFile.fromPath('extra_photo_$i', extraPhotoPaths[i]),
+      );
+    }
     if (closeupPhotoPath != null) {
       request.files.add(
         await http.MultipartFile.fromPath('closeup_photo', closeupPhotoPath),

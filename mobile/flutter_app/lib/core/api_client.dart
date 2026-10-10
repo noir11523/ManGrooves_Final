@@ -248,12 +248,34 @@ class ApiClient {
 
   Future<Map<String, dynamic>> checklist() => _get('checklist.php');
 
+  Future<Map<String, dynamic>> traitImages() =>
+      cloudRequest('trait-images.php');
+
+  Future<Map<String, dynamic>> saveTraitImage({
+    required String trait,
+    required String value,
+    String? photoPath,
+    bool remove = false,
+  }) => cloudUpload('trait-images.php', {
+    'action': 'trait_image',
+    'trait': trait,
+    'value': value,
+    'remove': remove,
+  }, photoPath == null ? const {} : {'photo': photoPath});
+
   Future<Map<String, dynamic>> saveChecklist(
     Map<String, dynamic> data,
     Map<String, String> images,
   ) async {
     return _withConnectionRecovery(() async {
-      final request = http.MultipartRequest('POST', _uri('checklist.php'));
+      final request = http.MultipartRequest(
+        'POST',
+        _uri(
+          data['action'] == 'trait_image'
+              ? 'trait-images.php'
+              : 'checklist.php',
+        ),
+      );
       request.headers.addAll(_headers());
       request.fields['payload'] = jsonEncode(data);
       for (final entry in images.entries) {
@@ -335,6 +357,7 @@ class ApiClient {
     required Map<String, List<int>> observations,
     required String photoPath,
     String? closeupPhotoPath,
+    List<String> extraPhotoPaths = const [],
   }) async {
     return _withConnectionRecovery(() async {
       final request = http.MultipartRequest('POST', _uri('submit-report.php'));
@@ -347,6 +370,14 @@ class ApiClient {
         }
       }
       request.files.add(await http.MultipartFile.fromPath('photo', photoPath));
+      for (var i = 0; i < extraPhotoPaths.length; i++) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'extra_photo_$i',
+            extraPhotoPaths[i],
+          ),
+        );
+      }
       if (closeupPhotoPath != null) {
         request.files.add(
           await http.MultipartFile.fromPath('closeup_photo', closeupPhotoPath),

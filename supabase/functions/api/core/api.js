@@ -1,3 +1,5 @@
+import {traitImages} from './trait-images.js';
+import {followUpAvailable} from './follow-up.js';
 import {sharedSite,visibleSite} from './site-access.js';
 import express from 'express';
 import PDFDocument from '../pdf.js';
@@ -112,6 +114,7 @@ export function createApi({db, auth, bucket, projectId}) {
       const only = method => { if (req.method !== method) throw new AppError('Method not allowed.', 405); };
       if (!get && !post) throw new AppError('Method not allowed.', 405);
       switch (route) {
+        case 'trait-images.php': {const {input,files}=post?await readInput(req):{input:null,files:{}};return send(res,await traitImages(service,user,input,files));}
         case 'places.php': only('GET');return send(res,await searchPlaces(service,user,req.query));
         case 'certificate-settings.php': {
           requireRole(user,'system_admin');const {input,files}=post?await readInput(req):{input:null,files:{}};
@@ -140,7 +143,7 @@ export function createApi({db, auth, bucket, projectId}) {
           only('POST'); requireRole(user, 'guardian', 'expert');
           await service.limited(`submit:${user.uid}`, 30);
           const {input, files} = await readInput(req);
-          const result = await service.submit(user, input, files.photo, files.closeup_photo);
+          const result = await service.submit(user, input, files.photo, files.closeup_photo, Object.keys(files).filter(k=>/^extra_photo_\d+$/.test(k)).sort().map(k=>files[k]));
           return send(res, {report: result.result ?? result, message: result.message ?? 'Report already received.'}, 201);
         }
         case 'reports.php': only('GET'); return send(res, reportList(await service.reports(user), req.query));
@@ -148,12 +151,12 @@ export function createApi({db, auth, bucket, projectId}) {
         case 'photo.php': {
           only('GET'); const id = integer(req.query.id, 'report'), report = await service.get('reports', id);
           if (!report || (user.role === 'guardian' && report.user_id !== user.id)) throw new AppError('Photo not found.', 404);
-          return await sendImage(bucket, req.query.view === 'closeup' ? report.closeup_photo_path : report.photo_path, res);
+          return await sendImage(bucket, req.query.view === 'extra' ? (report.extra_photo_paths??[])[integer(req.query.index,'photo',0,3)] : req.query.view === 'closeup' ? report.closeup_photo_path : report.photo_path, res);
         }
         case 'previous-reports.php': {
           only('GET'); requireRole(user, 'guardian', 'expert'); const clusterId = integer(req.query.cluster_id, 'cluster');
           const rows = await service.reports(user);
-          const reports = rows.filter(r => r.user_id === user.id && r.cluster_id === clusterId && r.status === 'verified' && !r.active_child_id)
+          const reports = rows.filter(r => r.user_id === user.id && r.cluster_id === clusterId && followUpAvailable(r))
             .sort(newest).slice(0, 30).map(r => ({id: r.id, report_code: reportLabel(r), submitted_at: r.submitted_at, health: displayHealth(r), next_followup_date: r.next_followup_date}));
           return send(res, {reports});
         }

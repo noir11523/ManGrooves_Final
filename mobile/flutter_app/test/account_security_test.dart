@@ -78,10 +78,7 @@ void main() {
           isTrue,
         );
         expect(find.textContaining('Deactivate'), findsNothing);
-        expect(
-          find.text('Health checklist'),
-          role == 'system_admin' ? findsOneWidget : findsNothing,
-        );
+        expect(find.text('Health checklist'), findsNothing);
         await tester.ensureVisible(find.text('Change password'));
         await tester.tap(find.text('Change password'));
         await tester.pumpAndSettle();

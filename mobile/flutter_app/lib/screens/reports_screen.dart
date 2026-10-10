@@ -1,3 +1,5 @@
+import 'follow_up_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -227,6 +229,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         _StatusChip(report),
+                        if (report['status'] == 'verified' &&
+                            (report['needs_attention'] == true ||
+                                report['needs_attention'] == 1))
+                          const Text(
+                            'Needs attention',
+                            style: TextStyle(
+                              color: Colors.deepOrange,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        if (report['needs_follow_up'] == true)
+                          Text(
+                            report['active_child_id'] != null
+                                ? 'Follow-up submitted'
+                                : 'Follow-up needed',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                       ],
                     ),
                     subtitle: Padding(
@@ -247,9 +270,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             '${report['display_health'] ?? 'Unknown'} · ${_formatDate(report['submitted_at'])}',
                           ),
                           Text(
-                            report['species_name']?.toString() ??
-                                'Species not identified',
+                            speciesNames(report).isEmpty
+                                ? 'Species not identified'
+                                : speciesNames(report),
                           ),
+                          if (!widget.showSubmitter &&
+                              report['can_follow_up'] == true)
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                TextButton(
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => ReportDetailScreen(
+                                        api: widget.api,
+                                        reportId: report['id'] as int,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const Text('View'),
+                                ),
+                                OutlinedButton(
+                                  onPressed: () async {
+                                    await startFollowUp(
+                                      context,
+                                      widget.api,
+                                      report,
+                                    );
+                                    if (mounted) _load();
+                                  },
+                                  child: const Text('Submit follow-up'),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                     ),

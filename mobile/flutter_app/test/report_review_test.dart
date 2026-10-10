@@ -165,6 +165,7 @@ class _Api extends ApiClient {
     required Map<String, List<int>> observations,
     required String photoPath,
     String? closeupPhotoPath,
+    List<String> extraPhotoPaths = const [],
   }) async {
     submissions++;
     sent = fields;
@@ -249,6 +250,20 @@ Future<void> tap(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> chooseObservation(WidgetTester tester, String label) async {
+  await tap(tester, find.text(label).first);
+  await tap(tester, find.text('Select this choice'));
+}
+
+bool observationSelected(WidgetTester tester, String code, int id) => tester
+    .widget<Semantics>(find.byKey(ValueKey('observation-$code-$id')))
+    .properties
+    .selected!;
+
+Future<void> chooseCategory(WidgetTester tester, String label) async {
+  await tap(tester, find.widgetWithText(ChoiceChip, label));
+}
+
 Future<void> openLocation(WidgetTester tester) async {
   tester.widget<Stepper>(find.byType(Stepper)).onStepTapped!(1);
   await tester.pumpAndSettle();
@@ -295,6 +310,52 @@ void main() {
       await tap(tester, find.widgetWithText(FilledButton, 'Cancel report'));
       expect(drafts.saved, isEmpty);
       expect(exits, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'system Back returns to the previous report step and preserves an unknown count draft',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final drafts = _Drafts();
+      int exits = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: _SiteApi(),
+              draftOwner: 'back-test',
+              draftStore: drafts,
+              initialClusterId: 1,
+              onSubmitted: () {},
+              onExit: () => exits++,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await openLocation(tester);
+      await tap(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Unable to count'),
+      );
+      expect(
+        tester.widget<TextField>(field('Living mangroves observed')).enabled,
+        false,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('1. Photos'), findsOneWidget);
+      expect(exits, 0);
+      expect(drafts.saved.values.single['count_unknown'], '1');
+      expect(drafts.saved.values.single['cluster_id'], 1);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(exits, 1);
+      expect(drafts.saved, isNotEmpty);
       expect(tester.takeException(), isNull);
     },
   );
@@ -350,6 +411,10 @@ void main() {
   testWidgets(
     'location-name suggestion saves a manual pin and late GPS cannot replace it',
     (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       final old = GeolocatorPlatform.instance, gps = _LiveGps();
       GeolocatorPlatform.instance = gps;
       addTearDown(() async {
@@ -392,9 +457,7 @@ void main() {
       await tester.enterText(field('Sitio or location name'), 'Pier');
       await tester.pump(const Duration(milliseconds: 750));
       await tester.pump();
-      await tester.ensureVisible(find.text('Pier 3, Cebu City'));
-      await tester.tap(find.text('Pier 3, Cebu City'));
-      await tester.pumpAndSettle();
+      await tap(tester, find.text('Pier 3, Cebu City'));
       gps.send(1);
       await tester.pump();
       expect(find.textContaining('Manual pin: 10.301'), findsOneWidget);
@@ -518,6 +581,7 @@ void main() {
               draftOwner: 'guardian-a',
               draftStore: drafts,
               initialClusterId: 1,
+              initialParentReportId: 7,
               onSubmitted: () => submitted++,
               onExit: () => exits++,
             ),
@@ -544,60 +608,34 @@ void main() {
       );
       await tester.enterText(field('Living mangroves observed'), '12');
       await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
-      await tap(tester, find.text('Green').first);
-      await tap(tester, find.text('Crabs'));
-      await tap(tester, find.text('None of the above'));
-      expect(
-        tester
-            .widget<CheckboxListTile>(
-              find.widgetWithText(CheckboxListTile, 'Crabs'),
-            )
-            .value,
-        false,
-      );
-      await tap(tester, find.text('All of the above'));
-      expect(
-        tester
-            .widget<CheckboxListTile>(
-              find.widgetWithText(CheckboxListTile, 'None of the above'),
-            )
-            .value,
-        false,
-      );
-      await tap(tester, find.text('Not Sure'));
+      await chooseObservation(tester, 'Green');
+      await chooseCategory(tester, 'Animals seen');
+      await chooseObservation(tester, 'Crabs');
+      await chooseObservation(tester, 'None of the above');
+      expect(observationSelected(tester, 'bio_indicators', 2), false);
+      await chooseObservation(tester, 'All of the above');
+      expect(observationSelected(tester, 'bio_indicators', 3), false);
+      await chooseObservation(tester, 'Not Sure');
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<CheckboxListTile>(
-              find.widgetWithText(CheckboxListTile, 'All of the above'),
-            )
-            .value,
-        false,
-      );
+      expect(observationSelected(tester, 'bio_indicators', 4), false);
       expect(find.text('Unknown - needs review'), findsOneWidget);
       expect(find.textContaining('null/6'), findsNothing);
-      await tap(tester, find.text('All of the above'));
-      await tap(tester, find.text('No animals'));
-      expect(
-        tester
-            .widget<CheckboxListTile>(
-              find.widgetWithText(CheckboxListTile, 'All of the above'),
-            )
-            .value,
-        false,
-      );
-      await tap(tester, find.text('Crabs'));
-      expect(
-        tester
-            .widget<CheckboxListTile>(
-              find.widgetWithText(CheckboxListTile, 'No animals'),
-            )
-            .value,
-        false,
-      );
-      for (final choice in ['Prop', 'Oval', 'Smooth']) {
-        await tap(tester, find.text(choice).last);
+      await chooseObservation(tester, 'All of the above');
+      await chooseCategory(tester, 'Warning signs');
+      await chooseObservation(tester, 'No animals');
+      await chooseCategory(tester, 'Animals seen');
+      expect(observationSelected(tester, 'bio_indicators', 4), false);
+      await chooseObservation(tester, 'Crabs');
+      await chooseCategory(tester, 'Warning signs');
+      expect(observationSelected(tester, 'negative_signs', 5), false);
+      for (final choice in {
+        'Roots': 'Prop',
+        'Leaves': 'Oval',
+        'Bark': 'Smooth',
+      }.entries) {
+        await chooseCategory(tester, choice.key);
+        await chooseObservation(tester, choice.value);
       }
       await tester.enterText(field('Notes (optional)'), 'First note');
       await tap(tester, find.text('Review report'));

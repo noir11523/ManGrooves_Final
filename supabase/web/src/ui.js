@@ -4,7 +4,8 @@ export const $ = selector => document.querySelector(selector);
 export const $$ = selector => [...document.querySelectorAll(selector)];
 export const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]));
 export const displayLabel = value => ({pending:'Pending',verified:'Verified',rejected:'Rejected',approved:'Approved',declined:'Declined',active:'Active',inactive:'Inactive',confirm:'Confirmed',correct:'Corrected',reject:'Rejected',auto_verify:'Verified automatically'}[value] ?? value ?? 'Not available');
-export const reportStatus = report => report.status === 'pending' && (report.needs_attention === true || Number(report.needs_attention) === 1) ? 'Needs attention' : report.status;
+export const reportStatus = report => report.status;
+export const speciesNames = s => [s?.local_name ?? s?.species_local_name, s?.common_name ?? s?.species_common_name, s?.scientific_name ?? s?.species_name ?? s?.final_species_name ?? s?.suggested_species_name].filter(Boolean).map(esc).join('<br>') || 'Needs identification';
 export const pill = value => `<span class="pill ${esc(String(value).toLowerCase().replaceAll(' ', '-'))}">${esc(displayLabel(value))}</span>`;
 export const field = (name, label, value = '', type = 'text', extra = '') => `<label class="field"><span>${esc(label)}</span><input name="${esc(name)}" type="${type}" value="${esc(value)}" ${extra}></label>`;
 export const select = (name, label, options, value = '', extra = '') => `<label class="field"><span>${esc(label)}</span><select name="${esc(name)}" ${extra}>${options.map(([id, label]) => `<option value="${esc(id)}" ${String(id) === String(value ?? '') ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`;
@@ -35,14 +36,14 @@ export function reportTable(items, {guardian = false, verification = false} = {}
   };
   const headers = verification ? ['Report','Submitted by / location','Assessment','Submitted','Status','Action'] : ['Report',...(!guardian?['Submitted by']:[]),'Site','Health','Status','Submitted','Action'];
   return `<section class="report-table-card"><div class="table-wrap"><table class="report-table"><caption class="sr-only">${verification?'Verification reports':guardian?'Your reports':'Community reports'}</caption><thead><tr>${headers.map(label=>`<th scope="col">${label}</th>`).join('')}</tr></thead><tbody>${items.map(r=>{
-    const site=r.cluster_name||r.sitio_name||r.barangay_name||'New site',species=r.species_name||'Not identified';
+    const site=r.cluster_name||r.sitio_name||r.barangay_name||'New site',species=speciesNames(r);
     const cell=(label,html)=>`<td data-label="${esc(label)}">${html}</td>`;
     const report=cell('Report',`<strong>${esc(r.report_code)}</strong>`);
     const person=cell(verification?'Submitted by / location':'Submitted by',`${esc(r.guardian_name||'Community member')}${verification?`<small>${esc(site)}${r.barangay_name&&r.barangay_name!==site?` · ${esc(r.barangay_name)}`:''}</small>`:''}`);
-    const health=cell(verification?'Assessment':'Health',`${pill(r.display_health||r.final_health||r.suggested_health||'Unknown')}${verification?`<small>${esc(species)}</small>`:''}`);
-    const submitted=cell('Submitted',esc(date(r.submitted_at))),status=cell('Status',pill(r.status));
-    const action=cell('Action',`<a class="button ${verification&&r.status==='pending'?'':'outline'}" href="#report/${r.id}" aria-label="${verification&&r.status==='pending'?'Review':'View'} ${esc(r.report_code)}">${verification&&r.status==='pending'?'Review':'View'}</a>`);
-    return `<tr>${verification?report+person+health+submitted+status+action:report+(!guardian?person:'')+cell('Site',`${esc(site)}<small>${esc(species)}</small>`)+health+status+submitted+action}</tr>`;
+    const health=cell(verification?'Assessment':'Health',`${pill(r.display_health||r.final_health||r.suggested_health||'Unknown')}${verification?`<small>${species}</small>`:''}`);
+    const submitted=cell('Submitted',esc(date(r.submitted_at))),status=cell('Status',pill(r.status)+(r.status==='verified'&&r.needs_attention?'<small>Needs attention</small>':'')+(r.needs_follow_up?`<small>${r.active_child_id?'Follow-up submitted':'Follow-up needed'}</small>`:''));
+    const action=cell('Action',`<a class="button ${verification&&r.status==='pending'?'':'outline'}" href="#report/${r.id}${verification?'?review=1':''}" aria-label="${verification&&r.status==='pending'?'Review':'View'} ${esc(r.report_code)}">${verification&&r.status==='pending'?'Review':'View'}</a>${guardian&&r.can_follow_up?` <a class="button outline" href="#submit?parent=${r.id}&cluster=${r.cluster_id}">Submit follow-up</a>`:''}`);
+    return `<tr>${verification?report+person+health+submitted+status+action:report+(!guardian?person:'')+cell('Site',`${esc(site)}<small>${species}</small>`)+health+status+submitted+action}</tr>`;
   }).join('')}</tbody></table></div></section>`;
 }
 export const healthColor = health => ({Healthy: '#3f7f43', Stressed: '#cf961d', 'At Risk': '#c6513c'}[health] ?? '#788778');

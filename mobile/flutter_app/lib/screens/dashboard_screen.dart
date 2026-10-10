@@ -132,15 +132,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisExtent: 155,
               children: [
                 _StatCard(
-                  'Total reports',
+                  'Verified reports',
                   stats['total_reports'],
                   Icons.assignment_outlined,
-                  () => _openReports(),
-                ),
-                _StatCard(
-                  'Verified',
-                  stats['verified_reports'],
-                  Icons.verified_outlined,
                   () => _openReports(status: 'verified'),
                 ),
                 _StatCard(
@@ -180,7 +174,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             if (reminders.isNotEmpty) ...[
               const SizedBox(height: 24),
               Text(
-                'Follow-up reminders',
+                'Follow-up requests',
                 style: Theme.of(context).textTheme.titleLarge
                     ?.copyWith(fontWeight: FontWeight.w700),
               ),
@@ -191,18 +185,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Card(
                     child: ListTile(
                       leading: Icon(
-                        item['due_state'] == 'overdue'
-                            ? Icons.warning_amber
-                            : Icons.event_outlined,
-                        color: item['due_state'] == 'overdue'
-                            ? Colors.red
-                            : Colors.orange.shade800,
+                        Icons.assignment_return_outlined,
+                        color: Colors.orange.shade800,
                       ),
                       title: Text(
                         item['cluster_name']?.toString() ??
                             item['report_code'].toString(),
                       ),
-                      subtitle: Text('Due ${item['next_followup_date']}'),
+                      subtitle: Text(
+                        (item['follow_up_note']?.toString().trim().isNotEmpty ??
+                                false)
+                            ? item['follow_up_note'].toString()
+                            : 'A follow-up visit was requested.',
+                      ),
                       trailing: widget.onStartFollowUp == null
                           ? null
                           : FilledButton.tonal(

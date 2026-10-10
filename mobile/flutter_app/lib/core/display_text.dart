@@ -9,12 +9,16 @@ String statusLabel(dynamic value) => switch (value?.toString()) {
   _ => value?.toString() ?? 'Not available',
 };
 
-String reportStatusLabel(Map report) =>
-    report['status'] == 'pending' &&
-        (report['needs_attention'] == true ||
-            '${report['needs_attention']}' == '1')
-    ? 'Needs attention'
-    : statusLabel(report['status']);
+String reportStatusLabel(Map report) => statusLabel(report['status']);
+
+String speciesNames(Map? species) => [
+  species?['local_name'] ?? species?['species_local_name'],
+  species?['common_name'] ?? species?['species_common_name'],
+  species?['scientific_name'] ??
+      species?['species_name'] ??
+      species?['final_species_name'] ??
+      species?['suggested_species_name'],
+].where((v) => v != null && '$v'.isNotEmpty).join(' · ');
 
 String reviewActionLabel(dynamic value) => switch (value?.toString()) {
   'confirm' => 'Confirmed',

@@ -1,3 +1,5 @@
+import 'follow_up_screen.dart';
+
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -11,9 +13,11 @@ class ReportDetailScreen extends StatefulWidget {
     super.key,
     required this.api,
     required this.reportId,
+    this.manageFollowUp = false,
   });
   final ApiClient api;
   final int reportId;
+  final bool manageFollowUp;
 
   @override
   State<ReportDetailScreen> createState() => _ReportDetailScreenState();
@@ -22,6 +26,7 @@ class ReportDetailScreen extends StatefulWidget {
 class _ReportDetailScreenState extends State<ReportDetailScreen> {
   Map<String, dynamic>? _report;
   String? _error;
+  bool _savingFollowUp = false;
 
   @override
   void initState() {
@@ -37,6 +42,81 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       _error = error is ApiException ? error.message : 'Unable to load report.';
     }
     if (mounted) setState(() {});
+  }
+
+  Future<void> _editFollowUp() async {
+    final note = TextEditingController(
+      text: _report?['follow_up_note']?.toString() ?? '',
+    );
+    bool needed = _report?['needs_follow_up'] == true;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: const Text('Follow-up request'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CheckboxListTile(
+                  value: needed,
+                  onChanged: (v) => update(() => needed = v ?? false),
+                  title: const Text('Needs follow-up'),
+                ),
+                if (needed)
+                  TextField(
+                    controller: note,
+                    maxLength: 1000,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Follow-up note (optional)',
+                      hintText:
+                          'Why does this mangrove need another observation?',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == true && mounted) {
+      setState(() => _savingFollowUp = true);
+      try {
+        await widget.api.reviewReport({
+          'report_id': widget.reportId,
+          'action': 'followup',
+          'needs_follow_up': needed,
+          'follow_up_note': note.text,
+        });
+        await _load();
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                error is ApiException
+                    ? error.message
+                    : 'Could not save the follow-up request.',
+              ),
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _savingFollowUp = false);
+      }
+    }
+    // The dialog route may still be animating while its text field unmounts.
   }
 
   @override
@@ -93,6 +173,17 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             errorBuilder: (_, _, _) => const Text('Photo unavailable.'),
           ),
         ],
+        for (final path in _report!['extra_photo_urls'] as List? ?? [])
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Image.network(
+              widget.api.resolve('$path').toString(),
+              headers: widget.api.imageHeaders,
+              height: 220,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const Text('Photo unavailable.'),
+            ),
+          ),
         const SizedBox(height: 16),
         Wrap(
           spacing: 8,
@@ -114,7 +205,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             'Cluster': _report!['cluster_name'] ?? 'New site',
             'Sitio': _report!['sitio_name'],
             'Coordinates': '${_report!['latitude']}, ${_report!['longitude']}',
-            'Living mangroves': _report!['observed_alive_count'],
+            'Living mangroves':
+                _report!['observed_alive_count'] ?? 'Unable to count',
             if (_report!['status'] == 'verified' &&
                 _report!['expert_id'] == null)
               'Verification': 'Automatically verified as Healthy',
@@ -122,15 +214,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ),
         const SizedBox(height: 12),
         _InfoCard(
-          title: 'Species assessment',
+          title: 'Species name',
           rows: {
-            'Species':
-                (_report!['status'] == 'verified'
-                    ? _report!['final_species_name']
-                    : (_report!['status'] == 'pending'
-                          ? _report!['suggested_species_name']
-                          : null)) ??
-                'Unidentified',
+            'Name': speciesNames(_report!).isEmpty
+                ? 'Unidentified'
+                : speciesNames(_report!),
             'Root type': _report!['root_type'],
             'Leaf shape': _report!['leaf_shape'],
             'Bark texture': _report!['bark_texture'],
@@ -145,7 +233,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
         const SizedBox(height: 8),
         Text(
-          'Health checklist',
+          'Observations',
           style: Theme.of(context).textTheme.titleLarge
               ?.copyWith(fontWeight: FontWeight.w700),
         ),
@@ -195,6 +283,66 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               icon: const Icon(Icons.timeline),
               label: Text(mode == 0 ? 'Health history' : 'Growth timeline'),
             ),
+        if (_report!['needs_follow_up'] == true ||
+            _report!['follow_up_state'] != null)
+          _InfoCard(
+            title: 'Follow-up',
+            rows: {
+              'Status': _report!['follow_up_state'] ?? 'Follow-up needed',
+              if (_report!['follow_up_note'] != null)
+                'Note': _report!['follow_up_note'],
+            },
+          ),
+        if (_report!['can_follow_up'] == true)
+          FilledButton.icon(
+            onPressed: () async {
+              await startFollowUp(context, widget.api, _report!);
+              await _load();
+            },
+            icon: const Icon(Icons.add_a_photo_outlined),
+            label: const Text('Submit follow-up'),
+          ),
+        if (widget.manageFollowUp && _report!['status'] == 'verified')
+          OutlinedButton(
+            onPressed: _savingFollowUp ? null : _editFollowUp,
+            child: Text(_savingFollowUp ? 'Saving…' : 'Edit follow-up request'),
+          ),
+        if ((_report!['observation_history'] as List? ?? []).length > 1)
+          Card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Observation history',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                for (final visit in _report!['observation_history'] as List)
+                  ListTile(
+                    title: Text(
+                      '${visit['report_code']} · ${visit['visit_label']}',
+                    ),
+                    subtitle: Text(
+                      '${visit['submitted_at']}\n${visit['health']} · ${statusLabel(visit['status'])}${visit['follow_up_state'] == null ? '' : '\n${visit['follow_up_state']}'}',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: visit['id'] == widget.reportId
+                        ? null
+                        : () => Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => ReportDetailScreen(
+                                api: widget.api,
+                                reportId: visit['id'] as int,
+                              ),
+                            ),
+                          ),
+                  ),
+              ],
+            ),
+          ),
         ValidationHistoryCard(report: _report!),
         if ((_report!['expert_feedback']?.toString().trim().isNotEmpty ??
             false)) ...[

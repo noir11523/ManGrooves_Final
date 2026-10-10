@@ -24,8 +24,17 @@ function jpeg(bytes) {
     if(size<2||end>bytes.length) throw new Error('JPG length');
     if([0xc0,0xc1,0xc2].includes(marker)) { height=bytes.readUInt16BE(offset+3); width=bytes.readUInt16BE(offset+5); }
     if(marker===0xe1) rotate=orientation(bytes.subarray(offset+2,end));
-    // Strip APP1..APP15 (EXIF/XMP/GPS/etc.) and comments. JFIF is harmless.
-    if(!(marker>=0xe1&&marker<=0xef)&&marker!==0xfe) chunks.push(bytes.subarray(markerAt,end));
+    // Strip APP1..APP15 (EXIF/XMP/GPS/etc.) and comments. Normalize JFIF
+    // print-density metadata so it cannot turn the same photo into a new hash.
+    if(!(marker>=0xe1&&marker<=0xef)&&marker!==0xfe) {
+      const chunk=Buffer.from(bytes.subarray(markerAt,end));
+      if(marker===0xe0&&size>=16&&bytes.toString('ascii',offset+2,offset+7)==='JFIF\0') {
+        chunk[11]=0;
+        chunk.writeUInt16BE(1,12);
+        chunk.writeUInt16BE(1,14);
+      }
+      chunks.push(chunk);
+    }
     offset=end;
     if(marker===0xda) {
       scan=true; const begin=offset;

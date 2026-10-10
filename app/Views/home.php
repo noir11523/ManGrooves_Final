@@ -69,9 +69,9 @@
             <li><span class="home-step-number">01</span><h3>Observe</h3><p>Visit a monitored area and check visible conditions.</p></li>
             <li><span class="home-step-number">02</span><h3>Document</h3><p>Take a photo, place the location pin and complete the checklist.</p></li>
             <li><span class="home-step-number">03</span><h3>Submit Report</h3><p>Send your field report through ManGROOVES.</p></li>
-            <li><span class="home-step-number">04</span><h3>Review</h3><p>Reports needing review go to a qualified expert for validation or feedback.</p></li>
+            <li><span class="home-step-number">04</span><h3>Review</h3><p>A qualified expert reviews each report for validation or feedback.</p></li>
         </ol>
-        <p class="home-process-note">Healthy reports may be verified automatically. Verified records support follow-up monitoring over time.</p>
+        <p class="home-process-note">Every report awaits expert review. Verified records support follow-up monitoring over time.</p>
     </div>
 </section>
 

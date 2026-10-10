@@ -39,37 +39,27 @@ const set = (name, value) => { const input = $(`[name=${name}]`); input.value = 
 const submit = () => { const form = $('#report-form'); return form.onsubmit({preventDefault() {}, submitter: $('#next')}); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };
 
-test('photo controls, automatic site follow-up, racing requests and cancellation preserve the intended draft',async()=>{
- const clusters=[{id:10,name:'Coastal nursery',sitio_name:'Nursery boardwalk',center_lat:10.2833,center_lng:123.8833},{id:11,name:'Estuary',center_lat:10.28,center_lng:123.88}];
+test('saved sites never auto-link observations; only an explicit request starts a follow-up',async()=>{
+ const clusters=[{id:10,name:'Coastal nursery',sitio_name:'Nursery boardwalk',center_lat:10.2833,center_lng:123.8833}];
  const traits=Object.fromEntries(['root_type','leaf_shape','bark_texture'].map(k=>[k,[reference.species[0][k]]]));
- let resolveVisits,fail=false;
  globalThis.testApi=async(path,{query}={})=>{
   if(path==='report-form.php')return {criteria:reference.criteria,clusters,traits,location:{}};
-  if(path==='previous-reports.php') {
-   if(fail)throw new Error('Connection interrupted.');
-   if(query.cluster_id==='11')return new Promise(resolve=>{resolveVisits=resolve});
-   return {reports:[{id:9,report_code:'Report #1',health:'Healthy'}]};
-  }
+  if(path==='previous-reports.php')return {reports:[{id:9,report_code:'Report #1',health:'Healthy'}]};
   return {places:[]};
  };
- ui.reportDraft.reset();let dispose=await ui.reportWizard($('#page'),{}, {id:'site-test'});
+ const owner='site-test-'+Date.now();ui.reportDraft.reset();let dispose=await ui.reportWizard($('#page'),{}, {id:owner});
  try {
   assert.equal($('[name=photo]').hasAttribute('capture'),false);assert.equal($('#camera-photo').getAttribute('capture'),'environment');
   let camera=0,gallery=0;Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{camera++;throw Object.assign(new Error(),{name:'NotFoundError'});}}});$('[name=photo]').click=()=>gallery++;
   $('#take-photo').click();$('#choose-photo').click();assert.equal(camera,1);assert.equal(gallery,1);await tick();
   set('cluster_id','10');await tick();assert.equal($('[name=sitio_name]').value,'Nursery boardwalk');
-  assert.equal(ui.reportDraft.fields.latitude,10.2833);assert.equal(ui.reportDraft.followup,true);assert.equal($('[name=parent_report_id]').value,'9');
-  assert.equal(ui.reportDraft.fields.parent_report_code,'Report #1');
-  set('cluster_id','11');assert.equal($('#next').disabled,true);
-  set('cluster_id','');assert.equal($('#next').disabled,false);assert.equal($('#followup-options').hidden,true);
-  resolveVisits({reports:[{id:88,report_code:'Old reply'}]});await tick();assert.equal(ui.reportDraft.followup,false);assert.equal(ui.reportDraft.fields.parent_report_id,'');
-  fail=true;set('cluster_id','10');await tick();assert.equal($('#next').disabled,true);assert.match($('#followup-options').textContent,/Retry previous visits/);
-  fail=false;$('#followup-options button').click();await tick();assert.equal($('#next').disabled,false);assert.equal(ui.reportDraft.followup,true);
-  await ui.reportDraft.flush();const cancelling=$('.page-head a').onclick({preventDefault(){}});await tick();closeConfirm('confirm');await cancelling;
-  assert.equal(location.hash,'#reports');dispose();ui.reportDraft.reset();
-  dispose=await ui.reportWizard($('#page'),{}, {id:'site-test'});
-  assert.equal($('[name=sitio_name]').value,'');assert.equal(ui.reportDraft.photo,null);assert.equal(ui.reportDraft.followup,false);
- }finally{dispose();ui.reportDraft.reset();clearTimeout(ui.toast.timer);}
+  assert.equal(ui.reportDraft.fields.latitude,10.2833);assert.equal(ui.reportDraft.followup,false);assert.equal(ui.reportDraft.fields.parent_report_id,'');assert.equal($('#followup-options').hidden,true);
+ } finally {dispose();ui.reportDraft.reset();}
+ dispose=await ui.reportWizard($('#page'),{parent:'9',cluster:'10'},{id:owner+'-followup'});
+ try {
+  await tick();assert.equal(ui.reportDraft.followup,true);assert.equal(ui.reportDraft.fields.parent_report_id,'9');
+  assert.equal($('[name=cluster_id]').disabled,true);assert.equal(ui.reportDraft.photo,null);assert.equal(ui.reportDraft.closeupPhoto,null);
+ } finally {dispose();ui.reportDraft.reset();clearTimeout(ui.toast.timer);}
 });
 
 test('dragged report pin refreshes the name, clears a distant site and ignores an older reverse lookup',async()=>{

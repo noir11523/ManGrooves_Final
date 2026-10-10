@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import 'account_security_screen.dart';
-import 'checklist_screen.dart';
-import 'cloud_admin_screen.dart';
-import 'management_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -113,56 +110,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
-        if (user['role'] == 'expert' && widget.api.supportsCloudAccounts)
-          ListTile(
-            title: const Text('Species and Sites'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    ManagementScreen(api: widget.api, page: 'species'),
-              ),
-            ),
-          ),
-        if (user['role'] == 'system_admin' &&
-            widget.api.supportsCloudAccounts) ...[
-          for (final entry in const {
-            'users': 'Users',
-            'species': 'Species and Sites',
-            'badge-settings': 'Manage badges',
-          }.entries)
-            ListTile(
-              title: Text(entry.value),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      ManagementScreen(api: widget.api, page: entry.key),
-                ),
-              ),
-            ),
-          ListTile(
-            title: const Text('Expert applications'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => CloudAdminScreen(api: widget.api),
-              ),
-            ),
-          ),
-          ListTile(
-            title: const Text('Certificate signer'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    CloudAdminScreen(api: widget.api, certificates: true),
-              ),
-            ),
-          ),
-        ],
         CircleAvatar(
           radius: 38,
           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -278,17 +225,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        if (user['role'] == 'system_admin')
-          OutlinedButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) => ChecklistScreen(api: widget.api),
-              ),
-            ),
-            icon: const Icon(Icons.checklist),
-            label: const Text('Health checklist'),
-          ),
         OutlinedButton.icon(
           onPressed: () => Navigator.push(
             context,
