@@ -152,6 +152,11 @@ class _Api extends ApiClient {
       'leaf_shape': ['Oval'],
       'bark_texture': ['Smooth'],
     },
+    'trait_images': {
+      'root_type': {'Prop': 'img/observations/v1-intact-prop-roots.jpg'},
+      'leaf_shape': {'Oval': 'img/observations/v1-green-leaf.jpg'},
+      'bark_texture': {'Smooth': 'img/observations/v1-smooth-bark.jpg'},
+    },
     'criteria': [
       {
         'code': 'leaf_color',
@@ -159,7 +164,12 @@ class _Api extends ApiClient {
         'selection_mode': 'single',
         'question_text': 'Choose a color.',
         'options': [
-          {'id': 1, 'code': 'green', 'label': 'Green'},
+          {
+            'id': 1,
+            'code': 'green',
+            'label': 'Green',
+            'image_path': 'img/observations/v1-green-leaf.jpg',
+          },
         ],
       },
       {
@@ -168,7 +178,12 @@ class _Api extends ApiClient {
         'question_text': 'What did you see?',
         'selection_mode': 'multiple',
         'options': [
-          {'id': 2, 'code': 'crabs', 'label': 'Crabs'},
+          {
+            'id': 2,
+            'code': 'crabs',
+            'label': 'Crabs',
+            'image_path': 'img/test-crab.jpg',
+          },
           {'id': 3, 'code': 'none_of_the_above', 'label': 'None of the above'},
           {'id': 4, 'code': 'all_of_the_above', 'label': 'All of the above'},
           {'id': 6, 'code': 'unknown', 'label': 'Not Sure'},

@@ -137,7 +137,7 @@
           "label": "Green",
           "points": 2,
           "display_order": 1,
-          "image_path": null
+          "image_path": "img/observations/v1-green-leaf.jpg"
         },
         {
           "id": 2,
@@ -146,7 +146,7 @@
           "label": "Light / Yellow-Green",
           "points": 1,
           "display_order": 2,
-          "image_path": null
+          "image_path": "img/observations/v1-yellow-green-leaves.jpg"
         },
         {
           "id": 3,
@@ -155,7 +155,7 @@
           "label": "Brown / Yellow-Brown",
           "points": 0,
           "display_order": 3,
-          "image_path": null
+          "image_path": "img/observations/v1-brown-leaf.jpg"
         },
         {
           "id": 27,
@@ -194,7 +194,7 @@
           "label": "Smooth & Healthy",
           "points": 2,
           "display_order": 1,
-          "image_path": null
+          "image_path": "img/observations/v1-green-leaf.jpg"
         },
         {
           "id": 5,
@@ -203,7 +203,7 @@
           "label": "Waxy / Curled / Pointing Up",
           "points": 1,
           "display_order": 2,
-          "image_path": null
+          "image_path": "img/observations/v1-waxy-upward-leaves.jpg"
         },
         {
           "id": 6,
@@ -212,7 +212,7 @@
           "label": "Damaged / Holes / Dark Spots",
           "points": 0,
           "display_order": 3,
-          "image_path": null
+          "image_path": "img/observations/v1-leaf-dark-spots.jpg"
         },
         {
           "id": 7,
@@ -221,7 +221,7 @@
           "label": "Brittle / Dry",
           "points": 0,
           "display_order": 4,
-          "image_path": null
+          "image_path": "img/observations/v1-dry-leaves.jpg"
         },
         {
           "id": 29,
@@ -260,7 +260,7 @@
           "label": "None Visible",
           "points": 2,
           "display_order": 1,
-          "image_path": null
+          "image_path": "img/observations/v1-green-leaf.jpg"
         },
         {
           "id": 9,
@@ -269,7 +269,7 @@
           "label": "Few Holes / Bites",
           "points": 1,
           "display_order": 2,
-          "image_path": null
+          "image_path": "img/observations/v1-leaf-bites.jpg"
         },
         {
           "id": 10,
@@ -278,7 +278,7 @@
           "label": "Many Holes / Webbing",
           "points": 0,
           "display_order": 3,
-          "image_path": null
+          "image_path": "img/observations/v1-caterpillar-damage.jpg"
         },
         {
           "id": 31,
@@ -317,7 +317,7 @@
           "label": "Firm & Intact",
           "points": 2,
           "display_order": 1,
-          "image_path": null
+          "image_path": "img/observations/v1-intact-prop-roots.jpg"
         },
         {
           "id": 12,
@@ -326,7 +326,7 @@
           "label": "Loose / Some Damage",
           "points": 1,
           "display_order": 2,
-          "image_path": null
+          "image_path": "img/observations/v1-uprooted-roots.jpg"
         },
         {
           "id": 13,
@@ -335,7 +335,7 @@
           "label": "Exposed / Erosion Visible",
           "points": 0,
           "display_order": 3,
-          "image_path": null
+          "image_path": "img/observations/v1-root-erosion.jpg"
         },
         {
           "id": 14,
@@ -344,7 +344,7 @@
           "label": "Dead / Rotten",
           "points": 0,
           "display_order": 4,
-          "image_path": null
+          "image_path": "img/observations/v1-dead-mangrove.jpg"
         },
         {
           "id": 33,
@@ -383,7 +383,7 @@
           "label": "Intact / Smooth",
           "points": 2,
           "display_order": 1,
-          "image_path": null
+          "image_path": "img/observations/v1-smooth-bark.jpg"
         },
         {
           "id": 16,
@@ -392,7 +392,7 @@
           "label": "Slightly Peeling / Cracks",
           "points": 1,
           "display_order": 2,
-          "image_path": null
+          "image_path": "img/observations/v1-flaking-bark.jpg"
         },
         {
           "id": 17,
@@ -401,7 +401,7 @@
           "label": "Deep Cracks / Fissures",
           "points": 0,
           "display_order": 3,
-          "image_path": null
+          "image_path": "img/observations/v1-fissured-bark.jpg"
         },
         {
           "id": 18,
@@ -410,7 +410,7 @@
           "label": "Missing / Large Damage",
           "points": 0,
           "display_order": 4,
-          "image_path": null
+          "image_path": "img/observations/v1-broken-trunk.jpg"
         },
         {
           "id": 35,
@@ -446,10 +446,10 @@
           "id": 19,
           "criteria_id": 6,
           "code": "crabs",
-          "label": "Crabs (Tambasakan)",
+          "label": "Tambasakan (Mudskipper)",
           "points": 1,
           "display_order": 1,
-          "image_path": null
+          "image_path": "img/observations/v1-mudskipper.jpg"
         },
         {
           "id": 20,
@@ -458,7 +458,7 @@
           "label": "Birds (Herons / Egrets)",
           "points": 1,
           "display_order": 2,
-          "image_path": null
+          "image_path": "img/observations/v1-mangrove-birds.jpg"
         },
         {
           "id": 21,
@@ -467,7 +467,7 @@
           "label": "Small Fish (Juveniles)",
           "points": 1,
           "display_order": 3,
-          "image_path": null
+          "image_path": "img/observations/v1-small-fish.jpg"
         },
         {
           "id": 22,
@@ -476,7 +476,7 @@
           "label": "Snails / Shells",
           "points": 1,
           "display_order": 4,
-          "image_path": null
+          "image_path": "img/observations/v1-shells.jpg"
         },
         {
           "id": 23,
@@ -485,7 +485,7 @@
           "label": "Butterflies / Bees",
           "points": 1,
           "display_order": 5,
-          "image_path": null
+          "image_path": "img/observations/v1-butterfly.jpg"
         },
         {
           "id": 37,
@@ -541,7 +541,7 @@
           "label": "Trash / Plastic Visible",
           "points": -1,
           "display_order": 2,
-          "image_path": null
+          "image_path": "img/observations/v1-plastic-litter.jpg"
         },
         {
           "id": 26,

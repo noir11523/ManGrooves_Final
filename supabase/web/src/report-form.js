@@ -1,5 +1,6 @@
 import {resolveAnimalChoices} from './observation-selection.js';
-import {traitLabels,traitHeadings,traitImage} from './trait-labels.js';
+import {traitLabels,traitHeadings} from './trait-labels.js';
+import {photoCredit} from './photo-credit.js';
 import {validateReportPhotos} from './report-photos.js';
 import {capturePhoto} from './camera.js';
 import L from 'leaflet';
@@ -80,6 +81,7 @@ export async function reportWizard(node, query, user = null) {
   const save = form => {
     if (!form) return;
     const values = formValues(form);
+    for(const key of Object.keys(traitHeadings))if(form.querySelector(`[name="${key}"]`))draft.fields[key]=form.querySelector(`[name="${key}"]:checked`)?.value??'';
     for (const [key, value] of Object.entries(values)) if (key !== 'closeup_photo' && key !== 'photo' && key !== 'extra_photos' && key !== 'count_unknown' && !key.startsWith('obs_') && key !== 'followup') draft.fields[key] = value;
     if (form.querySelector('#followup')) draft.followup = form.querySelector('#followup').checked;
   };
@@ -460,8 +462,8 @@ export async function reportWizard(node, query, user = null) {
     const sighting=data.criteria.find(c=>c.code==='bio_indicators')?.options.find(o=>
       (draft.observations.bio_indicators??[]).includes(o.id)&&!['unknown','none_of_the_above'].includes(o.code));
     if(sighting)resolveAnimalChoices(data.criteria,draft.observations,'bio_indicators',sighting.code);
-    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Tap a choice. Pick Not Sure if you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Health score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
-    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. These diagrams are a guide.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${label}</legend><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}><img src="${esc(asset(data.trait_images?.[key]?.[value]||'img/traits/'+traitImage(key,value)+'.svg'))}" alt=""><span>${esc(traitLabels[value]||value)}</span></label>`).join('')}</div></fieldset>`).join('')}`);
+    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Tap a photo to enlarge it, then select your answer. Pick Not Sure if you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Health score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span>${photoCredit(o.image_credit)}</label>`).join('')}</div></fieldset>`).join('')}`;
+    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. Photos show examples; compare them with what you see at the site.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${label}</legend><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}>${data.trait_images?.[key]?.[value]?`<img src="${esc(asset(data.trait_images[key][value]))}" alt="">`:''}<span>${esc(traitLabels[value]||value)}</span>${photoCredit(data.photo_credits?.[data.trait_images?.[key]?.[value]])}</label>`).join('')}</div></fieldset>`).join('')}`);
     const body=$('#step-body'), groups=[...body.querySelectorAll('fieldset.choice-group')];
     const tabs=document.createElement('div');tabs.className='observation-categories';tabs.setAttribute('aria-label','Observation categories');
     tabs.innerHTML=groups.map((group,i)=>`<button type="button" class="outline" data-category="${i}">${esc(group.querySelector('legend').childNodes[0].textContent)}</button>`).join('');
@@ -470,21 +472,31 @@ export async function reportWizard(node, query, user = null) {
     tabs.querySelectorAll('button').forEach((button,i)=>button.onclick=()=>showCategory(i));showCategory(Math.min(selectedCategory,groups.length-1));
     for(const choice of body.querySelectorAll('.choice')) {
       const control=choice.querySelector('input');control.id='choice-'+control.name+'-'+[...body.querySelectorAll('.choice')].indexOf(choice);choice.htmlFor=control.id;
-      if(!choice.querySelector('img'))choice.insertAdjacentHTML('afterbegin','<img src="'+asset('img/traits/elliptic.svg')+'" alt="">');
+      control.setAttribute('aria-label',choice.querySelector('span').textContent);
+      control.addEventListener('click',()=>{
+        const wasSelected=control.name.startsWith('obs_')
+          ? (draft.observations[control.name.slice(4)]??[]).includes(Number(control.value))
+          : draft.fields[control.name]===control.value;
+        if(control.type==='radio' && wasSelected){control.checked=false;control.dispatchEvent(new Event('change',{bubbles:true}));}
+      });
+      choice.append(control); // Keep the selection circle below the answer label.
+      if(!choice.querySelector('img')){choice.classList.add('choice-text-only');continue;}
       choice.insertAdjacentHTML('beforeend','<small class="choice-selected" aria-hidden="true">&#10003; Selected</small>');
       const picture=choice.querySelector('img'), preview=document.createElement('button');
       preview.type='button';preview.className='choice-picture';preview.setAttribute('aria-label','Preview '+choice.querySelector('span').textContent);
       picture.replaceWith(preview);preview.append(picture);
+      picture.loading='lazy';picture.decoding='async';
+      picture.addEventListener('error',()=>{preview.replaceWith(Object.assign(document.createElement('small'),{textContent:'Photo unavailable. You can still select this answer.'}));});
       preview.onclick=event=>{
         event.preventDefault();event.stopPropagation();
         const dialog=document.createElement('dialog');dialog.className='observation-preview';
         const title=document.createElement('h2');title.textContent=choice.querySelector('span').textContent;
         const image=picture.cloneNode();image.alt=title.textContent;
         const close=document.createElement('button');close.type='button';close.className='outline';close.textContent='Close';close.onclick=()=>dialog.close();
-        const use=document.createElement('button');use.type='button';use.textContent='Select';
-        use.onclick=()=>{const input=choice.querySelector('input');if(!input.checked){input.checked=true;input.dispatchEvent(new Event('change',{bubbles:true}));}dialog.close();};
+        const use=document.createElement('button');use.type='button';use.textContent=control.checked?'Deselect':'Select';
+        use.onclick=()=>{const input=choice.querySelector('input');input.checked=!input.checked;input.dispatchEvent(new Event('change',{bubbles:true}));dialog.close();};
         const actions=document.createElement('div');actions.className='actions';actions.append(close,use);
-        title.id='observation-preview-label';dialog.setAttribute('aria-labelledby',title.id);dialog.append(image,title,actions);body.append(dialog);dialog.addEventListener('close',()=>{dialog.remove();preview.focus();},{once:true});dialog.showModal();
+        title.id='observation-preview-label';dialog.setAttribute('aria-labelledby',title.id);dialog.append(image,title);const credit=choice.querySelector('.photo-credit');if(credit)dialog.append(credit.cloneNode(true));dialog.append(actions);body.append(dialog);dialog.addEventListener('close',()=>{dialog.remove();preview.focus();},{once:true});dialog.showModal();
       };
     }
     for (const c of data.criteria) {

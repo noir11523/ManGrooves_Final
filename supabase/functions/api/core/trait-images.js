@@ -1,5 +1,6 @@
 import {AppError, requireRole, text} from './domain.js';
 import {saveImage} from './uploads.js';
+import {photoCredits} from './reference-photos.js';
 
 export async function traitImages(service,user,input,files={}) {
   requireRole(user,'system_admin');
@@ -21,5 +22,5 @@ export async function traitImages(service,user,input,files={}) {
       });
     } catch(error) {if(upload)await service.bucket.file(upload.path).delete().catch(()=>{});throw error;}
   }
-  return {traits,trait_images:(await service.get('meta','trait_images'))??{},message:input?'Feature image saved.':null};
+  return {traits,photo_credits:photoCredits,trait_images:(await service.get('meta','trait_images'))??{},message:input?'Feature image saved.':null};
 }

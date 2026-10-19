@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'photo_credit.dart';
+
 /// A picture can be inspected without changing the report's saved answer.
 class ObservationChoice extends StatelessWidget {
   const ObservationChoice({
@@ -10,6 +12,8 @@ class ObservationChoice extends StatelessWidget {
     required this.picture,
     required this.onToggle,
     this.selectionKey,
+    this.hasPhoto = true,
+    this.photoCredit,
   });
 
   final String label;
@@ -18,6 +22,8 @@ class ObservationChoice extends StatelessWidget {
   final Widget picture;
   final VoidCallback onToggle;
   final Key? selectionKey;
+  final bool hasPhoto;
+  final Map? photoCredit;
 
   void _preview(BuildContext context) {
     showDialog<void>(
@@ -58,6 +64,7 @@ class ObservationChoice extends StatelessWidget {
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
+                          PhotoCredit(credit: photoCredit),
                           const Text(
                             'Pinch to zoom. Drag to move.',
                             textAlign: TextAlign.center,
@@ -134,19 +141,22 @@ class ObservationChoice extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Semantics(
-              button: true,
-              label: 'Preview $label',
-              child: InkWell(
+            if (hasPhoto)
+              Semantics(
+                button: true,
+                label: 'Preview $label',
+                excludeSemantics: true,
                 onTap: () => _preview(context),
-                borderRadius: BorderRadius.circular(12),
-                child: ClipRRect(
+                child: InkWell(
+                  onTap: () => _preview(context),
                   borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(height: 200, child: thumbnail),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(height: 200, child: thumbnail),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
+            if (hasPhoto) const SizedBox(height: 12),
             InkWell(
               onTap: onToggle,
               child: Padding(
@@ -163,6 +173,7 @@ class ObservationChoice extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
+            if (hasPhoto) PhotoCredit(credit: photoCredit),
             Center(
               child: IconButton(
                 key: ValueKey('choice-circle-$label'),

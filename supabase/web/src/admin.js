@@ -1,5 +1,5 @@
 import {adminList} from './admin-lists.js';
-import {traitImage} from './trait-labels.js';
+import {photoCredit} from './photo-credit.js';
 import {sitesPage,catalogTabs} from './sites-page.js';
 import { api, friendly } from './client.js';
 import { $, $$, esc, field, select, formValues, errorBox, showError, toast, confirm, pager, asset } from './ui.js';
@@ -24,29 +24,28 @@ export async function checklistPage(node) {
     traitRows.push([group,{name:traitHead[key]||key,options:values.map(label=>({label}))}]);
     const grid=document.createElement('div');grid.className='trait-editor-grid';group.append(grid);
     for(const value of values){
-    const sample='img/traits/'+traitImage(key,value)+'.svg';
-    const image=traitData.trait_images?.[key]?.[value]||sample,row=document.createElement('div');
+    const image=traitData.trait_images?.[key]?.[value],row=document.createElement('div');
     row.className='trait-image-editor';
     const label=document.createElement('strong');label.textContent=value;
-    const preview=document.createElement('img');preview.src=asset(image);preview.alt='Current sample for '+value;
+    const preview=document.createElement('img');if(image)preview.src=asset(image);preview.hidden=!image;preview.alt='Reference photo for '+value;
     const input=document.createElement('input');input.type='file';input.accept='image/jpeg,image/png,image/webp';input.setAttribute('aria-label','Replace sample picture for '+value);
     const actions=document.createElement('div');actions.className='actions';
     const save=document.createElement('button');save.type='button';save.textContent='Save picture';
     const status=document.createElement('p');status.setAttribute('role','status');
     actions.append(save);
     const remove=document.createElement('button');
-    remove.type='button';remove.className='outline';remove.textContent='Use sample illustration';remove.hidden=!traitData.trait_images?.[key]?.[value];actions.append(remove);
-    row.append(preview,label,input,actions,status);grid.append(row);
+    remove.type='button';remove.className='outline';remove.textContent='Remove photo';remove.hidden=!traitData.trait_images?.[key]?.[value];actions.append(remove);
+    row.append(preview,label,input,actions,status);grid.append(row);const credit=document.createElement('div');credit.innerHTML=photoCredit(traitData.photo_credits?.[image]);label.after(credit);
     save.onclick=async()=>{
       const file=input.files[0];
       if(!file||!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){status.textContent='Choose a JPG, PNG, or WebP image under 5 MB.';return;}
       save.disabled=true;const body=new FormData();body.set('payload',JSON.stringify({action:'trait_image',trait:key,value}));body.set('photo',file);
-      try{const saved=await api('trait-images.php',{body});traitData.trait_images=saved.trait_images;preview.src=asset(saved.trait_images[key][value]);remove.hidden=false;status.textContent='Picture saved.';input.value='';}
+      try{const saved=await api('trait-images.php',{body});traitData.trait_images=saved.trait_images;preview.src=asset(saved.trait_images[key][value]);preview.hidden=false;credit.replaceChildren();remove.hidden=false;status.textContent='Picture saved.';input.value='';}
       catch(error){status.textContent=friendly(error);}finally{save.disabled=false;}
     };
     remove.addEventListener('click',async()=>{
       remove.disabled=true;
-      try{const saved=await api('trait-images.php',{body:{action:'trait_image',trait:key,value,remove:true}});traitData.trait_images=saved.trait_images;preview.src=asset(sample);remove.hidden=true;remove.disabled=false;status.textContent='Sample illustration restored.';}
+      try{const saved=await api('trait-images.php',{body:{action:'trait_image',trait:key,value,remove:true}});traitData.trait_images=saved.trait_images;preview.removeAttribute('src');preview.hidden=true;credit.replaceChildren();remove.hidden=true;remove.disabled=false;status.textContent='Photo removed.';}
       catch(error){status.textContent=friendly(error);remove.disabled=false;}
     });
   }
@@ -99,7 +98,7 @@ export async function checklistPage(node) {
       wrapper.innerHTML = `<summary><strong>${esc(data.name)}</strong><span class="muted">${data.score_group === 'health' ? '0–2 health points' : 'Supporting observations'}</span></summary><form>${errorBox}<div class="row">${field('name', 'Category name', data.name, 'text', 'required maxlength="120"')}${field('question_text', 'Question', data.question_text, 'text', 'required maxlength="255"')}</div>
         <div class="choice-grid" style="margin-top:18px">${data.options.map(o => {
           const special = specials.includes(o.code ?? o.kind), health = data.score_group === 'health';
-          return `<div class="option-editor ${o.delete ? 'removed' : ''}" data-option="${o.id}">${o.delete ? `<p>${esc(o.label)} will be removed.</p><button type="button" class="outline restore">Undo</button>` : `${o.image_path && !o.remove_image ? `<img class="guide" src="${esc(asset(o.image_path))}" alt="${esc(o.label)}">` : ''}${field('label', 'Choice', o.label, 'text', 'required maxlength="190"')}${special ? `<p><strong>Scoring:</strong> ${(o.code ?? o.kind) === 'unknown' ? 'Not scored · Expert review' : (o.code ?? o.kind) === 'none_of_the_above' ? '0 points' : health ? 'Lowest regular score' : 'Sum of regular choices'}</p>` : field('points', 'Points', o.points, 'number', `required min="${health ? 0 : -2}" max="2" step="1"`)}<label class="field"><span>Choice photo</span><input type="file" data-image="option_image_${o.id}" accept="image/jpeg,image/png,image/webp"><small>${images.has(`option_image_${o.id}`) ? esc(images.get(`option_image_${o.id}`).name) : 'Optional'}</small></label>${o.image_path ? `<label class="check"><input type="checkbox" name="remove_image" ${o.remove_image ? 'checked' : ''}>Remove photo</label>` : ''}<button type="button" class="link remove">Remove choice</button>`}</div>`;
+          return `<div class="option-editor ${o.delete ? 'removed' : ''}" data-option="${o.id}">${o.delete ? `<p>${esc(o.label)} will be removed.</p><button type="button" class="outline restore">Undo</button>` : `${o.image_path && !o.remove_image ? `<img class="guide" src="${esc(asset(o.image_path))}" alt="${esc(o.label)}">${photoCredit(o.image_credit)}` : ''}${field('label', 'Choice', o.label, 'text', 'required maxlength="190"')}${special ? `<p><strong>Scoring:</strong> ${(o.code ?? o.kind) === 'unknown' ? 'Not scored · Expert review' : (o.code ?? o.kind) === 'none_of_the_above' ? '0 points' : health ? 'Lowest regular score' : 'Sum of regular choices'}</p>` : field('points', 'Points', o.points, 'number', `required min="${health ? 0 : -2}" max="2" step="1"`)}<label class="field"><span>Choice photo</span><input type="file" data-image="option_image_${o.id}" accept="image/jpeg,image/png,image/webp"><small>${images.has(`option_image_${o.id}`) ? esc(images.get(`option_image_${o.id}`).name) : 'Optional'}</small></label>${o.image_path ? `<label class="check"><input type="checkbox" name="remove_image" ${o.remove_image ? 'checked' : ''}>Remove photo</label>` : ''}<button type="button" class="link remove">Remove choice</button>`}</div>`;
         }).join('')}</div>
         <div class="actions"><button type="button" class="outline add" data-kind="standard">Add choice</button><button type="submit">Save changes</button></div>
         ${specials.some(key=>(key!=='none_of_the_above'||data.selection_mode==='multiple')&&!data.options.some(o=>!o.delete&&(o.code??o.kind)===key))?`<details class="special-choices"><summary>Restore a special choice</summary><div class="actions">${specials.filter(key=>(key!=='none_of_the_above'||data.selection_mode==='multiple')&&!data.options.some(o=>!o.delete&&(o.code??o.kind)===key)).map(key=>`<button type="button" class="outline add" data-kind="${key}">Add ${labels[key]}</button>`).join('')}</div></details>`:''}</form>`;

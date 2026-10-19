@@ -1,4 +1,5 @@
 import {cleanImage} from './images.js';
+import {withPhotoCredits, photoCredits} from './reference-photos.js';
 import {followUpAvailable, followUpState, observationHistory} from './follow-up.js';
 import {usableSite,visibleSite} from './site-access.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -31,7 +32,7 @@ export class Service extends Store {
   }
   async register(input,ip) { return startRegistration(this,input,ip); }
   async criteria() {
-    return (await this.rows('criteria')).filter(c => c.active !== 0).sort((a, b) => a.display_order - b.display_order);
+    return (await this.rows('criteria')).filter(c => c.active !== 0).sort((a, b) => a.display_order - b.display_order).map(withPhotoCredits);
   }
   async species() { return (await this.rows('species')).filter(s => !s.deleted_at && Number(s.active) !== 0); }
   // Staff use one durable sequence; guardians keep their personal sequence.
@@ -61,7 +62,7 @@ export class Service extends Store {
   async form(user) {
     requireRole(user, 'guardian', 'expert');
     const [criteria, clusters, species, barangay] = await Promise.all([this.criteria(), this.clusters(user), this.species(), this.get('barangays', user.barangay_id)]);
-    return {criteria, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)), species, location: {barangay, max_distance_meters: 5000, max_gps_accuracy_meters: 100},
+    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)), species, location: {barangay, max_distance_meters: 5000, max_gps_accuracy_meters: 100},
       traits: Object.fromEntries(['root_type', 'leaf_shape', 'bark_texture'].map(k => [k, [...new Set(species.map(s => s[k]).filter(Boolean))].sort()]))};
   }
   async preview(user, input) {

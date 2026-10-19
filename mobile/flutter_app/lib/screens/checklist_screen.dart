@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
+import '../shared/photo_credit.dart';
+
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
@@ -197,7 +200,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                               path == null
                                   ? const Icon(Icons.image_outlined)
                                   : Image.network(
-                                      widget.api.resolve(path).toString(),
+                                      widget.api
+                                          .resolve(
+                                            path.startsWith('img/')
+                                                ? '../assets/$path'
+                                                : path,
+                                          )
+                                          .toString(),
                                       headers: widget.api.imageHeaders,
                                       width: 180,
                                       height: 140,
@@ -206,6 +215,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                         Icons.broken_image_outlined,
                                       ),
                                     ),
+                              PhotoCredit(
+                                credit:
+                                    (_traitData?['photo_credits']
+                                            as Map?)?[path]
+                                        as Map?,
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 item,
@@ -220,7 +235,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                tooltip: 'Replace sample picture',
+                                tooltip: 'Replace photo',
                                 onPressed: busy
                                     ? null
                                     : () async {
@@ -281,7 +296,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                               ),
                               if (path != null)
                                 IconButton(
-                                  tooltip: 'Restore sample illustration',
+                                  tooltip: 'Remove photo',
                                   onPressed: busy
                                       ? null
                                       : () async {
@@ -308,7 +323,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                                       content: Text(
                                                         error is ApiException
                                                             ? error.message
-                                                            : 'Could not restore the sample picture.',
+                                                            : 'Could not remove the photo.',
                                                       ),
                                                     ),
                                                   );
@@ -526,6 +541,7 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                 ? Image.file(File(local), height: 120, fit: BoxFit.contain)
                 : Image.network(
                     widget.api.resolve('../assets/$existing').toString(),
+                    headers: widget.api.imageHeaders,
                     height: 120,
                     fit: BoxFit.contain,
                     errorBuilder: (_, _, _) => const Text('Photo unavailable.'),
@@ -767,6 +783,11 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                                     _dirty = true;
                                   }),
                           ),
+                        if (!_images.containsKey(
+                              'option_image_${option['id']}',
+                            ) &&
+                            option['remove_image'] != true)
+                          PhotoCredit(credit: option['image_credit'] as Map?),
                         _photo(
                           'option_image_${option['id']}',
                           option['image_path'] as String?,

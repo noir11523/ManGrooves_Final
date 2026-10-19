@@ -5,6 +5,36 @@ import 'package:mangrooves_mobile/core/api_client.dart';
 import 'package:mangrooves_mobile/shared/observation_choice.dart';
 
 void main() {
+  testWidgets('text-only answers have no misleading photo or preview', (
+    tester,
+  ) async {
+    var selected = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, update) => ObservationChoice(
+              label: 'Not Sure',
+              selected: selected,
+              hasPhoto: false,
+              thumbnail: const SizedBox(),
+              picture: const SizedBox(),
+              onToggle: () => update(() => selected = !selected),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.bySemanticsLabel('Preview Not Sure'), findsNothing);
+    final circle = find.byKey(const ValueKey('choice-circle-Not Sure'));
+    await tester.tap(circle);
+    await tester.pump();
+    expect(selected, true);
+    await tester.tap(circle);
+    await tester.pump();
+    expect(selected, false);
+    expect(find.byType(Dialog), findsNothing);
+  });
   for (final sample in [
     (const Size(320, 720), 1.0),
     (const Size(390, 800), 2.0),
@@ -42,6 +72,11 @@ void main() {
                           selected: selected,
                           thumbnail: Image.asset('assets/traits/elliptic.png'),
                           picture: Image.asset('assets/traits/elliptic.png'),
+                          photoCredit: const {
+                            'author': 'Reference photographer',
+                            'license': 'CC BY-SA 4.0',
+                            'note': 'A real photograph showing the feature.',
+                          },
                           onToggle: () => update(() => selected = !selected),
                         ),
                       ],

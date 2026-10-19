@@ -1,5 +1,7 @@
 # Generated visual assets
 
+The observation choices now use separate real photographs. Their sources, crops, licenses, and interpretation notes are in [OBSERVATION_PHOTOS.md](OBSERVATION_PHOTOS.md). The generated guides below are historical assets, not the new choice photographs.
+
 The following project-bound raster assets were generated with the built-in image generation tool and copied into `public/assets/img`. No third-party photo URLs are required.
 
 | Asset | Final path | Prompt summary |

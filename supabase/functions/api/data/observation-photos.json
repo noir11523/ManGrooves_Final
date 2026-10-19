@@ -1,0 +1,708 @@
+{
+  "version": "2026-10-20",
+  "photos": [
+    {
+      "path": "img/observations/v1-green-leaf.jpg",
+      "author": "Peripitus",
+      "source": "https://commons.wikimedia.org/wiki/File:Grey_Mangrove_leaf_-_front.jpg",
+      "license": "CC BY-SA 3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+      "note": "",
+      "original": "File:Grey Mangrove leaf - front.jpg",
+      "original_size": [
+        960,
+        826
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "f631ca993febf7b64da4abe2a39bd0a89bde300fe7c854205346f9197660f7b6",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-yellow-green-leaves.jpg",
+      "author": "Katja Schulz from Washington, D. C., USA",
+      "source": "https://commons.wikimedia.org/wiki/File:Black_Mangrove_Leaves_-_Flickr_-_treegrow.jpg",
+      "license": "CC BY 2.0",
+      "license_url": "https://creativecommons.org/licenses/by/2.0",
+      "note": "",
+      "original": "File:Black Mangrove Leaves - Flickr - treegrow.jpg",
+      "original_size": [
+        960,
+        720
+      ],
+      "crop": [
+        320,
+        70,
+        950,
+        620
+      ],
+      "crop_coordinate_size": null,
+      "sha256": "da0f70868952c763151733ee7e4ccd4a5c5f8d64369e0e5996c6f6f4544b337c",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-brown-leaf.jpg",
+      "author": "James St. John",
+      "source": "https://commons.wikimedia.org/wiki/File:Mollusc_shells_on_marine_beach_(Sanibel_Inn_Beach,_Sanibel_Island,_Florida,_USA)_1.jpg",
+      "license": "CC BY 2.0",
+      "license_url": "https://creativecommons.org/licenses/by/2.0",
+      "note": "Fallen brown mangrove leaf; compare the color of leaves still on your tree.",
+      "original": "File:Mollusc shells on marine beach (Sanibel Inn Beach, Sanibel Island, Florida, USA) 1.jpg",
+      "original_size": [
+        1280,
+        960
+      ],
+      "crop": [
+        945,
+        0,
+        1190,
+        300
+      ],
+      "crop_coordinate_size": null,
+      "sha256": "218bc356446ff3428485cb587769e96d6c1df76ab9e088079f9241898bd36fa2",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-waxy-upward-leaves.jpg",
+      "author": "CCENRO reference sheet",
+      "source": "",
+      "license": "Project reference",
+      "license_url": "",
+      "note": "",
+      "original": "835357134_1079044618360670_1143296594850569178_n.jpg",
+      "original_size": [
+        2048,
+        2048
+      ],
+      "crop": [
+        952,
+        1236,
+        1138,
+        1390
+      ],
+      "crop_coordinate_size": 1600,
+      "sha256": "d2c61200c2346d65c69cc4033e5402e53d8b51414307646242e2745c09c26683",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-dry-leaves.jpg",
+      "author": "John Game",
+      "source": "https://commons.wikimedia.org/wiki/File:Avicennia_marina_ssp._australasica_Lord_Howe_Island.jpg",
+      "license": "CC BY 2.0",
+      "license_url": "https://creativecommons.org/licenses/by/2.0",
+      "note": "Dried reference specimen. Check whether leaves on the tree are dry or brittle.",
+      "original": "File:Avicennia marina ssp. australasica Lord Howe Island.jpg",
+      "original_size": [
+        960,
+        668
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "89f0201d489146b2daf63e8d5df9612acf05ba794e8ef2213dcac45fdc26386d",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-leaf-bites.jpg",
+      "author": "David E Mead",
+      "source": "https://commons.wikimedia.org/wiki/File:Keeled-pod_mangrove_(Heritiera_littoralis)_leaves.jpg",
+      "license": "CC0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "note": "Chewed leaf edges are visible in this mangrove leaf sample.",
+      "original": "File:Keeled-pod mangrove (Heritiera littoralis) leaves.jpg",
+      "original_size": [
+        960,
+        720
+      ],
+      "crop": [
+        485,
+        300,
+        870,
+        675
+      ],
+      "crop_coordinate_size": null,
+      "sha256": "8314d1a85709eec99029ded819775548e26e60a00d9869dacf29199f32332b5f",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-caterpillar-damage.jpg",
+      "author": "Bob Peterson from North Palm Beach, Florida, Planet Earth!",
+      "source": "https://commons.wikimedia.org/wiki/File:Mangrove_Skipper_(Phocides_pigmalion)_(11381559594).jpg",
+      "license": "CC BY-SA 2.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+      "note": "Caterpillar and extensive feeding damage on a mangrove leaf.",
+      "original": "File:Mangrove Skipper (Phocides pigmalion) (11381559594).jpg",
+      "original_size": [
+        960,
+        960
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "870dcdc7a801b4d7f765298911e5dd6d78293b5d7b301ec4e3a30c70c5f09c9b",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-leaf-dark-spots.jpg",
+      "author": "J.M.Garg",
+      "source": "https://commons.wikimedia.org/wiki/File:Lumnitzera_racemosa,_Black_Mangrove_W_IMG_6941.jpg",
+      "license": "CC BY-SA 4.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+      "note": "Visible holes and damaged edges on Lumnitzera leaves.",
+      "original": "File:Lumnitzera racemosa, Black Mangrove W IMG 6941.jpg",
+      "original_size": [
+        500,
+        333
+      ],
+      "crop": [
+        0,
+        0,
+        320,
+        300
+      ],
+      "crop_coordinate_size": null,
+      "sha256": "55debc2115e0599c1e39bc8b89dbc7ebcfa892ba27155d595c6fefcdbf07e0e0",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-intact-prop-roots.jpg",
+      "author": "Source contributor",
+      "source": "https://commons.wikimedia.org/wiki/File:Mangroves.jpg",
+      "license": "Public domain",
+      "license_url": "",
+      "note": "",
+      "original": "File:Mangroves.jpg",
+      "original_size": [
+        689,
+        442
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "4c84f5ccda385f59b005597fcd497e8eddc7f3b7bf81aaeff4d451d0fa463fe3",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-uprooted-roots.jpg",
+      "author": "YourWorldExplorer",
+      "source": "https://commons.wikimedia.org/wiki/File:Uprooted_Mangrove_-_panoramio.jpg",
+      "license": "CC BY 3.0",
+      "license_url": "https://creativecommons.org/licenses/by/3.0",
+      "note": "An uprooted mangrove; look for loose or damaged roots at your site.",
+      "original": "File:Uprooted Mangrove - panoramio.jpg",
+      "original_size": [
+        1280,
+        960
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "72d6c79c729d1da972be9b5c919cafb781700da7e54d29804dc207be2609cd10",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-root-erosion.jpg",
+      "author": "John Robert McPherson",
+      "source": "https://commons.wikimedia.org/wiki/File:Avicennia_marina_bare_rooted_by_erosion_Nudgee_Creek_Nudgee_Beach_Bramble_Bay_Queensland_P1040563.jpg",
+      "license": "CC BY-SA 4.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+      "note": "",
+      "original": "File:Avicennia marina bare rooted by erosion Nudgee Creek Nudgee Beach Bramble Bay Queensland P1040563.jpg",
+      "original_size": [
+        960,
+        720
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "66c905f21d3fd8e2d59b179d66234028aed8b5c312127e1450b5d68a58501b69",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-dead-mangrove.jpg",
+      "author": "YourWorldExplorer",
+      "source": "https://commons.wikimedia.org/wiki/File:Old_Dead_Mangrove_w-live_one_in_rear_-_panoramio.jpg",
+      "license": "CC BY 3.0",
+      "license_url": "https://creativecommons.org/licenses/by/3.0",
+      "note": "Dead mangrove example. A photo alone cannot confirm root rot.",
+      "original": "File:Old Dead Mangrove w-live one in rear - panoramio.jpg",
+      "original_size": [
+        1280,
+        960
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "c22aebaa239b6bd10ba29e85768800892dba60c19cbe53d6e747aa27c893af95",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-smooth-bark.jpg",
+      "author": "CCENRO reference sheet",
+      "source": "",
+      "license": "Project reference",
+      "license_url": "",
+      "note": "",
+      "original": "836742845_1771525323966757_4267915318653616657_n.jpg",
+      "original_size": [
+        2048,
+        2048
+      ],
+      "crop": [
+        92,
+        365,
+        310,
+        735
+      ],
+      "crop_coordinate_size": 1600,
+      "sha256": "9a9c509c070410c0189bb37ff54ee034be76b1d20b09416d350e4b67b95fc813",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-flaking-bark.jpg",
+      "author": "CCENRO reference sheet",
+      "source": "",
+      "license": "Project reference",
+      "license_url": "",
+      "note": "",
+      "original": "836742845_1771525323966757_4267915318653616657_n.jpg",
+      "original_size": [
+        2048,
+        2048
+      ],
+      "crop": [
+        683,
+        585,
+        837,
+        723
+      ],
+      "crop_coordinate_size": 1600,
+      "sha256": "d44a48e2f88448f2216256b3dfd0ed96891ee509017b72a1b330c6a5bebeab16",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-rough-bark.jpg",
+      "author": "CCENRO reference sheet",
+      "source": "",
+      "license": "Project reference",
+      "license_url": "",
+      "note": "",
+      "original": "841207505_2883189508729450_5016555859826843370_n.jpg",
+      "original_size": [
+        2048,
+        2048
+      ],
+      "crop": [
+        699,
+        563,
+        807,
+        731
+      ],
+      "crop_coordinate_size": 1600,
+      "sha256": "b51c63b6410be5363466f9af506395052ee6e5c743d8fafb38e11768a7083c53",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-fissured-bark.jpg",
+      "author": "Homer Edward Price",
+      "source": "https://commons.wikimedia.org/wiki/File:Black-mangrove-bark_(13746385495).gif",
+      "license": "CC BY 2.0",
+      "license_url": "https://creativecommons.org/licenses/by/2.0",
+      "note": "Fissured black-mangrove bark. Natural bark texture alone does not prove damage.",
+      "original": "File:Black-mangrove-bark (13746385495).gif",
+      "original_size": [
+        500,
+        667
+      ],
+      "crop": [
+        130,
+        140,
+        270,
+        405
+      ],
+      "crop_coordinate_size": null,
+      "sha256": "5d80567cce612cba34770e6b2f68ec099e5f393384cf7165701b37a1bd1990ad",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-broken-trunk.jpg",
+      "author": "YourWorldExplorer",
+      "source": "https://commons.wikimedia.org/wiki/File:Old_Dead_Mangrove_w-live_one_in_rear_-_panoramio.jpg",
+      "license": "CC BY 3.0",
+      "license_url": "https://creativecommons.org/licenses/by/3.0",
+      "note": "Broken trunk and missing wood on a dead mangrove.",
+      "original": "File:Old Dead Mangrove w-live one in rear - panoramio.jpg",
+      "original_size": [
+        1280,
+        960
+      ],
+      "crop": [
+        230,
+        210,
+        945,
+        750
+      ],
+      "crop_coordinate_size": null,
+      "sha256": "c3a9312bfe3272439e191c2b9ce04bc468c6fde576810321908ad78cdc027acc",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-mudskipper.jpg",
+      "author": "Lulumac89 at en.wikipedia.",
+      "source": "https://commons.wikimedia.org/wiki/File:Mudskipper_(Oxudercinae),_Sungei_Buloh_Wetland_Reserve,_Singapore.jpg",
+      "license": "Public domain",
+      "license_url": "",
+      "note": "",
+      "original": "File:Mudskipper (Oxudercinae), Sungei Buloh Wetland Reserve, Singapore.jpg",
+      "original_size": [
+        500,
+        375
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "2c66073a64b8abbddbd0cea9281c90dcd2fdb31200ed9708c9d84233e3ea75d4",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-mangrove-birds.jpg",
+      "author": "Department of the Interior. U.S. Fish and Wildlife Service. National Conservation Training Center. 10/1997-8888",
+      "source": "https://commons.wikimedia.org/wiki/File:Little_blue_herons_on_mangrove_roots_-_DPLA_-_8783f676f5a0b49ecc4171f5fc106a93.jpg",
+      "license": "Public domain",
+      "license_url": "",
+      "note": "",
+      "original": "File:Little blue herons on mangrove roots - DPLA - 8783f676f5a0b49ecc4171f5fc106a93.jpg",
+      "original_size": [
+        960,
+        640
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "a189c510752feb58e26180e55bac182c422f744eb22319814c5fe8500b3afb17",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-small-fish.jpg",
+      "author": "Bernard DUPONT",
+      "source": "https://commons.wikimedia.org/wiki/File:Mangrove_Mollies_(Poecilia_orri)_feeding_on_a_leaf_-_Carwash_Cenote_QR_2020.jpg",
+      "license": "CC BY-SA 2.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+      "note": "",
+      "original": "File:Mangrove Mollies (Poecilia orri) feeding on a leaf - Carwash Cenote QR 2020.jpg",
+      "original_size": [
+        960,
+        656
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "dda878afc60ff5518ba67d0aeb268d25406e9deeed3fd8240140dbf3ce6d0a9f",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-shells.jpg",
+      "author": "James St. John",
+      "source": "https://commons.wikimedia.org/wiki/File:Mollusc_shells_on_marine_beach_(Sanibel_Inn_Beach,_Sanibel_Island,_Florida,_USA)_1.jpg",
+      "license": "CC BY 2.0",
+      "license_url": "https://creativecommons.org/licenses/by/2.0",
+      "note": "",
+      "original": "File:Mollusc shells on marine beach (Sanibel Inn Beach, Sanibel Island, Florida, USA) 1.jpg",
+      "original_size": [
+        1280,
+        960
+      ],
+      "crop": [
+        20,
+        220,
+        1260,
+        950
+      ],
+      "crop_coordinate_size": null,
+      "sha256": "cfcbdb3a0a0aece7e1ed937a5ba964dfa588ddf515a883caf86090e520502aa5",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-butterfly.jpg",
+      "author": "Vengolis",
+      "source": "https://commons.wikimedia.org/wiki/File:Avicennia_sp._with_Arhopala_amantes_03164.jpg",
+      "license": "CC BY-SA 4.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+      "note": "",
+      "original": "File:Avicennia sp. with Arhopala amantes 03164.jpg",
+      "original_size": [
+        960,
+        640
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "6bce7e213260cba1b2e312f749b8399d2ecebc22926a7e4e9d31cca16ba3467d",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-plastic-litter.jpg",
+      "author": "DLS",
+      "source": "https://commons.wikimedia.org/wiki/File:Charkop_Dumping.JPG",
+      "license": "Public domain",
+      "license_url": "",
+      "note": "",
+      "original": "File:Charkop Dumping.JPG",
+      "original_size": [
+        800,
+        600
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "74a80aef29a54f13fc1c77f412934599092f0de717ebc7e115b3adb16e338fa5",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-looping-roots.jpg",
+      "author": "Anonymous Powered",
+      "source": "https://commons.wikimedia.org/wiki/File:Bruguiera_gymnorhiza_roots.jpg",
+      "license": "CC BY-SA 3.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+      "note": "Looped knee-root example from Bruguiera; use this to compare root form, not identify a species.",
+      "original": "File:Bruguiera gymnorhiza roots.jpg",
+      "original_size": [
+        500,
+        375
+      ],
+      "crop": [
+        40,
+        135,
+        470,
+        370
+      ],
+      "crop_coordinate_size": null,
+      "sha256": "efb8c75c76a9d520800fd9245f7812ce25801984866857ad7b1d1021b05b0ed4",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-pencil-roots.jpg",
+      "author": "Dr. Raju Kasambe",
+      "source": "https://commons.wikimedia.org/wiki/File:Avicennia_sp._DSCN9864_(13).jpg",
+      "license": "CC BY-SA 4.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+      "note": "Upright breathing roots (pneumatophores) of Avicennia.",
+      "original": "File:Avicennia sp. DSCN9864 (13).jpg",
+      "original_size": [
+        500,
+        375
+      ],
+      "crop": [
+        65,
+        185,
+        455,
+        365
+      ],
+      "crop_coordinate_size": null,
+      "sha256": "3e60bbaa77363775a99eb429e3af919f6761a8b4f80805110250618031275219",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-nypa-base.jpg",
+      "author": "CCENRO reference sheet",
+      "source": "",
+      "license": "Project reference",
+      "license_url": "",
+      "note": "Nypa palm base. Its creeping rhizome is mostly below ground.",
+      "original": "837836789_1574159134514868_7924261311556051883_n.jpg",
+      "original_size": [
+        2048,
+        2048
+      ],
+      "crop": [
+        5,
+        650,
+        490,
+        1070
+      ],
+      "crop_coordinate_size": 1600,
+      "sha256": "90256329f75ef8e45160c1235db1862f574b4f70a302b8bc680cb2f270163bfc",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-nypa-leaflets.jpg",
+      "author": "CCENRO reference sheet",
+      "source": "",
+      "license": "Project reference",
+      "license_url": "",
+      "note": "",
+      "original": "837836789_1574159134514868_7924261311556051883_n.jpg",
+      "original_size": [
+        2048,
+        2048
+      ],
+      "crop": [
+        3,
+        20,
+        485,
+        460
+      ],
+      "crop_coordinate_size": 1600,
+      "sha256": "50e87a0febd6c9a0bda74e484d2ad788f4c731fbec4ee4637596d64c851c9150",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-obovate-leaves.jpg",
+      "author": "Dinesh Valke from Thane, India",
+      "source": "https://commons.wikimedia.org/wiki/File:Lumnitzera_racemosa_(11544407974).jpg",
+      "license": "CC BY-SA 2.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+      "note": "",
+      "original": "File:Lumnitzera racemosa (11544407974).jpg",
+      "original_size": [
+        960,
+        720
+      ],
+      "crop": null,
+      "crop_coordinate_size": null,
+      "sha256": "6de152fdd159eae26edd5245e255a3db62d931be23e4c4bd9006f53ab0042654",
+      "changes": "Resized"
+    },
+    {
+      "path": "img/observations/v1-brown-bark.jpg",
+      "author": "CCENRO reference sheet",
+      "source": "",
+      "license": "Project reference",
+      "license_url": "",
+      "note": "",
+      "original": "836693553_1513453507257854_2670710336926453175_n.jpg",
+      "original_size": [
+        2048,
+        2048
+      ],
+      "crop": [
+        86,
+        300,
+        290,
+        650
+      ],
+      "crop_coordinate_size": 1600,
+      "sha256": "a3533923192e9e017e96d63a1b6f928dcb7441b2282e3611638a68fea214e26b",
+      "changes": "Cropped and resized"
+    },
+    {
+      "path": "img/observations/v1-ai-nypa-rhizome.jpg",
+      "kind": "generated",
+      "author": "ManGROOVES",
+      "source": "",
+      "license": "Educational example",
+      "license_url": "",
+      "note": "Cutaway example: a horizontal underground stem connects the palm shoots; fine roots grow below it.",
+      "original": "Built-in imagegen; nypa",
+      "changes": "AI-generated; resized",
+      "sha256": "9e4f4216da5c06c8163746146b8747d36541c3d394d2fcc2307bd6a333623ee5",
+      "prompt": "Use case: scientific-educational. Create ONE photorealistic botanical educational illustration for the observation choice 'Creeping rhizomes' of Nypa fruticans (nipa mangrove palm). A clear side view of a SINGLE horizontal thick brown branching underground palm stem (rhizome), shown in an exposed-soil cutaway on a muddy tropical tidal bank; many thin adventitious roots grow down from its underside, two widely separated tufts of erect long green pinnate palm fronds emerge up from nodes on the same horizontal stem. The rhizome is a horizontal STEM underground, not stilt roots, not pencil roots and not a tall woody trunk. The cutaway exposes the horizontal connection clearly. Natural realistic materials and daylight; close specimen-scale framing makes the rhizome dominate the lower two thirds, fronds can extend beyond the upper crop. Landscape 4:3 composition. ONE scene, no panels, no collage, no text, no labels, no watermark. This is an AI educational illustration, not documentary field evidence; clarity of the horizontal rhizome is essential."
+    },
+    {
+      "path": "img/observations/v1-ai-elliptic-dots.jpg",
+      "kind": "generated",
+      "author": "ManGROOVES",
+      "source": "",
+      "license": "Educational example",
+      "license_url": "",
+      "note": "Underside example: tiny natural dark dots on an elliptic leaf. These dots are different from large damaged patches.",
+      "original": "Built-in imagegen; mucronata",
+      "changes": "AI-generated; resized",
+      "sha256": "dfe1e953336e82f230688734786eeef8b181ffbb75af3c5bf1b9753f59fca660",
+      "prompt": "Use case: scientific-educational. Create ONE photorealistic macro botanical educational illustration for a mangrove identification choice 'Elliptic (with dark dots)'. Show the UNDERSIDE of one mature Rhizophora mucronata leaf, isolated across a softly blurred neutral green outdoor background, the entire blade in sharp focus. The blade is broad elliptic (oval with both ends tapering), leathery, pale yellow-green beneath, a straight central raised pale midrib and delicate secondary veins, a small very short narrow pointed mucronate apex, and a short petiole at the opposite end. Many tiny discrete dark brown pinprick dots are distributed irregularly across the underside surface between the veins; dots are tiny natural punctations, NOT large disease blotches, NOT holes, NOT circular rings or pustules. Leaf is healthy with an unbroken smooth entire margin. No insect damage. Realistic natural light and subtly textured leaf. Landscape 4:3 composition, one leaf only, no montage, no collage, no comparison panels, no text, no watermark. This is a botanical feature illustration; prioritize the elliptic shape and clearly visible fine underside dots."
+    }
+  ],
+  "choices": {
+    "leaf_color": {
+      "green": "img/observations/v1-green-leaf.jpg",
+      "light_yellow_green": "img/observations/v1-yellow-green-leaves.jpg",
+      "brown_yellow_brown": "img/observations/v1-brown-leaf.jpg"
+    },
+    "leaf_condition": {
+      "smooth_healthy": "img/observations/v1-green-leaf.jpg",
+      "waxy_curled": "img/observations/v1-waxy-upward-leaves.jpg",
+      "damaged_spots": "img/observations/v1-leaf-dark-spots.jpg",
+      "brittle_dry": "img/observations/v1-dry-leaves.jpg"
+    },
+    "pests": {
+      "none_visible": "img/observations/v1-green-leaf.jpg",
+      "few_holes": "img/observations/v1-leaf-bites.jpg",
+      "many_holes": "img/observations/v1-caterpillar-damage.jpg"
+    },
+    "roots": {
+      "firm_intact": "img/observations/v1-intact-prop-roots.jpg",
+      "loose_damage": "img/observations/v1-uprooted-roots.jpg",
+      "exposed_erosion": "img/observations/v1-root-erosion.jpg",
+      "dead_rotten": "img/observations/v1-dead-mangrove.jpg"
+    },
+    "bark_trunk": {
+      "intact_smooth": "img/observations/v1-smooth-bark.jpg",
+      "peeling_cracks": "img/observations/v1-flaking-bark.jpg",
+      "deep_fissures": "img/observations/v1-fissured-bark.jpg",
+      "missing_damage": "img/observations/v1-broken-trunk.jpg"
+    },
+    "bio_indicators": {
+      "crabs": "img/observations/v1-mudskipper.jpg",
+      "birds": "img/observations/v1-mangrove-birds.jpg",
+      "small_fish": "img/observations/v1-small-fish.jpg",
+      "snails": "img/observations/v1-shells.jpg",
+      "pollinators": "img/observations/v1-butterfly.jpg"
+    },
+    "negative_signs": {
+      "trash": "img/observations/v1-plastic-litter.jpg"
+    }
+  },
+  "traits": {
+    "root_type": {
+      "Creeping rhizomes": "img/observations/v1-ai-nypa-rhizome.jpg",
+      "Looping (older trees)": "img/observations/v1-looping-roots.jpg",
+      "Pneumatophores (pencil-like)": "img/observations/v1-pencil-roots.jpg",
+      "Pneumatophores (pencil-like projections)": "img/observations/v1-pencil-roots.jpg",
+      "Prop roots": "img/observations/v1-intact-prop-roots.jpg",
+      "Prop roots (stilt roots)": "img/observations/v1-intact-prop-roots.jpg"
+    },
+    "leaf_shape": {
+      "Elliptic": "img/observations/v1-green-leaf.jpg",
+      "Elliptic (with dark dots)": "img/observations/v1-ai-elliptic-dots.jpg",
+      "Elliptic (waxy, leaves point upward)": "img/observations/v1-waxy-upward-leaves.jpg",
+      "Lanceolate (leaflets)": "img/observations/v1-nypa-leaflets.jpg",
+      "Obovate": "img/observations/v1-obovate-leaves.jpg"
+    },
+    "bark_texture": {
+      "Smooth with thin flakes, greenish brown": "img/observations/v1-flaking-bark.jpg",
+      "Slightly rough, brown": "img/observations/v1-brown-bark.jpg",
+      "Rough, fibrous, brown with deep fissures": "img/observations/v1-fissured-bark.jpg",
+      "N/A (palm)": "img/observations/v1-nypa-base.jpg",
+      "Rough, grayish to brown": "img/observations/v1-rough-bark.jpg"
+    }
+  },
+  "labels": {
+    "leaf_color": {
+      "green": "Green",
+      "light_yellow_green": "Light / Yellow-Green",
+      "brown_yellow_brown": "Brown / Yellow-Brown"
+    },
+    "leaf_condition": {
+      "smooth_healthy": "Hapsay ug himsog (Smooth & Healthy)",
+      "waxy_curled": "Sinaw / Nagkulot / Nag-atubang pataas (Waxy / Curled / Pointing Up)",
+      "damaged_spots": "Naay gisi / Buslot / Itom nga tuldok (Damaged / Holes / Dark Spots)",
+      "brittle_dry": "Daling mabali / Uga (Brittle / Dry)"
+    },
+    "pests": {
+      "none_visible": "Walay nakitang peste (None Visible)",
+      "few_holes": "Gamay nga buslot / Kagat (Few Holes / Bites)",
+      "many_holes": "Daghang buslot / Sapot (Many Holes / Webbing)"
+    },
+    "roots": {
+      "firm_intact": "Lig-on ug walay daot (Firm & Intact)",
+      "loose_damage": "Luag / Naay gamay nga daot (Loose / Some Damage)",
+      "exposed_erosion": "Niukab ang gamot / Naanod ang yuta (Exposed / Erosion Visible)",
+      "dead_rotten": "Patay / Nadunot (Dead / Rotten)"
+    },
+    "bark_trunk": {
+      "intact_smooth": "Hapsay ug walay daot (Intact / Smooth)",
+      "peeling_cracks": "Gamayng napaksit / Naay liki (Slightly Peeling / Cracks)",
+      "deep_fissures": "Dagko ug lawom nga liki (Deep Cracks / Fissures)",
+      "missing_damage": "Naay dakong parte nga nadaot (Missing / Large Damage)"
+    },
+    "bio_indicators": {
+      "crabs": "Tambasakan (Mudskipper)",
+      "birds": "Mga langgam (Birds)",
+      "small_fish": "Mga gagmay nga isda (Small Fish)",
+      "snails": "Mga kuhol / Kabhang (Snails / Shells)",
+      "pollinators": "Mga alibangbang / Putyukan (Butterflies / Bees)"
+    },
+    "negative_signs": {
+      "trash": "Naay basura / Plastik (Trash / Plastic Visible)"
+    }
+  }
+}

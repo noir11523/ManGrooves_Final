@@ -2205,37 +2205,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     );
   }
 
-  String _traitImage(String label, String value) {
-    final v = value.toLowerCase();
-    if (label == 'Root type') {
-      return v.contains('pneumat')
-          ? 'pencil-roots'
-          : v.contains('loop')
-          ? 'loop-roots'
-          : v.contains('rhizome')
-          ? 'rhizomes'
-          : 'prop-roots';
-    }
-    if (label == 'Leaf shape') {
-      return v.contains('lanceolate')
-          ? 'lanceolate'
-          : v.contains('obovate')
-          ? 'obovate'
-          : v.contains('dots')
-          ? 'elliptic-dots'
-          : v.contains('upward')
-          ? 'elliptic-upward'
-          : 'elliptic';
-    }
-    return v.contains('palm')
-        ? 'palm-bark'
-        : v.contains('smooth')
-        ? 'smooth-bark'
-        : v.contains('fissures')
-        ? 'fissured-bark'
-        : 'rough-bark';
-  }
-
   Widget _traitDropdown(
     String label,
     String? value,
@@ -2265,6 +2234,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               child: ObservationChoice(
                 label: traitLabels[item] ?? item,
                 selected: value == item,
+                hasPhoto: _traitPath(label, item) != null,
+                photoCredit:
+                    (_form?['photo_credits'] as Map?)?[_traitPath(label, item)]
+                        as Map?,
                 thumbnail: _traitPhoto(label, item, 200),
                 picture: _traitPhoto(label, item, 600),
                 onToggle: toggle,
@@ -2276,30 +2249,33 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     ],
   );
 
-  Widget _traitPhoto(String label, String value, double height) {
+  String? _traitPath(String label, String value) {
     final key = {
       'Root type': 'root_type',
       'Leaf shape': 'leaf_shape',
       'Bark texture': 'bark_texture',
     }[label];
-    final path = (_form?['trait_images'] as Map?)?[key]?[value];
-    if (path != null) {
-      return Image.network(
-        _assetUrl('$path'),
-        height: height,
-        fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => Image.asset(
-          'assets/traits/${_traitImage(label, value)}.png',
-          height: height,
-        ),
-      );
-    }
-    return Image.asset(
-      'assets/traits/${_traitImage(label, value)}.png',
+    return (_form?['trait_images'] as Map?)?[key]?[value]?.toString();
+  }
+
+  Widget _referencePhoto(String? path, double height) {
+    if (path == null || path.isEmpty) return const SizedBox.shrink();
+    return Image.network(
+      _assetUrl(path),
+      headers: widget.api.imageHeaders,
       height: height,
       fit: BoxFit.contain,
+      errorBuilder: (_, _, _) => const Center(
+        child: Text(
+          'Photo unavailable. You can still select this answer.',
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
+
+  Widget _traitPhoto(String label, String value, double height) =>
+      _referencePhoto(_traitPath(label, value), height);
 
   Widget _criterionCard(Map<String, dynamic> criterion) {
     final code = '${criterion['code']}',
@@ -2308,24 +2284,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         .map((o) => Map<String, dynamic>.from(o as Map))
         .toList();
     final single = criterion['selection_mode'] == 'single';
-    Widget picture(Map option, double height) {
-      final path = option['image_path'];
-      if (path != null) {
-        return Image.network(
-          _assetUrl('$path'),
-          height: height,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) =>
-              Image.asset('assets/traits/elliptic.png', height: height),
-        );
-      }
-      return Image.asset(
-        'assets/traits/elliptic.png',
-        height: height,
-        fit: BoxFit.contain,
-      );
-    }
-
     return _Section(
       title: '${criterion['name']}',
       subtitle:
@@ -2373,8 +2331,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 selectionKey: ValueKey('observation-$code-$id'),
                 label: '${option['label']}',
                 selected: active,
-                thumbnail: picture(option, 200),
-                picture: picture(option, 600),
+                hasPhoto: option['image_path'] != null,
+                photoCredit: option['image_credit'] as Map?,
+                thumbnail: _referencePhoto(
+                  option['image_path']?.toString(),
+                  200,
+                ),
+                picture: _referencePhoto(option['image_path']?.toString(), 600),
                 onToggle: choose,
               ),
             );

@@ -9,6 +9,8 @@ import {JSDOM} from 'jsdom';
 import {indexedDB} from 'fake-indexeddb';
 globalThis.indexedDB = indexedDB;
 import {classify, updateCriterion} from '../../functions/api/core/domain.js';
+import catalog from '../../functions/api/data/observation-photos.json' with {type:'json'};
+import {photoCredits,withPhotoCredits} from '../../functions/api/core/reference-photos.js';
 
 const reference = JSON.parse(await readFile(new URL('../../data/reference.json', import.meta.url), 'utf8'));
 const dom = new JSDOM('<main id="page"></main><div id="toast" hidden></div><dialog id="confirm"><h2 id="confirm-title"></h2><p id="confirm-body"></p></dialog>', {url: 'http://localhost:5002/#submit'});
@@ -103,6 +105,42 @@ test('observation choices select in one tap without a guide or enlarge control',
   const animal=$('[name=obs_bio_indicators]');const none=$('[name=obs_negative_signs][data-code=no_animals]');
   none.checked=true;change(none);animal.checked=true;change(animal);assert.equal(none.checked,false);
   const mosquitoes=$('[name=obs_negative_signs][data-code=mosquitoes]');mosquitoes.checked=true;change(mosquitoes);assert.equal(animal.checked,true);
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('individual photos, credits and text-only answers preview and select without losing trait deselection',async()=>{
+ const traits=Object.fromEntries(Object.entries(catalog.traits).map(([key,values])=>[key,Object.keys(values)]));
+ globalThis.testApi=async()=>({criteria:reference.criteria.map(withPhotoCredits),traits,trait_images:catalog.traits,photo_credits:photoCredits,clusters:[],location:{}});
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:2,owner:undefined});
+ const dispose=await ui.reportWizard($('#page'),{});
+ try{
+  const choice=$('.choice'), input=choice.querySelector('input'),preview=choice.querySelector('.choice-picture');
+  assert.match(preview.querySelector('img').src,/observations\/v1-green-leaf\.jpg/);
+  assert.equal(preview.querySelector('img').loading,'lazy');
+  assert.ok(choice.querySelector('.photo-credit a'));
+  assert.ok([...choice.children].indexOf(input)>[...choice.children].indexOf(choice.querySelector('span')));
+  preview.click();assert.equal(input.checked,false);
+  assert.equal($('.observation-preview .actions button:last-child').textContent,'Select');
+  $('.observation-preview .actions button:last-child').click();assert.equal(input.checked,true);
+  preview.click();assert.equal($('.observation-preview .actions button:last-child').textContent,'Deselect');
+  $('.observation-preview .actions button:last-child').click();assert.equal(input.checked,false);
+  assert.deepEqual(ui.reportDraft.observations.leaf_color,[]);
+  input.click();assert.equal(input.checked,true);
+  input.click();assert.equal(input.checked,false);
+  assert.deepEqual(ui.reportDraft.observations.leaf_color,[]);
+  const special=$('[data-code=unknown]').closest('.choice');
+  assert.equal(special.querySelector('img'),null);assert.ok(special.classList.contains('choice-text-only'));
+  const trait=$('[name=root_type]'),card=trait.closest('.choice');
+  assert.match(card.querySelector('.photo-credit').textContent,/AI illustration/);
+  card.querySelector('.choice-picture').click();$('.observation-preview .actions button:last-child').click();
+  assert.equal(ui.reportDraft.fields.root_type,trait.value);
+  card.querySelector('.choice-picture').click();$('.observation-preview .actions button:last-child').click();
+  assert.equal(ui.reportDraft.fields.root_type,'');
+  trait.click();assert.equal(ui.reportDraft.fields.root_type,trait.value);
+  trait.click();assert.equal(ui.reportDraft.fields.root_type,'');
+  const broken=$('[name=obs_pests]').closest('.choice');broken.querySelector('img').dispatchEvent(new Event('error'));
+  assert.equal(broken.querySelector('.choice-picture'),null);assert.match(broken.textContent,/Photo unavailable/);
+  broken.querySelector('input').click();assert.equal(broken.querySelector('input').checked,true);
  }finally{dispose();ui.reportDraft.reset();}
 });
 
