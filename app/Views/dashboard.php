@@ -8,7 +8,7 @@ $extraHead = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/
 $pageScripts = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>'
     . '<script src="' . e(asset('js/maps.js')) . '"></script>';
 $statCards = [
-    ['label' => 'Verified reports', 'value' => $stats['total_reports'] ?? 0, 'icon' => 'bi-files', 'tone' => 'primary', 'href' => url('reports.php?status=verified')],
+    ['label' => 'Total Reports Verified', 'value' => $stats['total_reports'] ?? 0, 'icon' => 'bi-files', 'tone' => 'success', 'href' => url('reports.php?status=verified')],
     ['label' => 'Pending', 'value' => $stats['pending_reports'] ?? 0, 'icon' => 'bi-hourglass-split', 'tone' => 'warning', 'href' => url('reports.php?status=pending')],
     ['label' => 'Rejected', 'value' => $stats['rejected_reports'] ?? 0, 'icon' => 'bi-x-circle', 'tone' => 'danger', 'href' => url('reports.php?status=rejected')],
     ['label' => 'Needs attention', 'value' => $stats['needs_attention'] ?? 0, 'icon' => 'bi-exclamation-triangle', 'tone' => 'danger', 'href' => url('reports.php?needs_attention=1')],

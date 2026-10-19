@@ -8,17 +8,24 @@ const cell=(label,value)=>`<td data-label="${esc(label)}">${value}</td>`;
 const table=(headers,rows)=>`<section class="report-table-card"><div class="table-wrap"><table class="report-table admin-table"><thead><tr>${headers.map(h=>`<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
 const active=item=>Number(item.active)!==0;
 
-export function editor(node,title,content,save) {
+export function editor(node,title,content,save,{remove}={}) {
   const dialog=node.querySelector('#admin-editor');
-  dialog.innerHTML=`<form class="admin-editor-form"><div class="page-head"><h2>${esc(title)}</h2><button type="button" class="outline close-editor" aria-label="Close editor">Close</button></div>${errorBox}${content}<div class="actions"><button type="submit">Save</button><button type="button" class="outline close-editor">Cancel</button></div></form>`;
+  dialog.innerHTML=`<form class="admin-editor-form"><div class="page-head"><h2>${esc(title)}</h2><button type="button" class="outline close-editor" aria-label="Close editor">Close</button></div>${errorBox}${content}<div class="actions">${remove?'<button type="button" class="danger delete-item">Delete species</button>':''}<button type="submit">Save</button><button type="button" class="outline close-editor">Cancel</button></div></form>`;
   dialog.querySelectorAll('.close-editor').forEach(button=>button.onclick=()=>dialog.close());
-  dialog.showModal();
-  dialog.querySelector('form').onsubmit=async event=>{
-    event.preventDefault();const button=event.submitter;if(button.disabled)return;button.disabled=true;
-    try{await save(formValues(event.target));dialog.close();}
+  let busy=false;
+  dialog.oncancel=event=>{if(busy)event.preventDefault();};
+  const execute=async action=>{
+    if(busy)return;busy=true;dialog.querySelectorAll('button').forEach(button=>button.disabled=true);
+    dialog.querySelector('.error').textContent='';
+    try{if(await action()!==false)dialog.close();}
     catch(error){showError(dialog.querySelector('.error'),friendly(error));}
-    finally{button.disabled=false;}
+    finally{busy=false;dialog.querySelectorAll('button').forEach(button=>button.disabled=false);}
   };
+  dialog.showModal();
+  dialog.querySelector('form').onsubmit=event=>{
+    event.preventDefault();return execute(()=>save(formValues(event.target)));
+  };
+  if(remove)dialog.querySelector('.delete-item').onclick=()=>execute(remove);
   return dialog;
 }
 export async function adminList(node,page,query,data,refresh,heading) {
@@ -30,13 +37,13 @@ export async function adminList(node,page,query,data,refresh,heading) {
     ['status','Status',[['','All statuses'],['active','Active'],['inactive','Inactive'],['pending_approval','Awaiting approval'],['rejected','Declined']]],
     ['barangay_id','Barangay',[['','All barangays'],...(data.barangays??[]).map(b=>[b.id,b.name])]]]
     :[['active','Status',[['','All statuses'],['1','Active'],['0','Archived']]]];
-  node.innerHTML=`${heading(name,note)}${listFilters(query,filters,users?'Name, email, or phone':species?'Scientific, common, or local name':'Badge name or milestone')}<div class="admin-toolbar"><button id="add">${users?'Create staff account':species?'Add species':'Add badge'}</button></div>${table(users?['User','Contact / barangay','Role and status']:species?['Species','Identification traits','Status','Actions']:['Badge','Rule','Earned','Status','Actions'],items.map(item=>{
+  node.innerHTML=`${heading(name,note)}${listFilters(query,filters,users?'Name, email, or phone':species?'Local, common, or scientific name':'Badge name or milestone')}<div class="admin-toolbar"><button id="add">${users?'Create staff account':species?'Add species':'Add badge'}</button></div>${table(users?['User','Contact / barangay','Role and status']:species?['Species','Identification traits','Status','Actions']:['Badge','Rule','Earned','Status','Actions'],items.map(item=>{
     if(users){
       const editable=['active','inactive'].includes(item.status);
       const access=editable?`<form class="user-form admin-access" data-id="${item.id}" aria-label="Access for ${esc(item.full_name)}">${errorBox}${select('role','Role',roles,item.role)}${select('status','Status',[['active','Active'],['inactive','Inactive']],item.status)}<button>Save</button></form>`:`${pill(item.status==='pending_approval'?'Awaiting approval':item.status)}<a class="button outline" href="#expert-applications">View application</a>`;
       return `<tr>${cell('User',`<strong>${esc(item.full_name)}</strong>${item.created_at?`<small>Joined ${esc(String(item.created_at).slice(0,10))}</small>`:''}`)}${cell('Contact',`${esc(item.email)}<small>${esc(item.phone||'No phone')} · ${esc(item.barangay_name||'No barangay')}</small>`)}${cell('Access',access)}</tr>`;
     }
-    const title=species?`<strong>${esc(item.common_name)}</strong><small><em>${esc(item.scientific_name)}</em></small><small>${esc(item.local_name||'')}</small>`:`<strong>${esc(item.badge_name)}</strong><small>${esc(item.description)}</small>`;
+    const title=species?`<strong class="species-local">${esc(item.local_name||item.common_name)}</strong>${item.local_name?`<small>${esc(item.common_name)}</small>`:''}<small><em>${esc(item.scientific_name)}</em></small>`:`<strong>${esc(item.badge_name)}</strong><small>${esc(item.description)}</small>`;
     const info=species?`<small><b>Roots:</b> ${esc(item.root_type)}</small><small><b>Leaves:</b> ${esc(item.leaf_shape)}</small><small><b>Bark:</b> ${esc(item.bark_texture)}</small>`:`${esc(new Map(metrics).get(item.metric)||item.metric)} ≥ ${esc(item.target_value)}`;
     return `<tr data-id="${item.id}">${cell(species?'Species':'Badge',title)}${cell(species?'Traits':'Rule',info)}${species?'':cell('Earned',esc(item.earned_count??0))}${cell('Status',pill(active(item)?'Active':'Archived'))}${cell('Actions',`<div class="admin-row-actions"><button type="button" class="outline edit-item" data-id="${item.id}" aria-label="Edit ${esc(species?item.common_name:item.badge_name)}">Edit</button><button type="button" class="outline archive-item" data-id="${item.id}">${active(item)?'Archive':'Restore'}</button></div>`)}</tr>`;
   }).join(''))}<p class="empty filter-empty" hidden>No ${users?'users':species?'species':'badges'} match. Try another search or reset the filters.</p>${users?pager(data,'users',query):''}<dialog id="admin-editor" class="admin-editor" aria-label="Edit ${name.toLowerCase()}"></dialog>`;
@@ -66,8 +73,12 @@ export async function adminList(node,page,query,data,refresh,heading) {
   const rows=[...node.querySelectorAll('tbody tr')].map(row=>[row,items.find(item=>item.id===Number(row.dataset.id))]);
   const apply=()=>filterLocalList(node,query,rows,(item,q)=>matchesSearch(species?[item.scientific_name,item.common_name,item.local_name]:[item.badge_name,item.description,new Map(metrics).get(item.metric)],q)&&(!q.active||Number(item.active)===Number(q.active)));
   bindListFilters(node,query,apply);apply();
-  const edit=item=>editor(node,`${item.id?'Edit':'Add'} ${species?'species':'badge'}`,`<div class="row">${species?['scientific_name','common_name','local_name','family','iucn_code','iucn_label','population_trend','root_type','leaf_shape','bark_texture'].map(k=>field(k,k.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase()),item[k]??'','text',`${['scientific_name','common_name','root_type','leaf_shape','bark_texture'].includes(k)?'required ':''}maxlength="255"`)).join(''):`${field('badge_name','Badge name',item.badge_name??'','text','required maxlength="120"')}${field('description','Description',item.description??'','text','required maxlength="1000"')}${select('metric','Milestone',metrics,item.metric)}${field('target_value','Target',item.target_value??1,'number','required min="1" max="1000000" step="1"')}`}${select('active','Status',[[1,'Active'],[0,'Archived']],item.active??1)}</div>`,async values=>{
+  const edit=item=>editor(node,`${item.id?'Edit':'Add'} ${species?'species':'badge'}`,`<div class="row">${species?['local_name','common_name','scientific_name','family','iucn_code','iucn_label','population_trend','root_type','leaf_shape','bark_texture'].map(k=>field(k,k.startsWith('iucn_')?'IUCN '+k.slice(5):k.startsWith('iucn_')?'IUCN '+k.slice(5):k.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase()),item[k]??'','text',`${['scientific_name','common_name','root_type','leaf_shape','bark_texture'].includes(k)?'required ':''}maxlength="255"`)).join(''):`${field('badge_name','Badge name',item.badge_name??'','text','required maxlength="120"')}${field('description','Description',item.description??'','text','required maxlength="1000"')}${select('metric','Milestone',metrics,item.metric)}${field('target_value','Target',item.target_value??1,'number','required min="1" max="1000000" step="1"')}`}${select('active','Status',[[1,'Active'],[0,'Archived']],item.active??1)}</div>`,async values=>{
     await api(`${page}.php`,{body:{...values,id:item.id,active:Number(values.active)}});toast('Saved.');await refresh();
+  },{remove:species&&item.id?async()=>{
+    if(!await confirm('Delete species?',`Remove “${item.local_name||item.common_name||item.scientific_name}” from the species list? Existing reports are kept. This cannot be undone here.`))return false;
+    const result=await api('species.php',{body:{id:item.id,action:'delete'}});toast(result.message);await refresh();
+  }:undefined
   });
   node.querySelector('#add').onclick=()=>edit({});
   node.querySelectorAll('.edit-item').forEach(button=>button.onclick=()=>edit(items.find(item=>item.id===Number(button.dataset.id))));

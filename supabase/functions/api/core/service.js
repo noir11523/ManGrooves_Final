@@ -9,11 +9,15 @@ import { saveImage } from './uploads.js';
 import {startRegistration} from './registration.js';
 
 export class Service extends Store {
-  constructor(db, auth, bucket) { super(db); this.auth = auth; this.bucket = bucket; }
+  constructor(db, auth, bucket, mailer = null) { super(db); this.auth = auth; this.bucket = bucket; this.mailer = mailer; }
   async user(uid) {
     const user = await this.get('users', uid);
     if(user?.status==='pending_approval') throw new AppError('Your expert application is waiting for admin approval.',403);
-    if(user?.status==='rejected') throw new AppError('Your expert application was declined. Contact the administrator.',403);
+    if(user?.status==='rejected') {
+      const application = await this.get('expert_applications', uid);
+      const reason = application?.note?.trim();
+      throw new AppError(`Your expert application was declined.${reason ? ` Reason: ${reason}` : ' Please contact the administrator for the reason.'}`,403);
+    }
     if (!user || user.status !== 'active') throw new AppError('Your account is unavailable. Contact the administrator.', 403);
     return user;
   }
@@ -29,11 +33,30 @@ export class Service extends Store {
   async criteria() {
     return (await this.rows('criteria')).filter(c => c.active !== 0).sort((a, b) => a.display_order - b.display_order);
   }
-  async species() { return (await this.rows('species')).filter(s => s.active !== 0); }
-  async reports(user) { return this.rows('reports', user.role === 'guardian' ? [['user_id', '==', user.id]] : []); }
+  async species() { return (await this.rows('species')).filter(s => !s.deleted_at && Number(s.active) !== 0); }
+  // Staff use one durable sequence; guardians keep their personal sequence.
+  async ensureStaffNumbers() {
+    if (await this.get('meta','staff_report_sequence')) return;
+    await this.db.runTransaction(async tx => {
+      const ref=this.ref('meta','staff_report_sequence');
+      if ((await tx.get(ref)).exists) return;
+      const rows=(await this.transactionRows(tx,'reports')).sort((a,b)=>-newest(a,b));
+      let last=0;
+      for(const report of rows) tx.update(this.ref('reports',report.id),{staff_report_number:++last});
+      tx.set(ref,{last_number:last});
+    });
+  }
+  async reportViews(user, rows) {
+    if(user.role==='guardian') return rows;
+    return rows.map(r=>({...r,display_report_number:r.staff_report_number??r.id}));
+  }
+  async reports(user) {
+    if(user.role!=='guardian') await this.ensureStaffNumbers();
+    return this.reportViews(user,await this.rows('reports', user.role === 'guardian' ? [['user_id', '==', user.id]] : []));
+  }
   async clusters(user) {
     return (await this.rows('clusters', user.role === 'guardian' ? [['barangay_id', '==', user.barangay_id ?? -1]] : []))
-      .filter(c => visibleSite(c,user)).map(c => ({...c, latitude: c.center_lat, longitude: c.center_lng}));
+      .filter(c => !c.location_pending && visibleSite(c,user)).map(c => ({...c, latitude: c.center_lat, longitude: c.center_lng}));
   }
   async form(user) {
     requireRole(user, 'guardian', 'expert');
@@ -60,8 +83,10 @@ export class Service extends Store {
   }
   async analytics(user, query = {}) { return analyticsForUser(user, await this.reports(user), await this.clusters(user), query); }
   async detail(user, id) {
-    const report = await this.get('reports', id);
+    if(user.role!=='guardian') await this.ensureStaffNumbers();
+    let report = await this.get('reports', id);
     if (!report || (user.role === 'guardian' && report.user_id !== user.id)) throw new AppError('Report not found.', 404);
+    [report]=await this.reportViews(user,[report]);
     const {photo_path, closeup_photo_path, extra_photo_paths, photo_sha256, photo_hashes, submission_digest, submission_token, uid, ...visible} = report;
     const groups = new Map();
     for (const o of report.observation_snapshots ?? []) {
@@ -69,10 +94,11 @@ export class Service extends Store {
       groups.get(o.criteria_code).options.push({label: o.option_label, points: o.option_code === 'unknown' ? null : o.points});
     }
     delete visible.observation_snapshots;
-    const catalog = await this.species(), species = catalog.find(s=>s.id===(report.final_species_id??report.suggested_species_id));
+    const speciesId=report.final_species_id??report.suggested_species_id;
+    const species=speciesId?await this.get('species',speciesId):null;
     return {...visible, species_local_name:species?.local_name??report.species_local_name, species_common_name:species?.common_name??report.species_common_name,
       can_follow_up:report.user_id===user.id && followUpAvailable(report), follow_up_state:followUpState(report),
-      observation_history:observationHistory(report,await this.rows('reports',[['user_id','==',report.user_id]])),
+      observation_history:observationHistory(report,await this.reportViews(user,await this.rows('reports',[['user_id','==',report.user_id]]))),
       extra_photo_urls:(extra_photo_paths??[]).map((_,index)=>`photo.php?id=${id}&view=extra&index=${index}`), closeup_photo_url:closeup_photo_path ? `photo.php?id=${id}&view=closeup` : null, report_code:reportLabel(report), needs_attention:verifiedNeedsAttention(report)?1:0, observations: [...groups.values()], photo_url: photo_path ? `photo.php?id=${id}` : null,
       verification_history: (await this.rows('verification_logs', [['report_id', '==', id]])).sort((a, b) => a.created_at.localeCompare(b.created_at))};
   }
@@ -165,6 +191,7 @@ export class Service extends Store {
     const claimRef = this.ref('photo_claims', `${user.id}_${hash}`);
     const existing = await claimRef.get();
     if (existing.exists) return this.repeatedSubmission(existing.data(), digest, submissionToken);
+    await this.ensureStaffNumbers();
     const upload = await saveImage(this.bucket, photo, `reports/${user.id}`);
     let closeupUpload; const extraUploads=[];
     try { if(closeupPhoto) closeupUpload=await saveImage(this.bucket,closeupPhoto,`reports/${user.id}`);
@@ -213,8 +240,11 @@ export class Service extends Store {
         const sequenceRef=this.ref('meta',`report_sequence_${user.id}`), sequence=(await tx.get(sequenceRef)).data();
         const history=sequence ? [] : await this.transactionRows(tx,'reports',[['user_id','==',user.id]]);
         const report_number=(sequence?.last_number ?? Math.max(history.length,...history.map(r=>Number(r.report_number)||0)))+1;
+        const staffSequenceRef=this.ref('meta','staff_report_sequence'),staffSequence=(await tx.get(staffSequenceRef)).data();
+        const staff_report_number=(staffSequence?.last_number??0)+1;
+        tx.set(staffSequenceRef,{last_number:staff_report_number});
         tx.set(sequenceRef,{last_number:report_number});
-        const report = {id, report_number, report_code: `Report #${report_number}`, user_id: user.id, uid: user.uid,
+        const report = {id, report_number, staff_report_number, report_code: `Report #${report_number}`, user_id: user.id, uid: user.uid,
           guardian_name: user.full_name, barangay_id: user.barangay_id, barangay_name: barangay.name, ...fields, ...location,
           cluster_id: cluster?.id ?? null, cluster_name: cluster?.name ?? null, parent_report_id: parentId, active_child_id: null,
           observed_alive_count: count, count_unknown:countUnknown, needs_follow_up:false, follow_up_note:null, health_score: classification.health_score, health_max_score: 6, context_score: classification.context_score,
@@ -305,9 +335,12 @@ export class Service extends Store {
       if (action === 'reject' && parentRef) tx.update(parentRef, {active_child_id: null});
       if (action !== 'reject') {
         const latest = previous.submitted_at >= (cluster.latest_report_at ?? '');
-        tx.set(this.ref('clusters', cluster.id), {...cluster, verified_count: cluster.verified_count + 1,
+        const publishSite = cluster.visibility === 'personal' && !cluster.deleted_at && Number(cluster.active) !== 0;
+        tx.set(this.ref('clusters', cluster.id), {...cluster, verified_count: (cluster.verified_count ?? 0) + 1, version:randomUUID(), updated_at:now(),
+          ...(publishSite ? {visibility:'shared', approved_by:user.id, approved_by_name:user.full_name, approved_at:now()} : {}),
           ...(latest ? {latest_health: report.final_health, latest_report_at: report.submitted_at, latest_report_id: report.id,
             observed_alive_count: report.observed_alive_count, species_id: speciesId, scientific_name: species?.scientific_name ?? null, rarity_level: rarity} : {})});
+        if (publishSite) this.audit(tx,user,'site.approve','cluster',cluster.id,{name:cluster.name,report_id:id,source:'report_verification'});
       }
       this.logReview(tx, report, user, action, previous);
       this.notification(tx, noticeId, report.user_id, `report_${report.status}`, action === 'reject' ? 'Report needs revision' : 'Report verified',

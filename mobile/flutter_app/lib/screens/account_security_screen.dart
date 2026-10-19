@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../shared/content_width.dart';
 
 class AccountSecurityScreen extends StatefulWidget {
   const AccountSecurityScreen({
@@ -20,6 +21,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
       _new = TextEditingController(),
       _confirm = TextEditingController();
   bool _busy = false;
+  final _visible = <String>{};
   String? _error;
   @override
   void dispose() {
@@ -87,61 +89,87 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     canPop: !_busy,
     child: Scaffold(
       appBar: AppBar(title: const Text('Change password')),
-      body: Form(
-        key: _form,
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            if (_error != null)
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-            TextFormField(
-              controller: _current,
-              obscureText: true,
-              enabled: !_busy,
-              autofillHints: const [AutofillHints.password],
-              decoration: const InputDecoration(labelText: 'Current password'),
-              validator: (value) => value == null || value.isEmpty
-                  ? 'Enter your current password.'
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _new,
-              obscureText: true,
-              enabled: !_busy,
-              maxLength: 25,
-              decoration: const InputDecoration(
-                labelText: 'New password',
-                helperText: 'Use 8 to 25 characters.',
+      body: ContentWidth(
+        maxWidth: 600,
+        child: Form(
+          key: _form,
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              if (_error != null) ...[
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+                const SizedBox(height: 16),
+              ],
+              TextFormField(
+                controller: _current,
+                obscureText: !_visible.contains('current'),
+                enabled: !_busy,
+                autofillHints: const [AutofillHints.password],
+                decoration: InputDecoration(
+                  labelText: 'Current password',
+                  suffixIcon: _eye('current', 'current password'),
+                ),
+                validator: (value) => value == null || value.isEmpty
+                    ? 'Enter your current password.'
+                    : null,
               ),
-              validator: (value) =>
-                  value == null ||
-                      value.runes.length < 8 ||
-                      value.runes.length > 25
-                  ? 'Use 8 to 25 characters.'
-                  : value == _current.text
-                  ? 'Choose a different password.'
-                  : null,
-            ),
-            TextFormField(
-              controller: _confirm,
-              obscureText: true,
-              enabled: !_busy,
-              maxLength: 25,
-              decoration: const InputDecoration(
-                labelText: 'Confirm new password',
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _new,
+                obscureText: !_visible.contains('new'),
+                enabled: !_busy,
+                maxLength: 25,
+                decoration: InputDecoration(
+                  labelText: 'New password',
+                  helperText: 'Use 8 to 25 characters.',
+                  suffixIcon: _eye('new', 'new password'),
+                ),
+                validator: (value) =>
+                    value == null ||
+                        value.runes.length < 8 ||
+                        value.runes.length > 25
+                    ? 'Use 8 to 25 characters.'
+                    : value == _current.text
+                    ? 'Choose a different password.'
+                    : null,
               ),
-              validator: (value) =>
-                  value != _new.text ? 'The new passwords do not match.' : null,
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _busy ? null : _save,
-              child: Text(_busy ? 'Saving...' : 'Update password'),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _confirm,
+                obscureText: !_visible.contains('confirm'),
+                enabled: !_busy,
+                maxLength: 25,
+                decoration: InputDecoration(
+                  labelText: 'Confirm new password',
+                  suffixIcon: _eye('confirm', 'confirm new password'),
+                ),
+                validator: (value) => value != _new.text
+                    ? 'The new passwords do not match.'
+                    : null,
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: _busy ? null : _save,
+                child: Text(_busy ? 'Saving...' : 'Update password'),
+              ),
+            ],
+          ),
         ),
       ),
+    ),
+  );
+
+  Widget _eye(String key, String label) => IconButton(
+    tooltip: '${_visible.contains(key) ? 'Hide' : 'Show'} $label',
+    onPressed: _busy
+        ? null
+        : () => setState(() {
+            if (!_visible.remove(key)) _visible.add(key);
+          }),
+    icon: Icon(
+      _visible.contains(key)
+          ? Icons.visibility_off_outlined
+          : Icons.visibility_outlined,
     ),
   );
 }

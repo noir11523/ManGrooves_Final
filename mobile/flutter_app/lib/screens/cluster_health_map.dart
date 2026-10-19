@@ -3,6 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../shared/species_names.dart';
+
 class ClusterHealthMap extends StatelessWidget {
   const ClusterHealthMap({
     super.key,
@@ -17,10 +19,10 @@ class ClusterHealthMap extends StatelessWidget {
   final void Function(int id, int tab)? onOpenTimeline;
 
   static Color healthColor(String health) => switch (health) {
-    'Healthy' => Colors.green,
-    'Stressed' => Colors.orange,
-    'At Risk' => Colors.red,
-    _ => Colors.grey,
+    'Healthy' => const Color(0xFF2D5A27),
+    'Stressed' => const Color(0xFF8A5C00),
+    'At Risk' => const Color(0xFFB42318),
+    _ => const Color(0xFF5F6B61),
   };
 
   LatLng? _point(Map<String, dynamic> cluster) {
@@ -38,25 +40,73 @@ class ClusterHealthMap extends StatelessWidget {
   }
 
   void _open(BuildContext context, Map<String, dynamic> cluster) {
+    final health = '${cluster['latest_health'] ?? 'Unknown'}';
+    final location = [
+      cluster['cluster_code'],
+      cluster['barangay_name'],
+    ].where((value) => value != null && '$value'.trim().isNotEmpty).join(' · ');
+    final hasSpecies = [
+      'local_name',
+      'species_local_name',
+      'common_name',
+      'species_common_name',
+      'scientific_name',
+      'species_name',
+    ].any((key) => '${cluster[key] ?? ''}'.trim().isNotEmpty);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxWidth: 560,
+        maxHeight: MediaQuery.sizeOf(context).height * .85,
+      ),
       builder: (sheet) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                '${cluster['name']}',
-                style: Theme.of(context).textTheme.titleLarge,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${cluster['name'] ?? 'Mangrove site'}',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.pop(sheet),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
               ),
+              if (location.isNotEmpty) Text(location),
+              const SizedBox(height: 8),
               Text(
-                '${cluster['latest_health'] ?? 'Unknown'} · ${cluster['barangay_name'] ?? ''}',
+                health,
+                style: TextStyle(
+                  color: healthColor(health),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+              if (hasSpecies) ...[
+                const SizedBox(height: 8),
+                SpeciesNames(cluster),
+              ],
               const SizedBox(height: 16),
-              FilledButton(
+              if (onOpenTimeline != null)
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(sheet);
+                    onOpenTimeline!(int.parse('${cluster['id']}'), 0);
+                  },
+                  child: const Text('View timeline'),
+                ),
+              OutlinedButton(
                 onPressed: () {
                   Navigator.pop(sheet);
                   onOpenReports(int.parse('${cluster['id']}'));
@@ -64,13 +114,6 @@ class ClusterHealthMap extends StatelessWidget {
                 child: const Text('View reports'),
               ),
               if (onOpenTimeline != null) ...[
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(sheet);
-                    onOpenTimeline!(int.parse('${cluster['id']}'), 0);
-                  },
-                  child: const Text('Health history'),
-                ),
                 TextButton(
                   onPressed: () {
                     Navigator.pop(sheet);
@@ -106,7 +149,7 @@ class ClusterHealthMap extends StatelessWidget {
             ),
           )
         else ...[
-          const Text('Tap a marker to view reports.'),
+          const Text('Tap a pin to view site details and its timeline.'),
           const SizedBox(height: 8),
           SizedBox(
             height: 300,

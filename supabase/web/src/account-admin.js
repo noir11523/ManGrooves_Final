@@ -1,23 +1,45 @@
 import {api,friendly} from './client.js';
-import {$,$$,esc,errorBox,field,formValues,showError,toast,confirm,privatePhoto,displayLabel,download} from './ui.js';
+import {$,$$,esc,errorBox,field,formValues,showError,toast,confirm,privatePhoto,download} from './ui.js';
 import {listFilters,bindListFilters,filterLocalList,matchesSearch} from './list-filters.js';
 
+const applicationEmailLabel=status=>({sent:'Email sent',sending:'Sending email…'}[status]??'Email not sent');
+const applicationDate=value=>{
+  if(!value)return '';
+  const date=new Date(value);
+  return Number.isNaN(date.valueOf())?'':date.toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+};
 export async function expertApplicationsPage(node,query={}){
   const {items}=await api('expert-applications.php');if(!node.isConnected)return;
-  node.innerHTML=`<div class="page-head"><h1>Expert applications</h1><a href="#users">Back to users</a></div><p>Check the applicant's ID code before approving expert access.</p><div class="list">${items.map(a=>`<article class="card" data-uid="${esc(a.uid)}"><h2>${esc(a.full_name)}</h2><p>${esc(a.email)} · ${esc(displayLabel(a.status))}</p>${a.id_code?`<dl class="summary"><dt>Expert ID code</dt><dd class="id-code">${esc(a.id_code)}</dd></dl>`:''}${a.has_id_photo?`<button class="outline id-photo" data-uid="${esc(a.uid)}" aria-expanded="false">View previous ID photo</button><img hidden class="guide" alt="Applicant's private ID">`:''}${a.status==='pending'?`<form class="application">${errorBox}${field('note','Note or reason','','text','maxlength="1000"')}<div class="actions"><button name="action" value="approve">Approve expert</button><button class="outline" name="action" value="reject">Decline</button></div></form>`:`<p>${esc(a.note??'')}${a.reviewer_name?` · Reviewed by ${esc(a.reviewer_name)}`:''}</p>`}</article>`).join('')||'<p class="empty">No expert applications yet.</p>'}</div>`;
+  node.innerHTML=`<section class="expert-applications-page"><div class="page-head"><div><h1>Expert applications</h1><p class="muted">Review credentials and send your decision to the applicant.</p></div><a class="button outline" href="#users">Back to users</a></div><div class="list application-list">${items.map(a=>{
+    const pending=a.status==='pending',status=pending?'Pending review':a.status==='rejected'?'Declined':'Approved';
+    const sending=a.email_status==='sending'&&Date.now()-Date.parse(a.email_attempted_at)<120000;
+    return `<article class="card application-card" data-uid="${esc(a.uid)}"><header class="application-heading"><h2>${esc(a.full_name)}</h2><span class="pill ${pending?'pending':a.status==='rejected'?'rejected':'verified'}">${status}</span></header><p class="application-email">${esc(a.email)}</p>${a.id_code?`<dl class="application-credentials"><dt>Expert ID</dt><dd class="id-code">${esc(a.id_code)}</dd></dl>`:''}${a.has_id_photo?`<button type="button" class="outline id-photo" data-uid="${esc(a.uid)}" aria-expanded="false">View previous ID photo</button><img hidden class="guide" alt="Applicant's private ID">`:''}${pending?`${a.created_at?`<small class="muted application-submitted">Submitted ${esc(applicationDate(a.created_at))}</small>`:''}<form class="application">${errorBox}<label class="field"><span>Message to applicant</span><textarea name="note" maxlength="1000" rows="3" placeholder="Add a short note about your decision"></textarea><small>Required to decline. Included in the decision email.</small></label><div class="actions"><button name="action" value="approve">Approve expert</button><button class="outline" name="action" value="reject">Decline</button></div></form>`:`${a.note?`<section class="application-note"><h3>${a.status==='rejected'?'Decline reason':'Message to applicant'}</h3><p>${esc(a.note)}</p></section>`:''}${a.reviewer_name||a.reviewed_at?`<p class="application-reviewer muted">${a.reviewer_name?`Reviewed by ${esc(a.reviewer_name)}`:'Reviewed'}${a.reviewed_at?` · ${esc(applicationDate(a.reviewed_at))}`:''}</p>`:''}<div class="application-mail" data-state="${a.email_status==='sent'?'sent':a.email_status==='sending'?'sending':'unsent'}"><small role="status" title="${a.email_status==='sent'?'Check the registered inbox or Spam folder.':'Your decision and note are saved.'}">${applicationEmailLabel(a.email_status)}</small>${a.email_status!=='sent'?`<button type="button" class="outline retry-email" ${sending?'disabled':''}>${a.email_status?'Retry email':'Send email'}</button>`:''}</div>`}</article>`;
+  }).join('')}</div><p class="empty filter-empty" hidden>No applications match your search.</p></section>`;
   node.querySelector('.list').insertAdjacentHTML('beforebegin',listFilters(query,[['status','Status',[['','All applications'],['pending','Pending'],['approved','Approved'],['rejected','Declined']]]],'Applicant name or email'));
-  node.insertAdjacentHTML('beforeend','<p class="empty filter-empty" hidden>No applications match.</p>');
+  node.querySelector('.list-filters [type=submit]').textContent='Filter';
   const rows=[...node.querySelectorAll('article[data-uid]')].map(element=>[element,items.find(item=>item.uid===element.dataset.uid)]);
-  node.querySelector('.list > .empty')?.remove();
-  const apply=()=>filterLocalList(node,query,rows,(item,q)=>matchesSearch([item.full_name,item.email],q)&&(!q.status||item.status===q.status));
+  const apply=()=>{
+    filterLocalList(node,query,rows,(item,q)=>matchesSearch([item.full_name,item.email],q)&&(!q.status||item.status===q.status));
+    const count=rows.filter(([element])=>!element.hidden).length;
+    node.querySelector('.result-count').textContent=`${count} application${count===1?'':'s'} · ${query.status==='pending'?'Oldest first':query.status?'Latest decisions first':'Pending first'}`;
+    if(!items.length)node.querySelector('.filter-empty').textContent='No expert applications yet.';
+  };
   bindListFilters(node,query,apply);apply();
   $$('.id-photo').forEach(button=>button.onclick=async()=>{const img=button.nextElementSibling;img.hidden=!img.hidden;button.setAttribute('aria-expanded',String(!img.hidden));button.textContent=img.hidden?'View previous ID photo':'Hide ID photo';if(!img.hidden)await privatePhoto(img,`expert-id.php?uid=${encodeURIComponent(button.dataset.uid)}`);});
+  node.querySelectorAll('.retry-email').forEach(button=>button.onclick=async()=>{
+    if(button.disabled)return;button.disabled=true;const label=button.textContent;button.textContent='Sending…';
+    try { const result=await api('expert-applications.php',{body:{action:'retry_email',uid:button.closest('[data-uid]').dataset.uid}});toast(result.message);await expertApplicationsPage(node,query); }
+    catch(error){toast(friendly(error));}finally{button.disabled=false;button.textContent=label;}
+  });
   $$('.application').forEach(form=>form.onsubmit=async event=>{
-    event.preventDefault();const button=event.submitter;if(button.disabled)return;
+    event.preventDefault();const button=event.submitter;if(!button||button.disabled||form.dataset.busy)return;
     const action=button.value,values=formValues(form);
     if(action==='reject'&&!values.note.trim()){showError(form.querySelector('.error'),'Add a reason for declining.');return;}
-    if(!await confirm(action==='approve'?'Approve this expert?':'Decline this application?',action==='approve'?'They can submit reports and review other users’ reports.':'They will not have expert access.'))return;
-    button.disabled=true;try{const result=await api('expert-applications.php',{body:{...values,action,uid:form.closest('[data-uid]').dataset.uid}});toast(result.message);await expertApplicationsPage(node,query);}catch(e){showError(form.querySelector('.error'),friendly(e));}finally{button.disabled=false;}
+    form.dataset.busy='1';const buttons=[...form.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
+    try{
+      if(!await confirm(action==='approve'?'Approve this expert?':'Decline this application?',action==='approve'?'They can submit reports and review other users’ reports.':'Your reason will be sent to the applicant. They will not have expert access.'))return;
+      const result=await api('expert-applications.php',{body:{...values,action,uid:form.closest('[data-uid]').dataset.uid}});toast(result.message);await expertApplicationsPage(node,query);
+    }catch(e){showError(form.querySelector('.error'),friendly(e));}finally{delete form.dataset.busy;buttons.forEach(b=>b.disabled=false);}
   });
 }
 export async function certificateSettingsPage(node){

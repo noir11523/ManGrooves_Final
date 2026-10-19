@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../shared/content_width.dart';
 import 'account_security_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -107,148 +108,206 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     final user = _user ?? widget.initialUser;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-      children: [
-        CircleAvatar(
-          radius: 38,
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          child: Text(
-            (_firstName.text.trim().isEmpty ? 'M' : _firstName.text.trim()[0])
-                .toUpperCase(),
-            style: Theme.of(context).textTheme.headlineLarge,
+    return ContentWidth(
+      maxWidth: 680,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        children: [
+          Center(
+            child: CircleAvatar(
+              radius: 38,
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              child: Text(
+                (_firstName.text.trim().isEmpty
+                        ? 'M'
+                        : _firstName.text.trim()[0])
+                    .toUpperCase(),
+                style: Theme.of(context).textTheme.headlineLarge,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          '${user['full_name'] ?? ''} · ${const {'guardian': 'Coastal Guardian', 'expert': 'Expert', 'system_admin': 'Administrator'}[user['role']] ?? ''}',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
-        const SizedBox(height: 20),
-        if (_error != null) ...[
-          Text(_error!, style: const TextStyle(color: Colors.red)),
-          const SizedBox(height: 12),
-        ],
-        if (user['first_name'] == null || user['last_name'] == null)
+          const SizedBox(height: 16),
           Text(
-            'Current name: ${user['full_name']}. Please confirm your first and last names.',
+            '${user['full_name'] ?? '${_firstName.text} ${_lastName.text}'}',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-        Form(
-          key: _formKey,
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: _firstName,
-                    maxLength: 60,
-                    autofillHints: const [AutofillHints.givenName],
-                    decoration: const InputDecoration(labelText: 'First name'),
-                    validator: (value) {
-                      final length = value?.trim().length ?? 0;
-                      return length < 1 || length > 60
-                          ? 'Enter 1 to 60 characters.'
-                          : null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _lastName,
-                    maxLength: 59,
-                    autofillHints: const [AutofillHints.familyName],
-                    decoration: const InputDecoration(labelText: 'Last name'),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Enter your last name.'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _email,
-                    readOnly: true,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email address',
-                      helperText: 'Your email cannot be changed.',
+          const SizedBox(height: 6),
+          Text(
+            const {
+                  'guardian': 'Coastal Guardian',
+                  'expert': 'Expert',
+                  'system_admin': 'Administrator',
+                }[user['role']] ??
+                '',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          if (_error != null) ...[
+            Text(_error!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 16),
+          ],
+          if (user['first_name'] == null || user['last_name'] == null)
+            Text(
+              'Current name: ${user['full_name']}. Please confirm your first and last names.',
+            ),
+          Form(
+            key: _formKey,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: _firstName,
+                      maxLength: 60,
+                      autofillHints: const [AutofillHints.givenName],
+                      decoration: const InputDecoration(
+                        labelText: 'First name',
+                      ),
+                      validator: (value) {
+                        final length = value?.trim().length ?? 0;
+                        return length < 1 || length > 60
+                            ? 'Enter 1 to 60 characters.'
+                            : null;
+                      },
                     ),
-                    validator: (value) =>
-                        value == null ||
-                            !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                                .hasMatch(value.trim())
-                        ? 'Enter a valid email address.'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _phone,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Phone (optional)',
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _lastName,
+                      maxLength: 59,
+                      autofillHints: const [AutofillHints.familyName],
+                      decoration: const InputDecoration(labelText: 'Last name'),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Enter your last name.'
+                          : null,
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: _barangayId,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Barangay'),
-                    items: _barangays
-                        .map(
-                          (barangay) => DropdownMenuItem<int>(
-                            value: barangay['id'] as int,
-                            child: Text(
-                              '${barangay['name']}, ${barangay['city_municipality']}',
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _email,
+                      readOnly: true,
+                      minLines: 1,
+                      maxLines: 3,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Email address',
+                        helperText: 'Your email cannot be changed.',
+                        helperMaxLines: 2,
+                      ),
+                      validator: (value) =>
+                          value == null ||
+                              !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                                  .hasMatch(value.trim())
+                          ? 'Enter a valid email address.'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _phone,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Phone (optional)',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int>(
+                      initialValue: _barangayId,
+                      isExpanded: true,
+                      itemHeight: null,
+                      decoration: InputDecoration(
+                        labelText: 'Barangay',
+                        helperText: _barangays
+                            .where((b) => b['id'] == _barangayId)
+                            .firstOrNull?['city_municipality']
+                            ?.toString(),
+                        helperMaxLines: 2,
+                      ),
+                      selectedItemBuilder: (context) => _barangays
+                          .map(
+                            (barangay) => Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '${barangay['name']}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      items: _barangays
+                          .map(
+                            (barangay) => DropdownMenuItem<int>(
+                              value: barangay['id'] as int,
+                              child: Text(
+                                '${barangay['name']}, ${barangay['city_municipality']}',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setState(() => _barangayId = value),
+                      validator: ['guardian', 'expert'].contains(user['role'])
+                          ? (value) =>
+                                value == null ? 'Select your barangay.' : null
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: _saving
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(_saving ? 'Saving…' : 'Save profile'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => AccountSecurityScreen(
+                  api: widget.api,
+                  onSignedOut: widget.onSignedOut,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.lock_outline),
+            label: const Text('Change password'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _signingOut
+                ? null
+                : () async {
+                    setState(() => _signingOut = true);
+                    try {
+                      await widget.onSignedOut();
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Could not sign out. Please try again.',
                             ),
                           ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => _barangayId = value),
-                    validator: ['guardian', 'expert'].contains(user['role'])
-                        ? (value) =>
-                              value == null ? 'Select your barangay.' : null
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save_outlined),
-                    label: Text(_saving ? 'Saving…' : 'Save profile'),
-                  ),
-                ],
-              ),
-            ),
+                        );
+                      }
+                    } finally {
+                      if (mounted) setState(() => _signingOut = false);
+                    }
+                  },
+            icon: const Icon(Icons.logout),
+            label: Text(_signingOut ? 'Signing out…' : 'Sign out'),
           ),
-        ),
-        const SizedBox(height: 20),
-        OutlinedButton.icon(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute<void>(
-              builder: (_) => AccountSecurityScreen(
-                api: widget.api,
-                onSignedOut: widget.onSignedOut,
-              ),
-            ),
-          ),
-          icon: const Icon(Icons.lock_outline),
-          label: const Text('Change password'),
-        ),
-        OutlinedButton.icon(
-          onPressed: _signingOut
-              ? null
-              : () async {
-                  setState(() => _signingOut = true);
-                  await widget.onSignedOut();
-                },
-          icon: const Icon(Icons.logout),
-          label: Text(_signingOut ? 'Signing out…' : 'Sign out'),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:mangrooves_mobile/core/api_client.dart';
 import 'package:mangrooves_mobile/core/report_draft_store.dart';
+import 'package:mangrooves_mobile/core/report_location.dart';
+import 'package:mangrooves_mobile/screens/location_picker_screen.dart';
 import 'package:mangrooves_mobile/screens/submit_report_screen.dart';
 
 class _Gps extends GeolocatorPlatform {
@@ -79,6 +81,30 @@ class _SiteApi extends _Api {
   };
 }
 
+class _RetryFollowUpApi extends _SiteApi {
+  int attempts = 0;
+  bool available = false;
+  bool siteAvailable = true;
+  @override
+  Future<Map<String, dynamic>> reportForm() async => {
+    ...await super.reportForm(),
+    if (!siteAvailable) 'clusters': [],
+  };
+  @override
+  Future<Map<String, dynamic>> previousReports(int clusterId) async {
+    if (++attempts == 1) throw const ApiException('Connection interrupted');
+    return {
+      'reports': [
+        {
+          'id': available ? 7 : 8,
+          'report_code': 'Report #1',
+          'health': 'Healthy',
+        },
+      ],
+    };
+  }
+}
+
 class _Api extends ApiClient {
   bool failSubmit = false;
   int submissions = 0;
@@ -113,7 +139,13 @@ class _Api extends ApiClient {
   @override
   Future<Map<String, dynamic>> reportForm() async => {
     'clusters': [
-      {'id': 1, 'name': 'Seaside'},
+      {
+        'id': 1,
+        'name': 'Seaside',
+        'center_lat': 10.2833,
+        'center_lng': 123.8833,
+        'radius_meters': 100,
+      },
     ],
     'traits': {
       'root_type': ['Prop'],
@@ -243,16 +275,46 @@ class _Drafts extends ReportDraftStore {
 Finder field(String label) => find.byWidgetPredicate(
   (widget) => widget is TextField && widget.decoration?.labelText == label,
 );
-Future<void> tap(WidgetTester tester, Finder finder) async {
+Future<void> tap(
+  WidgetTester tester,
+  Finder finder, {
+  bool photoIO = false,
+}) async {
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
-  await tester.tap(finder);
+  // Photo validation reads actual file contents outside Flutter's fake clock.
+  if (photoIO) {
+    await tester.runAsync(() => tester.tap(finder));
+    // Wait for the visible operation to finish, rather than assume that file
+    // I/O always completes within a fixed delay on a busy build machine.
+    var waiting = true;
+    for (var attempt = 0; attempt < 200 && waiting; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      final picking = find
+          .widgetWithText(FilledButton, 'Continue')
+          .evaluate()
+          .any((element) => (element.widget as FilledButton).onPressed == null);
+      final checking =
+          find.text('Checking photos...').evaluate().isNotEmpty &&
+          find.byType(AlertDialog).evaluate().isEmpty;
+      waiting =
+          picking ||
+          checking ||
+          find.text('Submitting...').evaluate().isNotEmpty;
+    }
+    expect(waiting, isFalse, reason: 'Photo operation did not finish.');
+  } else {
+    await tester.tap(finder);
+  }
   await tester.pumpAndSettle();
 }
 
 Future<void> chooseObservation(WidgetTester tester, String label) async {
   await tap(tester, find.text(label).first);
-  await tap(tester, find.text('Select this choice'));
+  expect(find.text('Select this choice'), findsNothing);
 }
 
 bool observationSelected(WidgetTester tester, String code, int id) => tester
@@ -270,6 +332,155 @@ Future<void> openLocation(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'duplicate photos stay out of the draft and count guidance is conditional',
+    (tester) async {
+      final oldGps = GeolocatorPlatform.instance;
+      GeolocatorPlatform.instance = _Gps();
+      addTearDown(() => GeolocatorPlatform.instance = oldGps);
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const channel = MethodChannel('plugins.flutter.io/image_picker');
+      messenger.setMockMethodCallHandler(
+        channel,
+        (_) async =>
+            File('../../public/assets/img/guides/leaf-color.png').absolute.path,
+      );
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final drafts = _Drafts();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: _Api(),
+              draftOwner: 'duplicate-ui',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('More views (optional)'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, 'Photo'), findsOneWidget);
+      await tap(tester, find.text('Gallery').first, photoIO: true);
+      await tap(
+        tester,
+        find.widgetWithText(OutlinedButton, 'Photo'),
+        photoIO: true,
+      );
+      expect(find.byType(BottomSheet), findsNothing);
+      await tap(tester, find.text('Gallery').last, photoIO: true);
+      expect(
+        find.text('This photo is already added. Choose a different photo.'),
+        findsOneWidget,
+      );
+      await tap(
+        tester,
+        find.widgetWithText(FilledButton, 'Continue').first,
+        photoIO: true,
+      );
+      expect(find.text('Add both photos before continuing.'), findsOneWidget);
+      await openLocation(tester);
+      expect(find.text('Choose a site. Count will be unknown.'), findsNothing);
+      await tap(tester, find.text('Unable to count'));
+      expect(
+        find.text('Choose a site. Count will be unknown.'),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'follow-up retries keep the original request and reject a distant replacement pin',
+    (tester) async {
+      final api = _RetryFollowUpApi(), drafts = _Drafts();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftStore: drafts,
+              draftOwner: 'follow-up-retry',
+              initialClusterId: 1,
+              initialParentReportId: 7,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await openLocation(tester);
+      expect(api.attempts, 1);
+      await tap(tester, find.text('Retry previous visits'));
+      expect(api.attempts, 2);
+      expect(find.textContaining('no longer available'), findsOneWidget);
+      api.available = true;
+      await tap(tester, find.text('Retry previous visits'));
+      expect(api.attempts, 3);
+      expect(find.text('Retry previous visits'), findsNothing);
+      expect(find.textContaining('no longer available'), findsNothing);
+      expect(drafts.saved.values.first['parent_report_id'], 7);
+      await tap(tester, find.byKey(const ValueKey('manual-location')));
+      Navigator.of(tester.element(find.byType(LocationPickerScreen)))
+          .pop(const ReportLocation.manual(latitude: 10.30, longitude: 123.90));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Keep this follow-up pin inside'),
+        findsOneWidget,
+      );
+      await tester.enterText(field('Living mangroves observed'), '12');
+      await tester.pumpAndSettle();
+      final saved = drafts.saved.values.first;
+      expect(saved['parent_report_id'], 7);
+      expect(saved['cluster_id'], 1);
+      expect((saved['location'] as Map)['latitude'], '10.28330000');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('an archived follow-up site cannot silently become a new site', (
+    tester,
+  ) async {
+    final api = _RetryFollowUpApi()..siteAvailable = false;
+    final drafts = _Drafts();
+    final old = GeolocatorPlatform.instance;
+    GeolocatorPlatform.instance = _DeniedGps();
+    addTearDown(() => GeolocatorPlatform.instance = old);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SubmitReportScreen(
+            api: api,
+            draftStore: drafts,
+            draftOwner: 'archived-follow-up',
+            initialClusterId: 1,
+            initialParentReportId: 7,
+            onSubmitted: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await openLocation(tester);
+    await tester.enterText(field('Living mangroves observed'), '12');
+    await tester.pumpAndSettle();
+    expect(drafts.saved.values.first['parent_report_id'], 7);
+    expect(drafts.saved.values.first['cluster_id'], 1);
+    expect(
+      tester
+          .widget<DropdownButtonFormField<int>>(
+            find.byKey(const ValueKey('cluster-1')),
+          )
+          .onChanged,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'selected site fills the location and Cancel clears the saved report only after confirmation',
     (tester) async {
@@ -303,7 +514,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(drafts.saved, isNotEmpty);
       await tap(tester, find.widgetWithText(TextButton, 'Cancel'));
-      await tap(tester, find.text('Keep editing'));
+      await tap(tester, find.text('Keep editing'), photoIO: true);
       expect(drafts.saved, isNotEmpty);
       expect(exits, 0);
       await tap(tester, find.widgetWithText(TextButton, 'Cancel'));
@@ -563,10 +774,12 @@ void main() {
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       const channel = MethodChannel('plugins.flutter.io/image_picker');
+      var picked = 0;
       messenger.setMockMethodCallHandler(
         channel,
-        (_) async =>
-            File('../../public/assets/img/guides/leaf-color.png').absolute.path,
+        (_) async => File(
+          '../../public/assets/img/guides/${picked++ == 0 ? 'leaf-color' : 'roots'}.png',
+        ).absolute.path,
       );
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final api = _Api();
@@ -597,9 +810,13 @@ void main() {
         EnginePhase.sendSemanticsUpdate,
         const Duration(seconds: 35),
       );
-      await tap(tester, find.text('Gallery').first);
-      await tap(tester, find.text('Gallery').last);
-      await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
+      await tap(tester, find.text('Gallery').first, photoIO: true);
+      await tap(tester, find.text('Gallery').last, photoIO: true);
+      await tap(
+        tester,
+        find.widgetWithText(FilledButton, 'Continue').first,
+        photoIO: true,
+      );
       expect(find.text('Previous report'), findsOneWidget);
       expect(find.text('This is a follow-up'), findsNothing);
       expect(
@@ -607,10 +824,54 @@ void main() {
         isTrue,
       );
       await tester.enterText(field('Living mangroves observed'), '12');
-      await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
-      await chooseObservation(tester, 'Green');
+      await tap(
+        tester,
+        find.widgetWithText(FilledButton, 'Continue').first,
+        photoIO: true,
+      );
+      final preview = find.bySemanticsLabel('Preview Green');
+      await tap(tester, preview);
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(find.text('Enlarge'), findsNothing);
+      await tap(tester, find.text('Close'));
+      expect(observationSelected(tester, 'leaf_color', 1), false);
+      await tap(tester, preview);
+      await tap(
+        tester,
+        find.descendant(of: find.byType(Dialog), matching: find.text('Select')),
+      );
+      expect(observationSelected(tester, 'leaf_color', 1), true);
+      final greenCircle = find.byKey(const ValueKey('choice-circle-Green'));
+      await tap(tester, greenCircle);
+      expect(observationSelected(tester, 'leaf_color', 1), false);
+      await tap(tester, find.text('Review report'));
+      expect(find.text('Choose one answer for Leaf color.'), findsOneWidget);
+      await tap(tester, greenCircle);
+      expect(observationSelected(tester, 'leaf_color', 1), true);
+      await tap(tester, preview);
+      await tap(
+        tester,
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.text('Deselect'),
+        ),
+      );
+      expect(observationSelected(tester, 'leaf_color', 1), false);
+      await tap(tester, greenCircle);
       await chooseCategory(tester, 'Animals seen');
       await chooseObservation(tester, 'Crabs');
+      await tap(tester, find.bySemanticsLabel('Preview Crabs'));
+      await tap(
+        tester,
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.text('Deselect'),
+        ),
+      );
+      expect(observationSelected(tester, 'bio_indicators', 2), false);
+      await chooseObservation(tester, 'Crabs');
+      expect(observationSelected(tester, 'bio_indicators', 2), true);
       await chooseObservation(tester, 'None of the above');
       expect(observationSelected(tester, 'bio_indicators', 2), false);
       await chooseObservation(tester, 'All of the above');
@@ -630,12 +891,36 @@ void main() {
       await chooseCategory(tester, 'Warning signs');
       expect(observationSelected(tester, 'negative_signs', 5), false);
       for (final choice in {
-        'Roots': 'Prop',
-        'Leaves': 'Oval',
-        'Bark': 'Smooth',
+        'Klase sa Gamot (Root Type)': 'Prop',
+        'Porma sa Dahon (Leaf Shape)': 'Oval',
+        'Hitsura sa Panit sa Punoan (Bark Texture)': 'Smooth',
       }.entries) {
         await chooseCategory(tester, choice.key);
-        await chooseObservation(tester, choice.value);
+        await tap(tester, find.bySemanticsLabel('Preview ${choice.value}'));
+        await tap(
+          tester,
+          find.descendant(
+            of: find.byType(Dialog),
+            matching: find.text('Select'),
+          ),
+        );
+        final circle = find.byKey(ValueKey('choice-circle-${choice.value}'));
+        expect(tester.widget<IconButton>(circle).isSelected, true);
+        await tap(tester, circle);
+        expect(tester.widget<IconButton>(circle).isSelected, false);
+        await tap(tester, find.text('Review report'));
+        expect(find.text('Choose the roots, leaves and bark.'), findsOneWidget);
+        await tap(tester, circle);
+        await tap(tester, find.bySemanticsLabel('Preview ${choice.value}'));
+        await tap(
+          tester,
+          find.descendant(
+            of: find.byType(Dialog),
+            matching: find.text('Deselect'),
+          ),
+        );
+        expect(tester.widget<IconButton>(circle).isSelected, false);
+        await tap(tester, circle);
       }
       await tester.enterText(field('Notes (optional)'), 'First note');
       await tap(tester, find.text('Review report'));
@@ -664,7 +949,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Notes: Updated note'), findsOneWidget);
-      expect(find.textContaining('Manual pin'), findsNothing);
+      expect(find.text('Manual pin'), findsOneWidget);
       expect(find.text('Discard draft'), findsNothing);
       expect(find.text('Draft saved on this device.'), findsNothing);
       expect(
@@ -672,14 +957,18 @@ void main() {
         findsNothing,
       );
       await tap(tester, find.text('These details are from this visit.'));
-      await tap(tester, find.text('Submit report'));
+      await tap(tester, find.text('Submit report'), photoIO: true);
       expect(find.text('Submit report?'), findsOneWidget);
       expect(api.submissions, 0);
-      await tap(tester, find.text('Keep editing'));
+      await tap(tester, find.text('Keep editing'), photoIO: true);
       expect(api.submissions, 0);
-      await tap(tester, find.text('Submit report'));
+      await tap(tester, find.text('Submit report'), photoIO: true);
       api.failSubmit = true;
-      await tap(tester, find.widgetWithText(FilledButton, 'Submit'));
+      await tap(
+        tester,
+        find.widgetWithText(FilledButton, 'Submit'),
+        photoIO: true,
+      );
       expect(find.text('Connection interrupted. Try again.'), findsOneWidget);
       expect(
         drafts.saved.entries
@@ -689,8 +978,12 @@ void main() {
         'Updated note',
       );
       api.failSubmit = false;
-      await tap(tester, find.text('Submit report'));
-      await tap(tester, find.widgetWithText(FilledButton, 'Submit'));
+      await tap(tester, find.text('Submit report'), photoIO: true);
+      await tap(
+        tester,
+        find.widgetWithText(FilledButton, 'Submit'),
+        photoIO: true,
+      );
       expect(api.submissions, 2);
       expect(drafts.saved, isEmpty);
       expect(api.previews, greaterThan(0));

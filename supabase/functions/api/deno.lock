@@ -4,6 +4,7 @@
     "npm:@supabase/supabase-js@2.117.2": "2.117.2",
     "npm:busboy@1.6.0": "1.6.0",
     "npm:express@5.1.0": "5.1.0",
+    "npm:nodemailer@10.1.0": "10.1.0",
     "npm:pdf-lib@1.17.1": "1.17.1",
     "npm:qrcode@1.5.4": "1.5.4"
   },
@@ -363,6 +364,9 @@
         "content-type@2.1.0"
       ]
     },
+    "nodemailer@10.1.0": {
+      "integrity": "sha512-fXW8AulB25aOTuwfRYV6lqHyfz2VM4rr4SGXH03mE7x5znEUpzL5mu6anARUpZN7744Ziwkmr4AxSLPJsBQspg=="
+    },
     "object-inspect@1.13.4": {
       "integrity": "sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew=="
     },
@@ -627,6 +631,7 @@
       "npm:@supabase/supabase-js@2.117.2",
       "npm:busboy@1.6.0",
       "npm:express@5.1.0",
+      "npm:nodemailer@10.1.0",
       "npm:pdf-lib@1.17.1",
       "npm:qrcode@1.5.4"
     ]

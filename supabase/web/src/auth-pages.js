@@ -6,15 +6,16 @@ function bind(form,action){form.onsubmit=async event=>{
   form.querySelector('.error').textContent='';
   try{await action(formValues(form));}catch(error){showError(form.querySelector('.error'),friendly(error));}finally{button.disabled=false;}
 };}
-function passwordField(name,label,{prefix='register',help=false,current=false}={}){
+export function passwordField(name,label,{prefix='register',help=false,current=false}={}){
   const id=`${prefix}-${name}`;
   return `<div class="field registration-password"><label for="${id}">${label}</label><div class="password-control"><input id="${id}" name="${name}" type="password" required ${current?'autocomplete="current-password"':'minlength="8" maxlength="25" autocomplete="new-password"'} ${help?'aria-describedby="register-password-help"':''}><button type="button" class="password-toggle" aria-controls="${id}" aria-label="Show ${label.toLowerCase()}" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="password-eye-slash" d="m3 3 18 18" hidden/></svg></button></div>${help?'<div class="password-length" role="progressbar" aria-label="Password length" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0"><span></span></div><small id="register-password-help" aria-live="polite">Use 8 to 25 characters. No special symbols required.</small>':''}</div>`;
 }
-function bindPasswordToggles(form){
+export function bindPasswordToggles(form){
   form.querySelectorAll('.password-toggle').forEach(button=>button.addEventListener('click',()=>{
     const input=document.getElementById(button.getAttribute('aria-controls')),visible=input.type==='password';
     input.type=visible?'text':'password';button.setAttribute('aria-pressed',String(visible));
-    button.setAttribute('aria-label',`${visible?'Hide':'Show'} ${input.name==='password'?'password':'confirm password'}`);
+    const label=input.labels?.[0]?.textContent.trim().toLowerCase()||'password';
+    button.setAttribute('aria-label',`${visible?'Hide':'Show'} ${label}`);
     button.querySelector('.password-eye-slash').toggleAttribute('hidden',!visible);
   }));
 }
@@ -152,7 +153,10 @@ export async function registrationPage(layout) {
       else delete details.expert_id_code;
       const result=await api('complete-registration.php',{body:details,token:proof,anonymous:true});
       clearTimeout(timer);proof=null;
-      if(result.pending_approval){area.innerHTML='<h1>Application sent</h1><p>Your email is verified. An administrator will review your expert ID code before you can sign in.</p><a class="button registration-submit" href="#login">Back to sign in</a>';return;}
+      if(result.pending_approval){
+        area.innerHTML=`<h1 tabindex="-1">Application submitted</h1><p>Your expert application is under review.</p><p>We'll email the decision and any admin note to <strong style="overflow-wrap:anywhere">${esc(details.email)}</strong>.</p><p>Check your <strong>Inbox and Spam folder</strong> for updates.</p><p>You can also sign in to check your application status.</p><a class="button registration-submit" href="#login">Back to sign in</a>`;
+        area.querySelector('h1').focus();return;
+      }
       // Creation has succeeded. A sign-in failure must never resubmit the profile.
       area.innerHTML='<h1>Account created</h1><p role="status">Opening your dashboard...</p><div class="error" role="alert"></div><button type="button" class="registration-submit" id="open-dashboard" hidden>Continue to dashboard</button>';
       const retry=area.querySelector('#open-dashboard'),status=area.querySelector('[role=status]');
@@ -174,12 +178,14 @@ export async function registrationPage(layout) {
 }
 
 export function recoveryPage(layout){
-  layout(`<h1>Forgot password?</h1><p>We will email you a reset code.</p><form id="recovery">${errorBox}${field('email','Email','','email','required autocomplete="email"')}<div id="reset-fields" hidden>${field('code','Email code','','text','inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8"')}${field('password','New password','','password','minlength="8" maxlength="25" autocomplete="new-password"')}${field('password_confirmation','Confirm password','','password','minlength="8" maxlength="25" autocomplete="new-password"')}</div><p id="recovery-status" role="status"></p><div class="actions"><button type="submit" id="recovery-submit">Send reset code</button><button type="button" id="reset-resend" class="outline" hidden>Resend code</button><a href="#login">Back to sign in</a></div></form>`);
+  layout(`<h1>Forgot password?</h1><p>We will email you a reset code.</p><form id="recovery">${errorBox}${field('email','Email','','email','required autocomplete="email"')}<div id="reset-fields" hidden>${field('code','Email code','','text','inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8"')}${passwordField('password','New password',{prefix:'reset'})}${passwordField('password_confirmation','Confirm password',{prefix:'reset'})}</div><p id="recovery-status" role="status"></p><div class="actions"><button type="submit" id="recovery-submit">Send reset code</button><button type="button" id="reset-resend" class="outline" hidden>Resend code</button><a href="#login">Back to sign in</a></div></form>`);
+  bindPasswordToggles($('#recovery'));
+  $('#reset-fields').querySelectorAll('input').forEach(input=>input.disabled=true);
   let sent=false,resendAfter=0;
   async function sendCode(){if(Date.now()<resendAfter)throw new Error('Wait a minute before requesting another code.');const result=await api('forgot-password.php',{body:{email:$('#recovery [name=email]').value},anonymous:true});resendAfter=Date.now()+60000;$('#recovery-status').textContent=result.message;}
   $('#reset-resend').onclick=async()=>{try{await sendCode();}catch(e){showError($('#recovery .error'),friendly(e));}};
   bind($('#recovery'),async values=>{
-    if(!sent){await sendCode();sent=true;$('#reset-fields').hidden=false;$('#reset-resend').hidden=false;$('#recovery [name=email]').readOnly=true;$('#reset-fields').querySelectorAll('input').forEach(i=>i.required=true);$('#recovery-submit').textContent='Reset password';return;}
+    if(!sent){await sendCode();sent=true;$('#reset-fields').hidden=false;$('#reset-resend').hidden=false;$('#recovery [name=email]').readOnly=true;$('#reset-fields').querySelectorAll('input').forEach(i=>{i.disabled=false;i.required=true;});$('#recovery-submit').textContent='Reset password';return;}
     if(values.password!==values.password_confirmation)throw new Error('The passwords do not match.');
     await api('reset-password.php',{body:values,anonymous:true});toast('Password changed. Sign in with your new password.');location.hash='login';
   });

@@ -2,9 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { classify, matchSpecies, updateCriterion, validateLocation, password, manilaDate, wireDates } from '../functions/api/core/domain.js';
-import { analyticsForUser, badgeMetrics, reportList, verifiedNeedsAttention } from '../functions/api/core/analytics.js';
+import { analyticsForUser, dashboardStats, badgeMetrics, reportList, verifiedNeedsAttention } from '../functions/api/core/analytics.js';
+import {compareApplications} from '../functions/api/core/registration.js';
 const reference = JSON.parse(readFileSync(new URL('../data/reference.json', import.meta.url)));
 const criteria = reference.criteria;
+
+test('expert applications prioritize the oldest pending review and then the latest decision',()=>{
+ const rows=[
+  {uid:'recent',status:'approved',created_at:'2026-01-01',reviewed_at:'2026-10-15'},
+  {uid:'pending-new',status:'pending',created_at:'2026-10-14'},
+  {uid:'legacy',status:'approved'},
+  {uid:'declined',status:'rejected',created_at:'2026-10-01',reviewed_at:'2026-10-16'},
+  {uid:'pending-old',status:'pending',created_at:'2026-10-02'},
+ ];
+ assert.deepEqual(rows.sort(compareApplications).map(row=>row.uid),['pending-old','pending-new','declined','recent','legacy']);
+});
 test('report date filters use Manila days, search names and species, and queue sorting is oldest first',()=>{
  const rows=[{id:1,status:'pending',guardian_name:'Local Guardian',suggested_species_name:'White Mangrove',submitted_at:'2026-10-01T16:30:00Z'},{id:2,status:'verified',final_health:'At Risk',submitted_at:'2026-10-01T00:00:00Z'},{id:3,status:'verified',final_health:'Healthy',submitted_at:'2026-09-30T00:00:00Z'}];
  assert.equal(reportList(rows,{date_from:'2026-10-02',date_to:'2026-10-02',q:'guardian'}).total,1);
@@ -99,4 +111,16 @@ test('analytics uses verified counts and only admin receives survival statistics
   assert.equal(admin.overall_survival, 80); assert.equal(admin.health.Healthy, 1); assert.equal(admin.verification.pending, 1);
   const expert = analyticsForUser({role: 'expert'}, rows, clusters, query);
   assert.equal(expert.overall_survival, undefined); assert.equal(expert.clusters[0].initial_seedlings, undefined);
+});
+
+test('pending health and healthy follow-ups never inflate verified health attention',()=>{
+ const submitted_at='2026-10-01T00:00:00Z';
+ const rows=[{status:'verified',final_health:'Healthy',needs_follow_up:true},
+ {status:'verified',final_health:'At Risk'},{status:'verified',final_health:'Stressed'},
+ ...['Healthy','Stressed','At Risk','Unknown'].map(suggested_health=>({status:'pending',suggested_health})),
+ {status:'rejected',suggested_health:'At Risk'}].map((r,i)=>({...r,id:i+1,submitted_at}));
+ const stats=dashboardStats(rows,[]),a=analyticsForUser({role:'guardian'},rows,[],{date_from:'2026-10-01',date_to:'2026-10-02'});
+ assert.equal(stats.total_reports,3);assert.equal(stats.pending_reports,4);assert.equal(stats.needs_attention,2);
+ assert.equal(a.verification.total,3);assert.equal(a.verification.pending,4);assert.equal(a.high_risk_total,2);
+ assert.deepEqual(a.health,{Healthy:1,Stressed:1,'At Risk':1});assert.equal(a.growth[0].verified_reports,3);
 });

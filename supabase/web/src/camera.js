@@ -6,7 +6,7 @@ export async function capturePhoto() {
   dialog.setAttribute('aria-label','Take a field photo');
   dialog.innerHTML='<h2>Take a photo</h2><p role="status">Opening camera… Allow camera access if asked.</p><video autoplay muted playsinline></video><div class="actions"><button type="button" class="capture" disabled>Take photo</button><button type="button" class="outline cancel">Cancel</button></div>';
   (document.querySelector('.cloud-panel')??document.body).append(dialog);dialog.showModal();
-  let stream,closed=false;
+  let stream,closed=false,capturing=false;
   let onHide;
   const stop=()=>{window.removeEventListener('pagehide',onHide);closed=true;stream?.getTracks().forEach(track=>track.stop());dialog.remove();};
   return new Promise((resolve,reject)=>{
@@ -25,11 +25,17 @@ export async function capturePhoto() {
       reject(new Error(error.name==='NotAllowedError'?'Camera permission was denied. Allow camera access in your browser or use Gallery.':error.name==='NotFoundError'?'No camera was found. Connect a camera or use Gallery.':'Could not open the camera. Close other camera apps and try again, or use Gallery.'));
     });
     dialog.querySelector('.capture').onclick=()=>{
-      if(!video.videoWidth)return;
-      const canvas=document.createElement('canvas'),scale=Math.min(1,1600/video.videoWidth);
-      canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
-      canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
-      canvas.toBlob(blob=>{stop();if(blob)resolve(new File([blob],'field-camera.jpg',{type:'image/jpeg'}));else reject(new Error('Could not capture the photo. Try again.'));},'image/jpeg',0.88);
+      if(closed||capturing||!video.videoWidth)return;
+      capturing=true;dialog.querySelector('.capture').disabled=true;
+      dialog.querySelector('p').textContent='Saving your photo…';
+      try {
+        const canvas=document.createElement('canvas'),scale=Math.min(1,1600/video.videoWidth);
+        canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
+        canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
+        // The frame is copied. Release the device even if JPEG encoding is slow.
+        stream?.getTracks().forEach(track=>track.stop());
+        canvas.toBlob(blob=>{if(closed)return;stop();if(blob)resolve(new File([blob],'field-camera.jpg',{type:'image/jpeg'}));else reject(new Error('Could not capture the photo. Try again.'));},'image/jpeg',0.88);
+      } catch { stop();reject(new Error('Could not capture the photo. Try again.')); }
     };
     onHide=cancel;window.addEventListener('pagehide',onHide,{once:true});
     dialog.addEventListener('close',()=>window.removeEventListener('pagehide',cancel),{once:true});

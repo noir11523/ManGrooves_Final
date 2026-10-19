@@ -23,6 +23,7 @@
     };
 
     const markerLayer = (map) => window.L.layerGroup().addTo(map);
+    const popupOptions = (map) => ({minWidth: 120, maxWidth: Math.max(120, Math.min(280, map.getSize().x - 60)), autoPanPadding: [12, 12], autoPanPaddingTopLeft: [12, map.getSize().x < 420 ? 84 : 12]});
     const renderClusters = (map, layer, clusters) => {
         layer.clearLayers();
         const bounds = [];
@@ -33,7 +34,7 @@
             bounds.push([lat, lng]);
             const color = healthColor(cluster.latest_health);
             const marker = window.L.circleMarker([lat, lng], {radius: 10, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95}).addTo(layer);
-            marker.bindPopup(`<strong>${escapeHtml(cluster.name)}</strong><br>${escapeHtml(cluster.cluster_code)} · ${escapeHtml(cluster.barangay_name)}<br><span style="color:${color}">${escapeHtml(cluster.latest_health)}</span>${cluster.scientific_name ? `<br><em>${escapeHtml(cluster.scientific_name)}</em>` : ''}<br><a href="${escapeHtml(clusterHref(cluster.id))}">View timeline</a>`);
+            marker.bindPopup(`<strong>${escapeHtml(cluster.name)}</strong><br>${escapeHtml(cluster.cluster_code)} · ${escapeHtml(cluster.barangay_name)}<br><span style="color:${color}">${escapeHtml(cluster.latest_health)}</span>${cluster.scientific_name ? `<br><em>${escapeHtml(cluster.scientific_name)}</em>` : ''}<br><a href="${escapeHtml(clusterHref(cluster.id))}">View timeline</a>`, popupOptions(map));
         });
         if (bounds.length === 1) map.setView(bounds[0], 17);
         else if (bounds.length > 1) map.fitBounds(bounds, {padding: [30, 30], maxZoom: 17});
@@ -64,7 +65,7 @@
         if (!map) return;
         const color = healthColor(element.dataset.health);
         window.L.circle([lat, lng], {radius: 75, color, fillColor: color, fillOpacity: 0.2}).addTo(map);
-        window.L.circleMarker([lat, lng], {radius: 10, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1}).addTo(map).bindPopup(`<strong>${escapeHtml(element.dataset.name)}</strong><br>${escapeHtml(element.dataset.health)}`).openPopup();
+        window.L.circleMarker([lat, lng], {radius: 10, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1}).addTo(map).bindPopup(`<strong>${escapeHtml(element.dataset.name)}</strong><br>${escapeHtml(element.dataset.health)}`, popupOptions(map)).openPopup();
     });
 
     const explore = document.querySelector('[data-explore-map]');

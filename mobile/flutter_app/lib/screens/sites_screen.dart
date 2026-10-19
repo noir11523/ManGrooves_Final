@@ -4,6 +4,8 @@ import 'package:latlong2/latlong.dart';
 import '../core/api_client.dart';
 import '../core/report_location.dart';
 import '../shared/list_filters.dart';
+import '../shared/catalog_widgets.dart';
+import '../shared/content_width.dart';
 import 'location_picker_screen.dart';
 
 class SitesScreen extends StatefulWidget {
@@ -66,7 +68,7 @@ class _SitesScreenState extends State<SitesScreen> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(approve ? 'Share this site?' : 'Delete this site?'),
+        title: Text(approve ? 'Add to site list?' : 'Delete this site?'),
         content: Text(
           approve
               ? 'Add this site to everyone’s available sites in this barangay?'
@@ -79,7 +81,12 @@ class _SitesScreenState extends State<SitesScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(approve ? 'Approve' : 'Delete'),
+            style: approve
+                ? null
+                : FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
+            child: Text(approve ? 'Add to site list' : 'Delete'),
           ),
         ],
       ),
@@ -157,113 +164,154 @@ class _SitesScreenState extends State<SitesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Species and Sites'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: Row(
+        bottom: CatalogTabs(
+          selected: 'sites',
+          textScaler: MediaQuery.textScalerOf(context),
+          onSelected: (_) => Navigator.pop(context),
+        ),
+      ),
+      body: ContentWidth(
+        maxWidth: 960,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            physics: const AlwaysScrollableScrollPhysics(),
             children: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Species'),
+              ListFilters(
+                applyLabel: 'Filter',
+                clearLabel: 'Reset',
+                hint: 'Site, location, or barangay',
+                filterLabel: 'Status',
+                options: const {
+                  '': 'All statuses',
+                  '1': 'Active',
+                  '0': 'Not active',
+                },
+                onApply: (q, status) => setState(() {
+                  _query = q;
+                  _status = status;
+                }),
               ),
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Sites',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _loading ? null : () => _edit(),
+                icon: const Icon(Icons.add_location_alt_outlined),
+                label: const Text('Add site'),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text('${sites.length} results'),
+              ),
+              if (_loading) const LinearProgressIndicator(),
+              if (_error.isNotEmpty)
+                TextButton(
+                  onPressed: _load,
+                  child: Text('$_error Tap to retry.'),
                 ),
-              ),
+              if (!_loading && sites.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Text('No sites match your filters.'),
+                ),
+              ...sites.map((site) => _siteCard(context, site)),
             ],
           ),
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+    );
+  }
+
+  Widget _siteCard(BuildContext context, Map<String, dynamic> site) {
+    final pending = site['location_pending'] == true;
+    final location = '${site['sitio_name'] ?? ''}'.trim();
+    return Card(
+      key: ValueKey('site-${site['id']}'),
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ListFilters(
-              hint: 'Site, location, or barangay',
-              filterLabel: 'Status',
-              options: const {
-                '': 'All statuses',
-                '1': 'Active',
-                '0': 'Archived',
-              },
-              onApply: (q, status) => setState(() {
-                _query = q;
-                _status = status;
-              }),
+            Text(
+              '${site['name']}',
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold, height: 1.4),
             ),
             const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: _loading ? null : () => _edit(),
-              icon: const Icon(Icons.add_location_alt_outlined),
-              label: const Text('Add site'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                CatalogStatus(
+                  pending
+                      ? 'Needs map location'
+                      : site['active'] == 0
+                      ? 'Archived'
+                      : 'Active',
+                  attention: pending,
+                ),
+                CatalogStatus(
+                  site['visibility'] == 'personal'
+                      ? 'Personal site · Not published'
+                      : 'Shared site',
+                ),
+              ],
             ),
-            if (_loading) const LinearProgressIndicator(),
-            if (_error.isNotEmpty)
-              TextButton(
-                onPressed: _load,
-                child: Text('$_error Tap to retry.'),
-              ),
-            if (!_loading && sites.isEmpty)
+            const SizedBox(height: 16),
+            if (location.isNotEmpty && location != '${site['name']}'.trim())
+              CatalogDetail('Location', location),
+            CatalogDetail('Barangay', '${site['barangay_name'] ?? ''}'),
+            CatalogDetail(
+              'Added by',
+              '${site['created_by_name'] ?? 'Administrator'}',
+            ),
+            if (pending)
               const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('No sites match your filters.'),
-              ),
-            ...sites.map(
-              (site) => Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${site['name']}',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text('${site['sitio_name'] ?? site['name']}'),
-                      Text(
-                        'Added by ${site['created_by_name'] ?? 'Administrator'}',
-                      ),
-                      Text(
-                        site['visibility'] == 'personal'
-                            ? 'Personal site · Awaiting approval'
-                            : 'Shared site',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        '${site['barangay_name']} · ${site['active'] == 0 ? 'Archived' : 'Active'}',
-                      ),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          if (site['visibility'] == 'personal')
-                            FilledButton(
-                              onPressed: () => _action(site, 'approve'),
-                              child: const Text('Approve for everyone'),
-                            ),
-                          TextButton(
-                            onPressed: () => _action(site, 'delete'),
-                            child: const Text('Delete'),
-                          ),
-                          TextButton(
-                            onPressed: () => _edit(site),
-                            child: const Text('Edit'),
-                          ),
-                          TextButton(
-                            onPressed: () => _archive(site),
-                            child: Text(
-                              site['active'] == 0 ? 'Restore' : 'Archive',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'Set a map location to make this site available for reports.',
                 ),
               ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Divider(),
+            ),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                if (pending)
+                  FilledButton.icon(
+                    onPressed: () => _edit(site),
+                    icon: const Icon(Icons.pin_drop_outlined, size: 20),
+                    label: const Text('Set map location'),
+                  )
+                else
+                  OutlinedButton.icon(
+                    onPressed: () => _edit(site),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Edit'),
+                  ),
+                if (site['visibility'] == 'personal')
+                  FilledButton(
+                    onPressed: () => _action(site, 'approve'),
+                    child: const Text('Add to site list'),
+                  ),
+                if (!pending)
+                  OutlinedButton(
+                    onPressed: () => _archive(site),
+                    child: Text(site['active'] == 0 ? 'Restore' : 'Archive'),
+                  ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  onPressed: () => _action(site, 'delete'),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Delete'),
+                ),
+              ],
             ),
           ],
         ),
@@ -298,7 +346,9 @@ class _SiteEditorState extends State<_SiteEditor> {
     );
     _radius = TextEditingController(text: '${site?['radius_meters'] ?? 100}');
     _barangay = site?['barangay_id'] as int?;
-    if (site != null) {
+    if (site != null &&
+        site['center_lat'] != null &&
+        site['center_lng'] != null) {
       _pin = ReportLocation.manual(
         latitude: (site['center_lat'] as num).toDouble(),
         longitude: (site['center_lng'] as num).toDouble(),
@@ -369,7 +419,9 @@ class _SiteEditorState extends State<_SiteEditor> {
           'center_lat': _pin!.latitude,
           'center_lng': _pin!.longitude,
           'radius_meters': _radius.text,
-          'active': widget.site?['active'] ?? 1,
+          'active': widget.site?['location_pending'] == true
+              ? 1
+              : widget.site?['active'] ?? 1,
         },
       );
       if (mounted) Navigator.pop(context, true);

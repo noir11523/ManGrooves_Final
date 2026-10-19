@@ -302,8 +302,11 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
         if (!mounted) return;
         if (result['pending_approval'] == true) {
           await _message(
-            'Application sent',
-            'Your email is verified. An administrator will review your expert ID code before you can sign in.',
+            'Application submitted',
+            'Your expert application is under review.\n\n'
+                "We'll email the decision and any admin note to $_sentEmail.\n\n"
+                'Check your Inbox and Spam folder for updates.\n\n'
+                'You can also sign in to check your application status.',
           );
           if (mounted) await _exit();
         } else {
@@ -420,6 +423,7 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
   Future<void> _message(String title, String body) => showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
+      scrollable: true,
       title: Text(title),
       content: Text(body),
       actions: [

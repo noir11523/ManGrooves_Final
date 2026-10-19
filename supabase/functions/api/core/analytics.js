@@ -2,21 +2,24 @@ import { AppError, paginate, manilaDate } from './domain.js';
 
 export const newest = (a, b) => String(b.submitted_at ?? b.created_at).localeCompare(String(a.submitted_at ?? a.created_at)) || b.id - a.id;
 export const needsReview = r => r.status === 'pending';
-export const reportLabel = r => r.report_number ? `Report #${r.report_number}` : (r.report_code?.startsWith('Report #') ? r.report_code : `Report #${r.report_id ?? r.id}`);
+export const reportLabel = r => r.display_report_number || r.report_number ? `Report #${r.display_report_number || r.report_number}` : (r.report_code?.startsWith('Report #') ? r.report_code : `Report #${r.report_id ?? r.id}`);
 export const displayHealth = r => r.final_health ?? r.suggested_health ?? 'Unknown';
-export const verifiedNeedsAttention = r => r.status === 'verified' && (['Stressed', 'At Risk', 'Unknown'].includes(displayHealth(r)) || (!!r.needs_follow_up && !r.active_child_id));
-export function reportList(rows, query = {}) {
+export const verifiedNeedsAttention = r => r.status === 'verified' && ['Stressed', 'At Risk', 'Unknown'].includes(r.final_health ?? 'Unknown');
+export function filterReports(rows, query = {}) {
   const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0,10) === value;
   for (const key of ['date_from','date_to']) if (query[key] && !validDate(query[key])) throw new AppError('Choose valid dates.');
   if (query.date_from && query.date_to && query.date_from > query.date_to) throw new AppError('From must be on or before To.');
-  return paginate(rows.filter(r => (!query.status || r.status === query.status)
+  return rows.filter(r => (!query.status || r.status === query.status)
     && (!query.health || displayHealth(r) === query.health)
     && (!query.cluster_id || r.cluster_id === Number(query.cluster_id))
     && (query.needs_attention !== '1' || verifiedNeedsAttention(r))
     && (query.verified_attention !== '1' || verifiedNeedsAttention(r))
     && (!query.date_from || manilaDate(r.submitted_at) >= query.date_from)
     && (!query.date_to || manilaDate(r.submitted_at) <= query.date_to)
-    && (!String(query.q ?? '').trim() || `${reportLabel(r)} ${r.report_code ?? ''} ${r.guardian_name ?? ''} ${r.cluster_name ?? ''} ${r.sitio_name ?? ''} ${r.barangay_name ?? ''} ${r.species_local_name ?? ''} ${r.species_common_name ?? ''} ${r.final_species_name ?? r.suggested_species_name ?? ''}`.toLowerCase().includes(String(query.q).trim().toLowerCase())))
+    && (!String(query.q ?? '').trim() || `${reportLabel(r)} ${r.display_report_number?'':r.report_code ?? ''} ${r.guardian_name ?? ''} ${r.cluster_name ?? ''} ${r.sitio_name ?? ''} ${r.barangay_name ?? ''} ${r.species_local_name ?? ''} ${r.species_common_name ?? ''} ${r.final_species_name ?? r.suggested_species_name ?? ''}`.toLowerCase().includes(String(query.q).trim().toLowerCase())));
+}
+export function reportList(rows, query = {}) {
+  return paginate(filterReports(rows, query)
     .sort(query.sort === 'oldest' ? (a,b)=>-newest(a,b) : newest).map(r => ({id: r.id, report_code: reportLabel(r), cluster_id: r.cluster_id,
       guardian_name: r.guardian_name,
       cluster_name: r.cluster_name, barangay_name: r.barangay_name, sitio_name: r.sitio_name,
@@ -71,7 +74,7 @@ export function analyticsForUser(user, rows, clusters, query = {}) {
     }
     month.survival_rate = denominator ? Math.round(numerator / denominator * 1000) / 10 : null;
   }
-  const high_risk = filtered.filter(verifiedNeedsAttention).map(r => ({id: r.id, report_code: r.report_code,
+  const high_risk = filtered.filter(verifiedNeedsAttention).map(r => ({id: r.id, report_code: reportLabel(r),
     cluster_name: r.cluster_name, final_health: r.final_health, barangay_name: r.barangay_name}));
   return {scope: user.role === 'guardian' ? 'personal' : 'all_users', capabilities: {can_view_survival: canSurvive, can_export_pdf: canSurvive},
     filters: {date_from: from, date_to: to, barangay_id: query.barangay_id ?? null, species_id: query.species_id ?? null},

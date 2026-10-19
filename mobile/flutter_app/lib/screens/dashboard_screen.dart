@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../shared/follow_up_card.dart';
 import 'report_detail_screen.dart';
 import 'reports_screen.dart';
 import 'cluster_health_map.dart';
@@ -129,10 +130,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               physics: const NeverScrollableScrollPhysics(),
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              mainAxisExtent: 155,
+              mainAxisExtent: 185,
               children: [
                 _StatCard(
-                  'Verified reports',
+                  'Total Reports Verified',
                   stats['total_reports'],
                   Icons.assignment_outlined,
                   () => _openReports(status: 'verified'),
@@ -182,28 +183,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ...reminders.map(
                 (item) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Card(
-                    child: ListTile(
-                      leading: Icon(
-                        Icons.assignment_return_outlined,
-                        color: Colors.orange.shade800,
+                  child: FollowUpCard(
+                    report: item,
+                    onFollowUp: widget.onStartFollowUp == null
+                        ? null
+                        : () => widget.onStartFollowUp!(item),
+                    onView: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => ReportDetailScreen(
+                          api: widget.api,
+                          reportId: item['id'] as int,
+                        ),
                       ),
-                      title: Text(
-                        item['cluster_name']?.toString() ??
-                            item['report_code'].toString(),
-                      ),
-                      subtitle: Text(
-                        (item['follow_up_note']?.toString().trim().isNotEmpty ??
-                                false)
-                            ? item['follow_up_note'].toString()
-                            : 'A follow-up visit was requested.',
-                      ),
-                      trailing: widget.onStartFollowUp == null
-                          ? null
-                          : FilledButton.tonal(
-                              onPressed: () => widget.onStartFollowUp!(item),
-                              child: const Text('Follow up'),
-                            ),
                     ),
                   ),
                 ),
@@ -284,7 +276,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     color: switch (label) {
-      'Verified' => const Color(0xFFE6F0DD),
+      'Total Reports Verified' => const Color(0xFFE6F0DD),
       'Pending' => const Color(0xFFFFF3D2),
       'Rejected' || 'Needs attention' => const Color(0xFFF9E6DF),
       'Clusters' => const Color(0xFFDDEDE8),
@@ -308,7 +300,7 @@ class _StatCard extends StatelessWidget {
               style: Theme.of(context).textTheme.headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w800),
             ),
-            Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text(label, maxLines: 3, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),

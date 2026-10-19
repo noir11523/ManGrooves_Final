@@ -6,7 +6,9 @@ Object.assign(globalThis,{Buffer});
 Deno.test('Deno HTTP runtime: routing, CORS, authentication, PDF and raster uploads',async()=>{
   Deno.env.set('WEB_ORIGINS','https://example.test');
   const user={id:1,uid:'admin',role:'system_admin',status:'active',email:'admin@example.test'};
-  const records={users:[user],barangays:[{id:1,name:'Test'}]};
+  // Model an initialized deployment; numbering migrations are covered by the
+  // PostgreSQL integration suite, not this read-only runtime fixture.
+  const records={users:[user],barangays:[{id:1,name:'Test'}],meta:[{id:'staff_report_sequence',last_number:0}]};
   const db={collection(name){const rows=records[name]??[];const query={where(){return query;},limit(){return query;},startAfter(){return query;},
     async get(){return {docs:rows.map(r=>({data:()=>r})),size:rows.length};},
     doc(id){const value=rows.find(r=>r.uid===id||String(r.id)===id);return {async get(){return {exists:!!value,data:()=>value};}};}};return query;}};
@@ -21,7 +23,9 @@ Deno.test('Deno HTTP runtime: routing, CORS, authentication, PDF and raster uplo
     response=await fetch(`${base}/me.php`,{headers:{Authorization:'Bearer valid',Origin:'https://example.test'}});body=await response.json();
     if(body.user.id!==1||response.headers.get('access-control-allow-origin')!=='https://example.test')throw new Error('Session/CORS failed');
     response=await fetch(`${base}/export-analytics.php`,{headers:{Authorization:'Bearer valid'}});
-    if(!Buffer.from(await response.arrayBuffer()).subarray(0,4).equals(Buffer.from('%PDF')))throw new Error('PDF failed');
+    const pdf=Buffer.from(await response.arrayBuffer());
+    if(response.status!==200||response.headers.get('content-type')!=='application/pdf'||!pdf.subarray(0,4).equals(Buffer.from('%PDF')))
+      throw new Error(`PDF export failed (HTTP ${response.status}, ${response.headers.get('content-type')})`);
     for(const ext of ['jpg','png','webp']) {const image=await Deno.readFile(new URL(`fixtures/photo.${ext}`,import.meta.url));if(cleanImage(Buffer.from(image)).extension!==ext)throw new Error('Image failed');}
   } finally {await new Promise(resolve=>server.close(resolve));}
 });

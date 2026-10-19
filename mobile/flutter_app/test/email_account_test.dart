@@ -250,7 +250,21 @@ void main() {
       );
       await tap(tester, find.text('Submit expert application'));
       expect(api.completed?['expert_id_code'], 'WORK-2026/001');
-      expect(find.text('Application sent'), findsOneWidget);
+      expect(find.text('Application submitted'), findsOneWidget);
+      expect(
+        find.textContaining(
+          "We'll email the decision and any admin note to guardian@example.test.",
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Check your Inbox and Spam folder for updates.'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('sign in to check your application status.'),
+        findsOneWidget,
+      );
       expect(api.logins, 0);
       await tap(
         tester,
@@ -339,6 +353,37 @@ void main() {
     await tester.enterText(field('Email code'), '000000');
     await tester.enterText(field('New password'), 'newpassword123');
     await tester.enterText(field('Confirm password'), 'newpassword123');
+    expect(tester.widget<TextField>(field('New password')).obscureText, isTrue);
+    expect(
+      tester.widget<TextField>(field('Confirm password')).obscureText,
+      isTrue,
+    );
+    await tap(tester, find.byTooltip('Show new password'));
+    expect(
+      tester.widget<TextField>(field('New password')).obscureText,
+      isFalse,
+    );
+    expect(
+      tester.widget<TextField>(field('Confirm password')).obscureText,
+      isTrue,
+    );
+    await tap(tester, find.byTooltip('Show confirm password'));
+    expect(
+      tester.widget<TextField>(field('Confirm password')).obscureText,
+      isFalse,
+    );
+    await tap(tester, find.byTooltip('Hide new password'));
+    await tap(tester, find.byTooltip('Hide confirm password'));
+    expect(tester.widget<TextField>(field('New password')).obscureText, isTrue);
+    expect(
+      tester.widget<TextField>(field('Confirm password')).obscureText,
+      isTrue,
+    );
+    expect(
+      tester.widget<TextField>(field('New password')).controller!.text,
+      'newpassword123',
+    );
+    expect(api.calls, ['forgot-password.php']);
     await tap(tester, find.widgetWithText(FilledButton, 'Reset password'));
     expect(find.textContaining('invalid or expired'), findsOneWidget);
     await tester.enterText(field('Email code'), '123456');

@@ -72,7 +72,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final titles = _guardian
-        ? ['Dashboard', 'Reports', 'Submit Report', 'Badges', 'Account']
+        ? ['Dashboard', 'My reports', 'Submit Report', 'My badges', 'Account']
         : ['Dashboard', 'Reports', 'Review reports', 'Analytics', 'Account'];
     final pages = _guardian
         ? <Widget>[
@@ -310,7 +310,7 @@ class _HomeShellState extends State<HomeShell> {
                   Icons.add_a_photo,
                   semanticLabel: 'Submit report',
                 ),
-                label: '',
+                label: 'Submit',
                 tooltip: 'Submit report',
               ),
             if (_guardian)

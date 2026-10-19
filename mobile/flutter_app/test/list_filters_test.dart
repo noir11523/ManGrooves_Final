@@ -81,6 +81,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(api.lastStatus, 'rejected');
       expect(api.lastAttention, isFalse);
+      for (final label in ['Verified', 'Pending']) {
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        expect(api.lastStatus, label.toLowerCase());
+        expect(api.lastAttention, isFalse);
+        expect(api.calls.last['page'], 1);
+      }
       expect(tester.takeException(), isNull);
     },
   );

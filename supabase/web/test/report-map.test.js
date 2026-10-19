@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {fileURLToPath} from 'node:url';
 import {JSDOM} from 'jsdom';
+import {readFile} from 'node:fs/promises';
+import {phpRoute} from '../../../vercel/src/routes.js';
 
 // Real Leaflet controls, markers and camera; only API responses are mocked.
 const dom=new JSDOM('<main id="page"></main>',{url:'https://mangrooves.example/report-map.php'});
@@ -15,12 +17,12 @@ const L=(await import('leaflet')).default;
 const makeMap=L.map;
 L.map=(...args)=>globalThis.testCanvas=makeMap(...args);
 globalThis.testLeaflet=L;
-const bundle=await build({stdin:{contents:'export {reportMapPage} from "./report-map.js";export {mapPoint} from "./ui.js";',resolveDir:fileURLToPath(new URL('../src/',import.meta.url))},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'adapters',setup(b){
+const bundle=await build({stdin:{contents:'export {reportMapPage} from "./report-map.js";export {mapPoint,map} from "./ui.js";',resolveDir:fileURLToPath(new URL('../src/',import.meta.url))},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'adapters',setup(b){
   b.onResolve({filter:/client\.js$/},()=>({path:'client',namespace:'stub'}));
   b.onResolve({filter:/^leaflet$/},()=>({path:'leaflet',namespace:'stub'}));
   b.onLoad({filter:/.*/,namespace:'stub'},({path})=>({contents:path==='client'?'export const api=(...args)=>globalThis.testApi(...args);export const apiUrl=p=>p;export const friendly=e=>e.message;':'export default globalThis.testLeaflet;'}));
 }}]});
-const {reportMapPage,mapPoint}=await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
+const {reportMapPage,mapPoint,map}=await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const root=document.querySelector('#page'),$=s=>root.querySelector(s);
 const tick=()=>new Promise(resolve=>setTimeout(resolve,10));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
@@ -109,4 +111,41 @@ test('missing and invalid coordinates cannot create a misleading zero-coordinate
   for(const latitude of [null,undefined,'',false,'bad',Infinity,90])assert.equal(mapPoint({latitude,longitude:123}),null);
   assert.deepEqual(mapPoint({latitude:'0',longitude:'0'}),[0,0]);
   assert.deepEqual(mapPoint({center_lat:10.2,center_lng:123.8}),[10.2,123.8]);
+});
+
+const site={id:7,name:'MJ Angel Store Pardo, Natalio Bacalso Avenue, Poblacion Pardo, Cebu City, Central Visayas, Philippines',cluster_code:'MGC-1713',barangay_name:'Inayawan',latitude:10.28,longitude:123.88,latest_health:'Healthy',scientific_name:'Avicennia rumphiana'};
+test('cluster pins open their details on click and link to the selected health or growth timeline',()=>{
+  for(const timelineMode of ['health','growth']){
+    root.innerHTML='<div id="report-map"></div>';
+    const canvas=map($('#report-map'),[site,{...site,id:8,name:'Another site',latitude:10.29}],{timelineMode});
+    try{
+      assert.equal($('.leaflet-popup'),null);
+      markers()[0].fire('click');
+      const popup=$('.leaflet-popup');assert.ok(popup);
+      for(const value of [site.name,site.cluster_code,site.barangay_name,site.latest_health,site.scientific_name])assert.ok(popup.textContent.includes(value));
+      assert.equal(popup.querySelector('em').textContent,site.scientific_name);
+      assert.equal(phpRoute(popup.querySelector('a').getAttribute('href')),`/cluster.php?tab=${timelineMode}&id=7`);
+      markers()[1].fire('click');assert.ok($('.leaflet-popup').textContent.includes('Another site'));
+      assert.match($('.leaflet-popup a').getAttribute('href'),/#cluster\/8/);
+    }finally{canvas.remove();}
+  }
+});
+
+test('PHP dashboard pin popup shows the site summary and a working timeline URL',async()=>{
+  root.innerHTML='<div id="report-map" data-cluster-map data-clusters-url="/api/clusters.php"></div>';
+  window.L=L;
+  const previousFetch=globalThis.fetch;
+  globalThis.fetch=async()=>({ok:true,json:async()=>({ok:true,clusters:[{...site,name:site.name+' <script>alert(1)</script>'}]})});
+  try{
+    new Function(await readFile(new URL('../../../public/assets/js/maps.js',import.meta.url),'utf8'))();
+    await tick();
+    markers()[0].fire('click');
+    const popup=$('.leaflet-popup');assert.ok(popup);
+    assert.ok(popup.textContent.includes(site.name));assert.ok(popup.textContent.includes(site.cluster_code));
+    assert.ok(popup.textContent.includes('Healthy'));assert.equal(popup.querySelector('em').textContent,site.scientific_name);
+    assert.equal(popup.querySelector('script'),null);
+    const link=new URL(popup.querySelector('a').href);
+    assert.equal(link.pathname,'/cluster.php');assert.equal(link.searchParams.get('id'),'7');
+    assert.equal(popup.querySelector('a').textContent,'View timeline');
+  }finally{$('#report-map')._mangroovesMap?.remove();globalThis.fetch=previousFetch;}
 });

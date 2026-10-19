@@ -1,3 +1,4 @@
+import '../shared/species_names.dart';
 import 'follow_up_screen.dart';
 
 import 'package:flutter/material.dart';
@@ -40,6 +41,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
   bool _loading = false;
   String _query = '', _health = '';
   String _dateFrom = '', _dateTo = '';
+
+  Future<void> _openReport(int id) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => ReportDetailScreen(api: widget.api, reportId: id),
+      ),
+    );
+    if (mounted) await _load();
+  }
 
   @override
   void didUpdateWidget(covariant ReportsScreen oldWidget) {
@@ -120,6 +131,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   child: ChoiceChip(
                     label: Text(entry.value),
                     selected: entry.key == (_attention ? 'attention' : _status),
+                    selectedColor: const Color(0xFF245B2B),
+                    backgroundColor: Colors.white,
+                    checkmarkColor: Colors.white,
+                    labelStyle: TextStyle(
+                      color: entry.key == (_attention ? 'attention' : _status)
+                          ? Colors.white
+                          : const Color(0xFF26372B),
+                      fontWeight: FontWeight.w700,
+                    ),
+                    side: const BorderSide(color: Color(0xFF758871)),
                     onSelected: _loading
                         ? null
                         : (_) {
@@ -210,15 +231,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       horizontal: 16,
                       vertical: 8,
                     ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReportDetailScreen(
-                          api: widget.api,
-                          reportId: report['id'] as int,
-                        ),
-                      ),
-                    ),
+                    onTap: () => _openReport(report['id'] as int),
                     title: Wrap(
                       spacing: 8,
                       runSpacing: 6,
@@ -232,23 +245,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         if (report['status'] == 'verified' &&
                             (report['needs_attention'] == true ||
                                 report['needs_attention'] == 1))
-                          const Text(
+                          const _ReportTag(
                             'Needs attention',
-                            style: TextStyle(
-                              color: Colors.deepOrange,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            foreground: Color(0xFF8A321C),
+                            background: Color(0xFFFFE8DC),
                           ),
                         if (report['needs_follow_up'] == true)
-                          Text(
+                          _ReportTag(
                             report['active_child_id'] != null
                                 ? 'Follow-up submitted'
                                 : 'Follow-up needed',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            foreground: const Color(0xFF1D4E77),
+                            background: const Color(0xFFE7F1FA),
                           ),
                       ],
                     ),
@@ -269,26 +277,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           Text(
                             '${report['display_health'] ?? 'Unknown'} · ${_formatDate(report['submitted_at'])}',
                           ),
-                          Text(
-                            speciesNames(report).isEmpty
-                                ? 'Species not identified'
-                                : speciesNames(report),
-                          ),
+                          SpeciesNames(report),
                           if (!widget.showSubmitter &&
                               report['can_follow_up'] == true)
                             Wrap(
                               spacing: 8,
                               children: [
                                 TextButton(
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => ReportDetailScreen(
-                                        api: widget.api,
-                                        reportId: report['id'] as int,
-                                      ),
-                                    ),
-                                  ),
+                                  onPressed: () =>
+                                      _openReport(report['id'] as int),
                                   child: const Text('View'),
                                 ),
                                 OutlinedButton(
@@ -358,22 +355,41 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (report['status']) {
-      'verified' => Colors.green,
-      'rejected' => Colors.red,
-      _ => Colors.orange,
+    final (foreground, background) = switch (report['status']) {
+      'verified' => (const Color(0xFF245B2B), const Color(0xFFE2F0DF)),
+      'rejected' => (const Color(0xFF8F2424), const Color(0xFFFCE5E5)),
+      _ => (const Color(0xFF6B4700), const Color(0xFFFFF1C2)),
     };
+    return _ReportTag(
+      reportStatusLabel(report),
+      foreground: foreground,
+      background: background,
+    );
+  }
+}
+
+class _ReportTag extends StatelessWidget {
+  const _ReportTag(
+    this.label, {
+    required this.foreground,
+    required this.background,
+  });
+  final String label;
+  final Color foreground, background;
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: .12),
+        color: background,
+        border: Border.all(color: foreground.withValues(alpha: .25)),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        reportStatusLabel(report),
+        label,
         style: TextStyle(
-          color: color.shade700,
-          fontSize: 12,
+          color: foreground,
+          fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
       ),

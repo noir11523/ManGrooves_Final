@@ -1,4 +1,6 @@
+import {resolveAnimalChoices} from './observation-selection.js';
 import {traitLabels,traitHeadings,traitImage} from './trait-labels.js';
+import {validateReportPhotos} from './report-photos.js';
 import {capturePhoto} from './camera.js';
 import L from 'leaflet';
 import { api, apiUrl, friendly } from './client.js';
@@ -20,7 +22,7 @@ export async function reportWizard(node, query, user = null) {
   const closeupStorage=new ReportDraftStore(scope==null?null:`${apiUrl('report-form.php')}:${scope}:closeup`);
   const extraStorage=Array.from({length:4},(_,i)=>new ReportDraftStore(scope==null?null:`${apiUrl('report-form.php')}:${scope}:extra${i}`));
   const clearPhotos=async()=>{await closeupStorage.clear();await Promise.all(extraStorage.map(s=>s.clear()));};
-  let extraUrls=[];
+  let extraUrls=[],photoWork=Promise.resolve();
   let draftMessage = '', saveWarning = '';
   let closeupUrl=null;
   if (scope != null || !draft.dirty || draft.owner !== scope) {
@@ -107,7 +109,7 @@ export async function reportWizard(node, query, user = null) {
       catch { draft.step = 2; draftMessage = 'Draft restored. Check the checklist before reviewing your report.'; }
     }
     if (stopped || !node.isConnected) return;
-    node.innerHTML = `<div class="page-head"><div><p class="eyebrow">Mangrove report</p><h1>Submit Report</h1></div><a class="button outline" href="#reports">Close</a></div><div class="steps" aria-label="Report steps">${['Details', 'Location', 'Observations', 'Review'].map((label, i) => `<span class="${draft.step === i ? 'active' : ''}" ${draft.step === i ? 'aria-current="step"' : ''}>${i + 1}. ${label}</span>`).join('')}</div><section class="card"><form id="report-form">${errorBox}<div id="step-body"></div><div class="actions"><button type="button" id="previous" class="outline" ${draft.step ? '' : 'hidden'}>${draft.step ? '← Back' : 'Cancel'}</button><button id="next" type="submit">${draft.step === 3 ? 'Submit Report' : 'Continue →'}</button></div></form></section>`;
+    node.innerHTML = `<div class="page-head"><div><p class="eyebrow">Mangrove report</p><h1>Submit Report</h1></div><a class="button outline" href="#reports">Close</a></div><div class="steps" aria-label="Report steps">${['Details', 'Location', 'Observations', 'Review'].map((label, i) => `<span class="${draft.step === i ? 'active' : ''}" ${draft.step === i ? 'aria-current="step"' : ''}>${i + 1}. ${label}</span>`).join('')}</div><section class="card report-task" data-step="${draft.step}"><form id="report-form">${errorBox}<div id="step-body"></div><div class="actions form-actions"><button type="button" id="previous" class="outline" ${draft.step ? '' : 'hidden'}>${draft.step ? '← Back' : 'Cancel'}</button><button id="next" type="submit">${draft.step === 3 ? 'Submit Report' : 'Continue →'}</button></div></form></section>`;
     node.querySelector('.steps').insertAdjacentHTML('afterend', '<p id="draft-notice" class="notice" role="status" hidden></p>');
     status();
     const cancelButton=node.querySelector('.page-head a');let handlingForm=false,cancelling=false;
@@ -134,7 +136,9 @@ export async function reportWizard(node, query, user = null) {
       const error = form.querySelector('.error'); error.textContent = ''; save(form);
       button.disabled = true;handlingForm=true;
       try {
+        await photoWork;
         if (draft.step === 0 && draft.fields.count_unknown==='1' && !draft.fields.cluster_id) throw new Error('Choose a saved site when you are unable to count the mangroves.');
+        if (draft.step === 0 || draft.step === 3) await validateReportPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos]);
         if (draft.step === 0 && (!draft.photo || !draft.closeupPhoto)) throw new Error('Add a site overview and a close-up photo from this visit.');
         if (draft.step === 0 && $('#followup').checked && !draft.fields.parent_report_id) throw new Error('Choose the previous report for this follow-up.');
         if (draft.step === 1 && !['gps', 'manual'].includes(draft.fields.location_source)) throw new Error('Search for a place or tap the map to set your pin.');
@@ -162,38 +166,41 @@ export async function reportWizard(node, query, user = null) {
     $('#step-body').innerHTML = `<h2>What did you observe?</h2><div class="field report-photo-picker"><span>Site overview</span><small>Step back to show the whole mangrove and surrounding site.</small><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden><input type="file" id="camera-photo" accept="image/*" capture="environment" hidden><div class="actions"><button type="button" class="outline" id="take-photo">Camera</button><button type="button" class="outline" id="choose-photo">Gallery</button></div><small>JPG, PNG, or WebP · Up to 5 MB</small></div><img id="photo-preview" class="preview-photo" alt="Your selected photo" ${draft.photo ? '' : 'hidden'}>
       <div class="row">${select('cluster_id', 'Site', [['', 'New site'], ...data.clusters.map(c => [c.id, c.name])], draft.fields.cluster_id, draft.fields.parent_report_id?'disabled':'')}${field('sitio_name', 'Location name', draft.fields.sitio_name, 'text', 'required maxlength="120" placeholder="Sitio or nearby landmark"')}</div>${draft.fields.parent_report_id?'<p class="muted">This follow-up stays linked to its requested site.</p>':''}
       <input type="checkbox" id="followup" name="followup" hidden ${draft.fields.parent_report_id ? 'checked' : ''}><div id="followup-options" ${draft.fields.parent_report_id ? '' : 'hidden'}></div>
-      <div class="row" style="margin-top:20px">${field('observed_alive_count', 'Living mangroves counted', draft.fields.observed_alive_count, 'number', 'required min="0" max="1000000" step="1"')}</div>
+      <div class="row count-row">${field('observed_alive_count', 'Living mangroves counted', draft.fields.observed_alive_count, 'number', 'required min="0" max="1000000" step="1"')}</div>
       <label class="field"><span>Notes (optional)</span><textarea name="guardian_remarks" maxlength="5000">${esc(draft.fields.guardian_remarks)}</textarea></label>`;
     $('#photo-preview').insertAdjacentHTML('afterend','<div class="field report-photo-picker"><span>Close-up</span><small>Show the leaves, roots, or damage clearly.</small><input type="file" name="closeup_photo" accept="image/jpeg,image/png,image/webp" hidden><div class="actions"><button type="button" class="outline" id="closeup-camera">Camera</button><button type="button" class="outline" id="closeup-gallery">Gallery</button></div><img id="closeup-preview" class="preview-photo" alt="Your close-up photo" hidden></div>');
     const photoGrid=document.createElement('div');photoGrid.className='report-photo-grid';
     const overview=node.querySelector('.report-photo-picker'),closeup=$('#closeup-preview').closest('.report-photo-picker');
     overview.before(photoGrid);photoGrid.append(overview,closeup);overview.append($('#photo-preview'));
-    photoGrid.insertAdjacentHTML('afterend', '<section class="extra-photo-picker"><h3>More views (optional)</h3><p>Up to 4 extra photos · 12 MB for all photos</p><div id="extra-previews" class="review-photos"></div><input id="extra-photos" name="extra_photos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden><div class="actions"><button type="button" class="outline" id="add-photos">+ Add photos</button><button type="button" class="outline" id="extra-camera">Camera</button></div></section>');
+    photoGrid.insertAdjacentHTML('afterend', '<div class="extra-photo-picker" aria-label="Extra photos (optional)"><div id="extra-previews"></div><button type="button" class="outline add-photo" id="add-photos" aria-label="Add another photo"><span aria-hidden="true">＋</span> Photo</button><small id="extra-count"></small><input id="extra-photos" name="extra_photos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></div>');
     const showPhoto = () => {
       extraUrls.forEach(URL.revokeObjectURL);extraUrls=draft.extraPhotos.map(p=>URL.createObjectURL(p));
-      $('#extra-previews').innerHTML=extraUrls.map((url,i)=>`<figure><img class="inline-photo" src="${url}" alt="Additional photo ${i+1}"><button type="button" class="outline" data-remove-photo="${i}">Remove photo ${i+1}</button></figure>`).join('');
+      $('#extra-previews').innerHTML=extraUrls.map((url,i)=>`<figure><img class="inline-photo" src="${url}" alt="Additional photo ${i+1}"><button type="button" class="remove-photo" aria-label="Remove photo ${i+1}" data-remove-photo="${i}">×</button></figure>`).join('');
       $$('[data-remove-photo]').forEach(button=>button.onclick=()=>{draft.extraPhotos.splice(Number(button.dataset.removePhoto),1);changed();showPhoto();});
-      $('#add-photos').disabled=$('#extra-camera').disabled=draft.extraPhotos.length>=4;
+      $('#add-photos').disabled=draft.extraPhotos.length>=4;$('#extra-count').textContent=draft.extraPhotos.length?`${draft.extraPhotos.length}/4`:'';
       if(closeupUrl)URL.revokeObjectURL(closeupUrl);
       if(draft.closeupPhoto){closeupUrl=URL.createObjectURL(draft.closeupPhoto);$('#closeup-preview').src=closeupUrl;$('#closeup-preview').hidden=false;}
       if (photoUrl) URL.revokeObjectURL(photoUrl);
       if (draft.photo) { photoUrl = URL.createObjectURL(draft.photo); $('#photo-preview').src = photoUrl; $('#photo-preview').hidden = false; }
     }; showPhoto();
-    const addPhotos=async files=>{
-      try {
+    const changePhotos=work=>{photoWork=photoWork.then(work).catch(error=>{const message=node.querySelector('#report-form .error');if(!stopped&&draft.step===0&&message)showError(message,friendly(error));});return photoWork;};
+    const addPhotos=files=>changePhotos(async()=>{
         if(draft.extraPhotos.length+files.length>4)throw new Error('Add up to four additional photos.');
-        for(const photo of files) {
-          if(!['image/jpeg','image/png','image/webp'].includes(photo.type)||photo.size>5*1024*1024)throw new Error('Choose JPG, PNG or WebP photos under 5 MB each.');
-        }
-        draft.extraPhotos.push(...files);changed();showPhoto();
-      } catch(error){toast(friendly(error));}
-    };
+        await validateReportPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos,...files]);
+        if(stopped||draft.step!==0)return;
+        draft.extraPhotos.push(...files);changed();showPhoto();$('#report-form .error').textContent='';
+    });
+    const replacePhoto=(photo,closeup)=>changePhotos(async()=>{
+      await validateReportPhotos([closeup?draft.photo:photo,closeup?photo:draft.closeupPhoto,...draft.extraPhotos]);
+      if(stopped||draft.step!==0)return;
+      if(closeup)draft.closeupPhoto=photo;else draft.photo=photo;
+      changed();showPhoto();$('#report-form .error').textContent='';
+    });
     $('#add-photos').onclick=()=>$('#extra-photos').click();
     $('#extra-photos').onchange=event=>{void addPhotos([...event.target.files]);event.target.value='';};
-    $('#extra-camera').onclick=async()=>{try{const photo=await capturePhoto();if(photo&&node.isConnected)await addPhotos([photo]);}catch(e){toast(friendly(e));}};
     const countInput=$('[name=observed_alive_count]');
-    countInput.closest('.row').insertAdjacentHTML('afterend',`<label class="check"><input id="count-unknown" type="checkbox" ${draft.fields.count_unknown==='1'?'checked':''}>Unable to count — too many or not clearly visible</label><p class="muted">If you cannot count them, choose a saved site. The count will be recorded as unknown.</p>`);
-    const updateCount=()=>{const unknown=$('#count-unknown').checked;draft.fields.count_unknown=unknown?'1':'0';countInput.disabled=unknown;countInput.required=!unknown;};
+    countInput.closest('.row').insertAdjacentHTML('afterend',`<div class="count-choice"><label class="count-toggle"><input id="count-unknown" type="checkbox" aria-describedby="count-hint" ${draft.fields.count_unknown==='1'?'checked':''}><span>Unable to count</span></label><p id="count-hint" role="status" hidden></p></div>`);
+    const updateCount=()=>{const unknown=$('#count-unknown').checked;draft.fields.count_unknown=unknown?'1':'0';countInput.disabled=unknown;countInput.required=!unknown;$('#count-hint').hidden=!unknown;$('#count-hint').textContent=draft.fields.cluster_id?'Count saved as unknown.':'Choose a site. Count will be unknown.';$('[name=cluster_id]').classList.toggle('needs-site',unknown&&!draft.fields.cluster_id);};
     updateCount();$('#count-unknown').onchange=()=>{updateCount();changed();};
     const placeInput = $('[name=sitio_name]');
     placeInput.autocomplete = 'off';placeInput.readOnly=Boolean(draft.fields.cluster_id);
@@ -229,15 +236,14 @@ export async function reportWizard(node, query, user = null) {
       if (event.key === 'ArrowDown' && results.firstElementChild) { event.preventDefault(); results.firstElementChild.focus(); }
       if (event.key === 'Escape') { ++searchGeneration; clearTimeout(searchTimer); results.replaceChildren(); hint.textContent=''; }
     };
-    const useCamera=async closeup=>{try{const photo=await capturePhoto();if(!photo||!node.isConnected)return;if(closeup)draft.closeupPhoto=photo;else draft.photo=photo;changed();showPhoto();}catch(error){toast(friendly(error));}};
+    const useCamera=async closeup=>{try{const photo=await capturePhoto();if(!photo||!node.isConnected)return;await replacePhoto(photo,closeup);}catch(error){toast(friendly(error));}};
     $('#take-photo').onclick=()=>useCamera(false);
     $('#closeup-camera').onclick=()=>useCamera(true);
     $('#closeup-gallery').onclick=()=>$('[name=closeup_photo]').click();
     $('#choose-photo').onclick=()=>$('[name=photo]').click();
     const photoSelected = event => {
       const photo = event.target.files[0]; if (!photo) return;
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(photo.type) || photo.size > 5 * 1024 * 1024) { event.target.value = ''; toast('Choose a JPG, PNG, or WebP photo under 5 MB.'); return; }
-      if(event.target.name==='closeup_photo')draft.closeupPhoto=photo;else draft.photo = photo; changed(); showPhoto();
+      void replacePhoto(photo,event.target.name==='closeup_photo');event.target.value='';
     };
     $('[name=closeup_photo]').onchange=photoSelected;$('[name=photo]').onchange=photoSelected;$('#camera-photo').onchange=photoSelected;
     let generation = 0;
@@ -245,10 +251,11 @@ export async function reportWizard(node, query, user = null) {
       const current = ++generation, target = $('#followup-options');
       const cluster = $('[name=cluster_id]').value;
       const preferred=draft.fields.parent_report_id,next=$('#next');
-      draft.fields.parent_report_id='';draft.fields.parent_report_code='';draft.followup=false;$('#followup').checked=false;
+      draft.followup=Boolean(preferred);$('#followup').checked=draft.followup;
       target.hidden = true;target.innerHTML='';
       next.disabled=false;
-      if (!cluster || !preferred) { changed();return; }
+      if (!preferred) { draft.fields.parent_report_code='';changed();return; }
+      if (!cluster) { target.hidden=false;target.innerHTML='<p class="notice">This follow-up site is unavailable. Return to the original report to check its status.</p>';next.disabled=true;return; }
       target.innerHTML = '<p class="muted">Loading your previous visits…</p>';
       target.hidden=false;next.disabled=true;
       let reports;
@@ -261,11 +268,10 @@ export async function reportWizard(node, query, user = null) {
       }
       if (current !== generation || !target.isConnected) return;
       next.disabled=false;
-      draft.followup=reports.some(r=>String(r.id)===String(preferred));$('#followup').checked=draft.followup;
-      draft.fields.parent_report_id=reports.some(r=>String(r.id)===String(preferred))?preferred:reports[0]?.id??'';
+      const requested=reports.find(r=>String(r.id)===String(preferred));
       target.hidden=false;
-      if(!draft.followup){target.innerHTML='<p class="notice">This follow-up is no longer available. Return to the report to check its status.</p>';next.disabled=true;return;}
-      target.innerHTML=draft.followup?`<p class="notice">Follow-up visit · An expert requested a new observation.</p>${select('parent_report_id','Previous visit',reports.map(r=>[r.id,`${r.report_code} · ${r.health}`]),draft.fields.parent_report_id,'required')}`:'';
+      if(!requested){target.innerHTML='<p class="notice">This follow-up is no longer available. Return to the report to check its status.</p><button type="button" class="outline">Retry previous visits</button>';target.querySelector('button').onclick=followups;next.disabled=true;return;}
+      target.innerHTML=`<p class="notice">Follow-up visit · An expert requested a new observation.</p>${select('parent_report_id','Previous visit',[[requested.id,`${requested.report_code} · ${requested.health}`]],preferred,'required')}`;
       const rememberVisit = () => {
         const selected=target.querySelector('[name=parent_report_id]')?.value;
         draft.fields.parent_report_code=reports.find(r=>String(r.id)===String(selected))?.report_code??'';
@@ -277,7 +283,7 @@ export async function reportWizard(node, query, user = null) {
     $('#followup').checked = draft.followup || Boolean(draft.fields.parent_report_id);
     $('#followup').onchange = () => followups().catch(e => toast(friendly(e)));
     $('[name=cluster_id]').onchange = () => {
-      draft.fields.parent_report_id='';
+      draft.fields.parent_report_id='';draft.fields.cluster_id=$('[name=cluster_id]').value;updateCount();
       const site=data.clusters.find(c=>String(c.id)===$('[name=cluster_id]').value);
       placeInput.readOnly=Boolean(site);
       if(site){
@@ -290,13 +296,13 @@ export async function reportWizard(node, query, user = null) {
     };
     if (draft.fields.cluster_id) {
       const site=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
-      if(!site){$('[name=cluster_id]').value='';draft.fields.cluster_id='';}
+      if(!site){$('[name=cluster_id]').value='';if(!draft.fields.parent_report_id)draft.fields.cluster_id='';}
       else if(!draft.fields.location_source){
         placeInput.value=String(site.sitio_name||site.name).slice(0,120);
         Object.assign(draft.fields,{sitio_name:placeInput.value,latitude:site.center_lat,longitude:site.center_lng,location_source:'manual',location_accuracy:'',location_selection:'site',selected_place_label:placeInput.value});
       }
       await followups();
-    }
+    } else if (draft.fields.parent_report_id) await followups();
   }
   function locationStep() {
     $('#step-body').innerHTML = `<h2>Where is the mangrove?</h2><p id="location-status" class="muted" role="status">${draft.fields.location_source ? 'Your selected pin is saved.' : 'Finding your location… Allow access if asked.'}</p><label class="field"><span>Find an address or landmark</span><input id="place-search" type="search" autocomplete="off" placeholder="Type a place name"><small>Choose a result, then check the pin.</small></label><div id="place-results" class="list" role="status"></div><div id="location-map" class="map large"></div><input type="hidden" name="latitude" value="${esc(draft.fields.latitude??'')}"><input type="hidden" name="longitude" value="${esc(draft.fields.longitude??'')}">`;
@@ -317,20 +323,19 @@ export async function reportWizard(node, query, user = null) {
       if (event.key !== 'Enter' || event.target !== mapElement) return;
       event.preventDefault();
       const center = canvas.getCenter();
-      stopGps(); choose(center.lat, center.lng, 'manual', null);
-      $('#location-status').textContent = 'Pin placed. Check the spot before continuing.';
+      stopGps(); if(choose(center.lat, center.lng, 'manual', null)) $('#location-status').textContent = 'Pin placed. Check the spot before continuing.';
     });
     locationInput.value = draft.fields.sitio_name || '';
     locationInput.closest('.field').querySelector('span').textContent = 'Location name';
     locationInput.closest('.field').querySelector('small').textContent = 'Check the pin or choose another place.';
     if (draft.fields.location_source) $('#location-status').textContent = 'Check your pin below.';
-    canvas = map($('#location-map'), [], {onClick: event => { stopGps(); choose(event.latlng.lat, event.latlng.lng, 'manual', null); $('#location-status').textContent = 'Pin placed. Check the spot before continuing.'; }});
+    canvas = map($('#location-map'), [], {onClick: event => { stopGps(); if(choose(event.latlng.lat, event.latlng.lng, 'manual', null)) $('#location-status').textContent = 'Pin placed. Check the spot before continuing.'; }});
     const currentCanvas = canvas;
     const b = data.location.barangay;
     if (b) canvas.setView([b.center_lat, b.center_lng], 15);
     const cluster = data.clusters.find(c => String(c.id) === String(draft.fields.cluster_id));
     if (cluster) { L.circle([cluster.center_lat, cluster.center_lng], {radius: cluster.radius_meters, color: '#5e8751', fillOpacity: .08}).addTo(canvas); canvas.setView([cluster.center_lat, cluster.center_lng], 18); }
-    let addressGeneration = 0, lastAddressAt = 0;
+    let addressGeneration = 0, lastAddressAt = 0, pinWarning = '';
     async function address(lat, lng) {
       if(draft.fields.cluster_id)return;
       const generation = ++addressGeneration;
@@ -350,10 +355,18 @@ export async function reportWizard(node, query, user = null) {
     }
     $('#location-status').insertAdjacentHTML('afterend', '<small id="nearby-address" class="muted"></small>');
     function choose(lat, lng, source, accuracy, restoring = false) {
+      const selectedSite=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
+      if(!restoring && draft.fields.parent_report_id && (!selectedSite || canvas.distance([lat,lng],[selectedSite.center_lat,selectedSite.center_lng])>Number(selectedSite.radius_meters||75))){
+        pinWarning='Keep this follow-up pin inside its requested site. Your previous pin is unchanged.';
+        $('#location-status').textContent=pinWarning;
+        if(marker)marker.setLatLng([Number(draft.fields.latitude),Number(draft.fields.longitude)]);
+        return false;
+      }
+      pinWarning='';
       if (source === 'manual' && accuracyCircle) { accuracyCircle.remove(); accuracyCircle = null; }
       if (!marker) {
         marker = L.marker([lat, lng], {draggable:true,icon: L.divIcon({html: '<span style="display:block;background:#245b2b;border:3px solid white;border-radius:50%;width:22px;height:22px;box-shadow:0 1px 5px #0008"></span>', className: '', iconSize: [22, 22], iconAnchor: [11, 11]})}).addTo(canvas);
-        marker.on('dragend',()=>{const point=marker.getLatLng();stopGps();choose(point.lat,point.lng,'manual',null);$('#location-status').textContent='Pin moved. Check the location name below.';});
+        marker.on('dragend',()=>{const point=marker.getLatLng();stopGps();if(choose(point.lat,point.lng,'manual',null))$('#location-status').textContent='Pin moved. Check the location name below.';});
       }
       else marker.setLatLng([lat, lng]);
       draft.fields = {...draft.fields, latitude: lat, longitude: lng, location_source: source, location_accuracy: accuracy ?? ''};
@@ -370,6 +383,7 @@ export async function reportWizard(node, query, user = null) {
         changed();
         if (source === 'manual' || Date.now() - lastAddressAt > 15000) { lastAddressAt = Date.now(); void address(lat, lng); }
       }
+      return true;
     }
     if (draft.fields.location_source) { choose(Number(draft.fields.latitude), Number(draft.fields.longitude), draft.fields.location_source, draft.fields.location_accuracy, true); canvas.setView([draft.fields.latitude, draft.fields.longitude], 18); }
     $('#place-search').oninput=()=>{
@@ -382,7 +396,7 @@ export async function reportWizard(node, query, user = null) {
         target.querySelectorAll('button').forEach(button=>button.onclick=()=>{
           const p=places[Number(button.dataset.index)];
           ++searchGeneration;clearTimeout(searchTimer);stopGps();
-          choose(p.latitude,p.longitude,'manual',null);
+          if(!choose(p.latitude,p.longitude,'manual',null))return;
           if(!draft.fields.cluster_id)draft.fields.sitio_name=p.label.slice(0,120);
           Object.assign(draft.fields,{location_selection:'search',selected_place_label:draft.fields.sitio_name});
           void persist();canvas.setView([p.latitude,p.longitude],18);target.innerHTML='';
@@ -413,7 +427,7 @@ export async function reportWizard(node, query, user = null) {
         onPosition:position=>{
           if (!current()) return;
           const {latitude,longitude,accuracy}=position.coords;
-          circle(latitude,longitude,accuracy); choose(latitude,longitude,'gps',accuracy);
+          if(choose(latitude,longitude,'gps',accuracy))circle(latitude,longitude,accuracy);
         },
         onApproximate:area=>{
           if (!current() || draft.fields.location_source) return;
@@ -427,6 +441,7 @@ export async function reportWizard(node, query, user = null) {
           gpsButton.disabled = busy;
           gpsButton.setAttribute('aria-busy', String(busy));
           gpsButton.textContent = busy ? 'Finding location…' : retry ? 'Try again' : 'Use my location';
+          if(pinWarning){$('#location-status').textContent=pinWarning;return;}
           $('#location-status').textContent = retry && draft.fields.location_source
             ? 'Could not update your location. Your selected pin is unchanged. ' + message
             : message;
@@ -440,33 +455,47 @@ export async function reportWizard(node, query, user = null) {
 
   let selectedCategory=0;
   function checklist() {
-    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Leaf color, pests, and roots determine the health score. Choose Not Sure when you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Health score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p>${c.guide_image ? `<img class="guide" src="${esc(asset(c.guide_image))}" alt="${esc(c.name)} guide">` : ''}<div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
+    // Older drafts may contain both animal sightings and "No Animals".
+    // Preserve the specific sightings and other negative signs.
+    const sighting=data.criteria.find(c=>c.code==='bio_indicators')?.options.find(o=>
+      (draft.observations.bio_indicators??[]).includes(o.id)&&!['unknown','none_of_the_above'].includes(o.code));
+    if(sighting)resolveAnimalChoices(data.criteria,draft.observations,'bio_indicators',sighting.code);
+    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Tap a choice. Pick Not Sure if you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Health score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
     $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. These diagrams are a guide.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${label}</legend><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}><img src="${esc(asset(data.trait_images?.[key]?.[value]||'img/traits/'+traitImage(key,value)+'.svg'))}" alt=""><span>${esc(traitLabels[value]||value)}</span></label>`).join('')}</div></fieldset>`).join('')}`);
     const body=$('#step-body'), groups=[...body.querySelectorAll('fieldset.choice-group')];
     const tabs=document.createElement('div');tabs.className='observation-categories';tabs.setAttribute('aria-label','Observation categories');
     tabs.innerHTML=groups.map((group,i)=>`<button type="button" class="outline" data-category="${i}">${esc(group.querySelector('legend').childNodes[0].textContent)}</button>`).join('');
     body.prepend(tabs);body.classList.add('observation-catalog');
-    const showCategory=index=>{selectedCategory=index;groups.forEach((g,i)=>g.hidden=i!==index);tabs.querySelectorAll('button').forEach((b,i)=>{b.classList.toggle('selected',i===index);b.setAttribute('aria-pressed',String(i===index));});};
+    const showCategory=index=>{selectedCategory=index;groups.forEach((g,i)=>g.hidden=i!==index);tabs.querySelectorAll('button').forEach((b,i)=>{b.classList.toggle('selected',i===index);b.setAttribute('aria-pressed',String(i===index));if(i===index)b.scrollIntoView({block:'nearest',inline:'nearest'});});};
     tabs.querySelectorAll('button').forEach((button,i)=>button.onclick=()=>showCategory(i));showCategory(Math.min(selectedCategory,groups.length-1));
-    // Expand a tile before selecting it; keyboard users retain the native inputs.
     for(const choice of body.querySelectorAll('.choice')) {
-      const source=choice.querySelector('img');
-      if(!source)choice.insertAdjacentHTML('afterbegin',`<img src="${asset('img/traits/elliptic.svg')}" alt="Sample illustration">`);
-      const image=choice.querySelector('img');image.alt ||= 'Tap to enlarge';
-      const preview=document.createElement('button');preview.type='button';preview.className='choice-preview';preview.textContent='Enlarge';choice.append(preview);
-      const open=event=>{event.preventDefault();event.stopPropagation();
+      const control=choice.querySelector('input');control.id='choice-'+control.name+'-'+[...body.querySelectorAll('.choice')].indexOf(choice);choice.htmlFor=control.id;
+      if(!choice.querySelector('img'))choice.insertAdjacentHTML('afterbegin','<img src="'+asset('img/traits/elliptic.svg')+'" alt="">');
+      choice.insertAdjacentHTML('beforeend','<small class="choice-selected" aria-hidden="true">&#10003; Selected</small>');
+      const picture=choice.querySelector('img'), preview=document.createElement('button');
+      preview.type='button';preview.className='choice-picture';preview.setAttribute('aria-label','Preview '+choice.querySelector('span').textContent);
+      picture.replaceWith(preview);preview.append(picture);
+      preview.onclick=event=>{
+        event.preventDefault();event.stopPropagation();
         const dialog=document.createElement('dialog');dialog.className='observation-preview';
-        dialog.innerHTML=`<h2>${esc(choice.querySelector('span').textContent)}</h2><img src="${esc(image.src)}" alt="Feature preview"><div class="actions"><button type="button" class="outline" data-cancel>Cancel</button><button type="button" data-select>Select this choice</button></div>`;
-        node.append(dialog);dialog.onclose=()=>dialog.remove();dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();dialog.querySelector('[data-select]').onclick=()=>{const input=choice.querySelector('input');input.checked=input.type==='checkbox'?!input.checked:true;input.dispatchEvent(new Event('change',{bubbles:true}));dialog.close();};dialog.showModal();
+        const title=document.createElement('h2');title.textContent=choice.querySelector('span').textContent;
+        const image=picture.cloneNode();image.alt=title.textContent;
+        const close=document.createElement('button');close.type='button';close.className='outline';close.textContent='Close';close.onclick=()=>dialog.close();
+        const use=document.createElement('button');use.type='button';use.textContent='Select';
+        use.onclick=()=>{const input=choice.querySelector('input');if(!input.checked){input.checked=true;input.dispatchEvent(new Event('change',{bubbles:true}));}dialog.close();};
+        const actions=document.createElement('div');actions.className='actions';actions.append(close,use);
+        title.id='observation-preview-label';dialog.setAttribute('aria-labelledby',title.id);dialog.append(image,title,actions);body.append(dialog);dialog.addEventListener('close',()=>{dialog.remove();preview.focus();},{once:true});dialog.showModal();
       };
-      choice.onclick=event=>{if(event.target===choice.querySelector('input')&&event.detail===0)return;open(event);};
     }
     for (const c of data.criteria) {
       const inputs = $$(`[name=obs_${c.code}]`);
       inputs.forEach(input => input.onchange = () => {
         const special = ['unknown', 'all_of_the_above', 'none_of_the_above'];
         if (input.checked && c.selection_mode === 'multiple') inputs.filter(i => i !== input && (special.includes(input.dataset.code) || special.includes(i.dataset.code))).forEach(i => i.checked = false);
-        draft.observations[c.code] = inputs.filter(i => i.checked).map(i => Number(i.value)); changed();
+        draft.observations[c.code] = inputs.filter(i => i.checked).map(i => Number(i.value));
+        if(input.checked) resolveAnimalChoices(data.criteria,draft.observations,c.code,input.dataset.code);
+        for(const criterion of data.criteria) for(const control of $$('[name=obs_'+criterion.code+']')) control.checked=(draft.observations[criterion.code]??[]).includes(Number(control.value));
+        changed();
       });
     }
   }

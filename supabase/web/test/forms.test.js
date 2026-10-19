@@ -12,7 +12,7 @@ import {classify, updateCriterion} from '../../functions/api/core/domain.js';
 
 const reference = JSON.parse(await readFile(new URL('../../data/reference.json', import.meta.url), 'utf8'));
 const dom = new JSDOM('<main id="page"></main><div id="toast" hidden></div><dialog id="confirm"><h2 id="confirm-title"></h2><p id="confirm-body"></p></dialog>', {url: 'http://localhost:5002/#submit'});
-for (const key of ['window', 'document', 'location', 'navigator', 'FormData', 'File', 'Event']) {
+for (const key of ['window', 'document', 'location', 'navigator', 'FormData', 'File', 'FileReader', 'Event']) {
   Object.defineProperty(globalThis, key, {value: dom.window[key], configurable: true});
 }
 dom.window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -39,6 +39,73 @@ const set = (name, value) => { const input = $(`[name=${name}]`); input.value = 
 const submit = () => { const form = $('#report-form'); return form.onsubmit({preventDefault() {}, submitter: $('#next')}); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };
 
+test('species editor uses local-first names and deletion requires confirmation, preserves errors and refreshes',async()=>{
+  let species=[{...reference.species[0]}],fail=false;const writes=[];
+  globalThis.testApi=async(path,{body}={})=>{
+    if(body){writes.push(body);if(fail)throw new Error('Please try again.');species=[];return {message:'Species deleted. Existing reports are kept.'};}
+    return {species};
+  };
+  await ui.adminPage($('#page'),'species',{});$('.edit-item').click();
+  assert.deepEqual([...$('#admin-editor').querySelectorAll('input')].slice(0,3).map(i=>i.name),['local_name','common_name','scientific_name']);
+  $('[name=local_name]').value='Unsaved local name';
+  let deleting=$('.delete-item').onclick();await tick();
+  assert.match($('#confirm-body').textContent,/Existing reports are kept/);
+  closeConfirm('cancel');await deleting;assert.equal(writes.length,0);
+  assert.equal($('#admin-editor').open,true);assert.equal($('[name=local_name]').value,'Unsaved local name');
+  fail=true;deleting=$('.delete-item').onclick();await tick();closeConfirm('confirm');await deleting;
+  assert.match($('#admin-editor .error').textContent,/try again/);assert.equal($('#admin-editor').open,true);
+  fail=false;deleting=$('.delete-item').onclick();await tick();closeConfirm('confirm');await deleting;
+  assert.deepEqual(writes.at(-1),{id:reference.species[0].id,action:'delete'});
+  assert.equal($('.edit-item'),null);$('#add').click();assert.equal($('.delete-item'),null);
+  $('#admin-editor').close();
+});
+
+test('compact photos reject renamed copies and unknown counts require a saved site',async()=>{
+ globalThis.testApi=async path=>path==='report-form.php'?{criteria:[],clusters:[{id:10,name:'Nursery',sitio_name:'Boardwalk',center_lat:10.2833,center_lng:123.8833}],location:{}}:{places:[]};
+ ui.reportDraft.reset();const dispose=await ui.reportWizard($('#page'),{},{id:'photo-ui-'+Date.now()});
+ const waitFor=async check=>{for(let i=0;i<100&&!check();i++)await new Promise(r=>setTimeout(r,10));assert.ok(check());};
+ const choose=(name,files)=>{const input=$(name);Object.defineProperty(input,'files',{configurable:true,value:files});change(input);};
+ const photo=(bytes,name)=>new File([bytes],name,{type:'image/jpeg'});
+ try{
+  assert.equal($('#extra-photo-menu'),null);let galleryOpened=false;$('#extra-photos').click=()=>galleryOpened=true;$('#add-photos').click();assert.equal(galleryOpened,true);assert.equal($('#extra-camera'),null);
+  choose('[name=photo]',[photo('overview contents','one.jpg')]);await waitFor(()=>ui.reportDraft.photo);
+  choose('[name=closeup_photo]',[photo('overview contents','renamed.jpg')]);await waitFor(()=>$('#report-form .error').textContent.includes('already added'));
+  assert.equal(ui.reportDraft.closeupPhoto,null);
+  choose('[name=closeup_photo]',[photo('close-up contents','two.jpg')]);await waitFor(()=>ui.reportDraft.closeupPhoto);
+  assert.equal($('#report-form .error').textContent,'');
+  choose('#extra-photos',[photo('close-up contents','extra.jpg')]);await waitFor(()=>$('#report-form .error').textContent.includes('already added'));
+  assert.equal(ui.reportDraft.extraPhotos.length,0);
+  assert.equal($('#count-hint').hidden,true);$('#count-unknown').click();
+  assert.equal($('#count-hint').hidden,false);assert.match($('#count-hint').textContent,/Choose a site/);
+  assert.equal($('[name=observed_alive_count]').disabled,true);await submit();assert.equal(ui.reportDraft.step,0);
+  set('cluster_id','10');await tick();assert.equal($('#count-hint').textContent,'Count saved as unknown.');
+  await submit();assert.equal(ui.reportDraft.step,1);
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('observation choices select in one tap without a guide or enlarge control',async()=>{
+ globalThis.testApi=async()=>({criteria:reference.criteria,clusters:[],location:{},traits:{root_type:[],leaf_shape:[],bark_texture:[]}});
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:2,owner:undefined});
+ const animalOption=reference.criteria.find(c=>c.code==='bio_indicators').options[0];
+ const noAnimalsOption=reference.criteria.find(c=>c.code==='negative_signs').options.find(o=>o.code==='no_animals');
+ ui.reportDraft.observations={bio_indicators:[animalOption.id],negative_signs:[noAnimalsOption.id]};
+ const dispose=await ui.reportWizard($('#page'),{});
+ try{
+  assert.equal($('.guide'),null);assert.equal($('.choice-preview'),null);
+  assert.deepEqual(ui.reportDraft.observations.bio_indicators,[animalOption.id]);
+  assert.deepEqual(ui.reportDraft.observations.negative_signs,[]);
+  const choice=$('.choice'),input=choice.querySelector('input');choice.querySelector('span').click();
+  assert.equal(input.checked,true);assert.equal($('dialog[open]'),null);
+  assert.ok(Object.values(ui.reportDraft.observations).some(ids=>ids.includes(Number(input.value))));
+  choice.querySelector('.choice-picture').click();assert.ok($('.observation-preview').open);
+  assert.equal($('.observation-preview h2').textContent,choice.querySelector('span').textContent);
+  $('.observation-preview').close();assert.equal($('.observation-preview'),null);
+  const animal=$('[name=obs_bio_indicators]');const none=$('[name=obs_negative_signs][data-code=no_animals]');
+  none.checked=true;change(none);animal.checked=true;change(animal);assert.equal(none.checked,false);
+  const mosquitoes=$('[name=obs_negative_signs][data-code=mosquitoes]');mosquitoes.checked=true;change(mosquitoes);assert.equal(animal.checked,true);
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
 test('saved sites never auto-link observations; only an explicit request starts a follow-up',async()=>{
  const clusters=[{id:10,name:'Coastal nursery',sitio_name:'Nursery boardwalk',center_lat:10.2833,center_lng:123.8833}];
  const traits=Object.fromEntries(['root_type','leaf_shape','bark_texture'].map(k=>[k,[reference.species[0][k]]]));
@@ -62,10 +129,54 @@ test('saved sites never auto-link observations; only an explicit request starts 
  } finally {dispose();ui.reportDraft.reset();clearTimeout(ui.toast.timer);}
 });
 
-test('dragged report pin refreshes the name, clears a distant site and ignores an older reverse lookup',async()=>{
+test('follow-up retry preserves the requested parent, including an unavailable request',async()=>{
+ let attempts=0, available=false;
+ globalThis.testApi=async path=>{
+  if(path==='report-form.php')return {criteria:[],clusters:[{id:10,name:'Nursery',sitio_name:'Boardwalk',center_lat:10.2833,center_lng:123.8833}],location:{}};
+  if(path==='previous-reports.php'){
+   if(++attempts===1)throw new Error('Connection interrupted');
+   return {reports:available?[{id:9,report_code:'Report #1',health:'Healthy'}]:[{id:12,report_code:'Report #2',health:'Healthy'}]};
+  }
+  return {places:[]};
+ };
+ ui.reportDraft.reset();let dispose=await ui.reportWizard($('#page'),{parent:'9',cluster:'10'},{id:'retry-'+Date.now()});
+ try{
+  assert.equal(String(ui.reportDraft.fields.parent_report_id),'9');assert.equal($('#next').disabled,true);
+  $('#followup-options button').click();await tick();
+  assert.equal(attempts,2);assert.equal(String(ui.reportDraft.fields.parent_report_id),'9');
+  assert.equal($('#next').disabled,true);assert.match($('#followup-options').textContent,/no longer available/);
+  available=true;$('#followup-options button').click();await tick();
+  assert.equal(attempts,3);assert.equal(String(ui.reportDraft.fields.parent_report_id),'9');
+  assert.equal($('#next').disabled,false);assert.equal(ui.reportDraft.followup,true);
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('follow-up pin cannot leave its site or lose its original report',async()=>{
+ globalThis.testApi=async path=>path==='report-form.php'?{criteria:[],clusters:[{id:10,name:'Nursery',sitio_name:'Boardwalk',center_lat:10.2833,center_lng:123.8833,radius_meters:100}],location:{}}:{places:[]};
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,followup:true,fields:{cluster_id:'10',parent_report_id:'9',sitio_name:'Boardwalk',latitude:10.2833,longitude:123.8833,location_source:'manual'}});
+ const dispose=await ui.reportWizard($('#page'),{});
+ try{
+  globalThis.testMarker.setLatLng([10.30,123.90]);globalThis.testMarker.events.dragend();
+  assert.equal(ui.reportDraft.fields.cluster_id,'10');assert.equal(ui.reportDraft.fields.parent_report_id,'9');
+  assert.equal(ui.reportDraft.fields.latitude,10.2833);assert.equal(ui.reportDraft.fields.sitio_name,'Boardwalk');
+  assert.deepEqual(globalThis.testMarker.point,[10.2833,123.8833]);assert.match($('#location-status').textContent,/follow-up.*site/i);
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('an unavailable follow-up site keeps its parent and blocks submission',async()=>{
+ globalThis.testApi=async()=>({criteria:[],clusters:[],location:{}});
+ ui.reportDraft.reset();const dispose=await ui.reportWizard($('#page'),{parent:'9',cluster:'10'},{id:'archived-'+Date.now()});
+ try{
+  assert.equal(ui.reportDraft.fields.parent_report_id,'9');assert.equal(ui.reportDraft.fields.cluster_id,'10');
+  assert.equal($('[name=cluster_id]').disabled,true);assert.equal($('#next').disabled,true);
+  assert.match($('#followup-options').textContent,/site is unavailable/);
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('dragged new-report pin refreshes the name, clears a distant site and ignores an older reverse lookup',async()=>{
  let lookups=[];
  globalThis.testApi=async path=>path==='report-form.php'?{criteria:[],clusters:[{id:10,center_lat:10.2833,center_lng:123.8833,radius_meters:100}],location:{}}:new Promise(resolve=>lookups.push(resolve));
- ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,followup:true,fields:{cluster_id:'10',parent_report_id:'9',sitio_name:'Old site',latitude:10.2833,longitude:123.8833,location_source:'manual'}});
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,fields:{cluster_id:'10',sitio_name:'Old site',latitude:10.2833,longitude:123.8833,location_source:'manual'}});
  const dispose=await ui.reportWizard($('#page'),{});
  try {
   globalThis.testMarker.setLatLng([10.29,123.89]);globalThis.testMarker.events.dragend();
@@ -225,7 +336,7 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
   try {
     assert.equal($('#followup-options').hidden, true);
     const photo = new File(['test bytes'], 'field.jpg', {type: 'image/jpeg'});
-    Object.defineProperty($('[name=photo]'), 'files', {value: [photo]}); change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[photo]});change($('[name=closeup_photo]'));
+    Object.defineProperty($('[name=photo]'), 'files', {value: [photo]}); change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[new File(['different close-up'],'closeup.jpg',{type:'image/jpeg'})]});change($('[name=closeup_photo]'));
     set('sitio_name', 'First location'); set('observed_alive_count', '12');
 
     await submit(); assert.equal(ui.reportDraft.step, 1);
@@ -281,7 +392,7 @@ test('report draft restores fields, photo, checklist and step after reload, isol
   try {
     assert.equal($('#discard-draft'),null);assert.equal($('#draft-status'),null);assert.equal($('#draft-notice').hidden,true);
     const photo = new File(['saved photo bytes'],'saved.jpg',{type:'image/jpeg'});
-    Object.defineProperty($('[name=photo]'),'files',{value:[photo]}); change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[photo]});change($('[name=closeup_photo]'));
+    Object.defineProperty($('[name=photo]'),'files',{value:[photo]}); change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[new File(['different close-up'],'closeup.jpg',{type:'image/jpeg'})]});change($('[name=closeup_photo]'));
     set('sitio_name','Saved coastal site');set('observed_alive_count','16');set('guardian_remarks','Remember this visit');
 
     await submit();
@@ -334,7 +445,7 @@ test('details address selection becomes the next-step map pin and a restored dra
     await new Promise(r=>setTimeout(r,750));await tick();
     assert.match($('#details-places').textContent,/Pier 3/);$('#details-places button').click();
     assert.equal(input.value,'Pier 3, Cebu City');assert.equal(ui.reportDraft.fields.location_source,'manual');
-    const photo=new File(['photo'],'field.jpg',{type:'image/jpeg'});Object.defineProperty($('[name=photo]'),'files',{value:[photo]});change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[photo]});change($('[name=closeup_photo]'));
+    const photo=new File(['photo'],'field.jpg',{type:'image/jpeg'});Object.defineProperty($('[name=photo]'),'files',{value:[photo]});change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[new File(['different close-up'],'closeup.jpg',{type:'image/jpeg'})]});change($('[name=closeup_photo]'));
     set('observed_alive_count','12');
     await submit();assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
     assert.equal($('#place-search').value,'Pier 3, Cebu City');
@@ -350,13 +461,32 @@ test('details address selection becomes the next-step map pin and a restored dra
   } finally {dispose();ui.reportDraft.reset();window.localStorage.clear();clearTimeout(ui.toast.timer);}
 });
 
+test('checklist live search covers choices and traits in report order without losing drafts', async () => {
+  globalThis.testApi=async path=>path==='trait-images.php'
+    ? {traits:{root_type:['Prop roots'],leaf_shape:['Elliptic'],bark_texture:['Rough bark']}}
+    : {criteria:structuredClone(reference.criteria)};
+  await ui.checklistPage($('#page'));
+  const form=$('.list-filters'), search=form.querySelector('[name=q]');
+  assert.ok(form.compareDocumentPosition($('#criteria')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok($('#criteria').compareDocumentPosition($('#trait-editors')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+  const first=$('.checklist-editor'); first.open=true;
+  const label=first.querySelector('[name=label]');label.value='Emerald green';label.dispatchEvent(new Event('input',{bubbles:true}));
+  const find=value=>{search.value=value;search.dispatchEvent(new Event('input',{bubbles:true}));};
+  find('  EMERALD green  ');assert.equal(first.hidden,false);assert.equal(first.open,true);
+  find('prop roots');assert.equal(first.hidden,true);assert.equal($('#trait-editors details').hidden,false);assert.equal($('#trait-editors details').open,true);
+  find('nothing-matches');assert.equal($('.filter-empty').hidden,false);
+  $('.clear-filters').click();assert.equal(first.hidden,false);assert.equal(first.open,true);assert.equal(label.value,'Emerald green');assert.equal($('#trait-editors details').open,false);
+  assert.match($('.result-count').textContent,/10 categories/);
+  const card=$('.trait-image-editor');assert.equal(card.children[0].tagName,'IMG');assert.equal(card.children[1].tagName,'STRONG');
+});
+
 test('checklist editor retains names while adding, undoing and deleting choices, and saving photos', async () => {
   const original = structuredClone(reference.criteria[0]); let saved;
   globalThis.testApi = async (path, {body} = {}) => {
     assert.equal(path, 'checklist.php');
     if (!body) return {criteria: [original]};
     const input = JSON.parse(body.get('payload'));
-    assert.equal(body.get('guide_image').name, 'guide.jpg');
+    assert.equal(body.get('option_image_-1').name, 'guide.jpg');
     let id = 9000; saved = updateCriterion(original, input, () => id++);
     return {criteria: [saved], message: 'Checklist saved.'};
   };
@@ -371,7 +501,7 @@ test('checklist editor retains names while adding, undoing and deleting choices,
   $(`[data-option="${removable.id}"] .remove`).click();
   assert.equal($('[name=name]').value, 'Leaf appearance');
   assert.equal($('[data-option="-1"] [name=label]').value, 'Mixed colors');
-  const fileInput = $('[data-image=guide_image]');
+  const fileInput = $('[data-image=option_image_-1]');
   Object.defineProperty(fileInput, 'files', {value: [new File(['photo'], 'guide.jpg', {type: 'image/jpeg'})]}); change(fileInput);
   const form = $('#criteria form'); await form.onsubmit({preventDefault() {}, submitter: form.querySelector('[type=submit]')});
   assert.ok(saved); assert.equal(saved.name, 'Leaf appearance');
@@ -440,7 +570,11 @@ test('expert ID is collected after verification, retained when going back, and s
   assert.equal($('[name=first_name]').value,'Test');await submitAccount();
   assert.equal($('[data-step="2"]').hidden,false);assert.equal(calls.filter(c=>c.path==='register.php').length,1);
   assert.equal($('[name=expert_id_code]').value,' WORK-2026/001 ');await submitAccount();
-  assert.equal(calls.at(-1).body.expert_id_code,'WORK-2026/001');assert.match($('#page').textContent,/Application sent/);
+  assert.equal(calls.at(-1).body.expert_id_code,'WORK-2026/001');assert.match($('#page').textContent,/Application submitted/);
+  assert.match($('#page').textContent,/We'll email the decision and any admin note to expert@example.test/);
+  assert.match($('#page').textContent,/Check your Inbox and Spam folder for updates/);
+  assert.match($('#page').textContent,/sign in to check your application status/);
+  assert.equal(document.activeElement,$('#page h1'));
   assert.equal(calls.some(c=>c.path==='login'),false);
 });
 test('resending waits 60 seconds and changing email invalidates previous verification',async()=>{
@@ -485,7 +619,19 @@ test('web password recovery requires the code and matching new passwords',async(
   globalThis.testApi=async(path,{body})=>{calls.push(path);if(path==='reset-password.php'&&body.code!=='123456')throw new Error('Invalid code.');return {message:'Check your email.'};};
   ui.recoveryPage(authLayout);
   const send=()=>$('#recovery').onsubmit({preventDefault(){},submitter:$('#recovery-submit')});
-  set('email','guardian@example.test');await send();assert.equal($('#reset-fields').hidden,false);
+  set('email','guardian@example.test');assert.equal($('#recovery').checkValidity(),true);await send();assert.equal($('#reset-fields').hidden,false);
+  assert.equal($('#recovery').checkValidity(),false);
+  const password=$('[name=password]'),confirmation=$('[name=password_confirmation]');
+  const eye=$('[aria-controls="reset-password"]'),confirmEye=$('[aria-controls="reset-password_confirmation"]');
+  set('password','keep-this-value');set('password_confirmation','keep-confirm-value');
+  assert.equal(password.type,'password');assert.equal(confirmation.type,'password');
+  eye.click();assert.equal(password.type,'text');assert.equal(confirmation.type,'password');
+  assert.equal(eye.getAttribute('aria-label'),'Hide new password');assert.equal(eye.getAttribute('aria-pressed'),'true');
+  confirmEye.click();assert.equal(confirmation.type,'text');
+  eye.click();confirmEye.click();assert.equal(password.type,'password');assert.equal(confirmation.type,'password');
+  assert.equal(eye.getAttribute('aria-label'),'Show new password');assert.equal(eye.getAttribute('aria-pressed'),'false');
+  assert.equal(password.value,'keep-this-value');assert.equal(confirmation.value,'keep-confirm-value');
+  assert.deepEqual(calls,['forgot-password.php']);
   set('code','000000');set('password','newpassword123');set('password_confirmation','differentpass');await send();assert.deepEqual(calls,['forgot-password.php']);
   set('password_confirmation','newpassword123');await send();assert.equal($('#recovery .error').textContent,'Invalid code.');
   set('code','123456');await send();assert.equal(location.hash,'#login');clearTimeout(ui.toast.timer);
@@ -502,10 +648,38 @@ test('admin sees the ID code, confirms approval, and must give a reason to decli
   assert.equal($('.id-code').textContent,'WORK-2026/<001>');assert.equal($('.id-photo'),null);
   const form=$('.application');const send=action=>form.onsubmit({preventDefault(){},submitter:form.querySelector(`[value=${action}]`)});
   await send('reject');assert.equal(decision,undefined);assert.match($('.error').textContent,/reason/);
-  let pending=send('approve');await tick();assert.equal(decision,undefined);closeConfirm('cancel');await pending;assert.equal(decision,undefined);
+  let pending=send('approve');await tick();assert.equal(decision,undefined);
+  assert.ok([...form.querySelectorAll('button')].every(button=>button.disabled));
+  closeConfirm('cancel');await pending;assert.equal(decision,undefined);
+  assert.ok([...form.querySelectorAll('button')].every(button=>!button.disabled));
   set('note','Code checked.');pending=send('approve');await tick();closeConfirm('confirm');await pending;
   assert.deepEqual(decision,{uid:'candidate',action:'approve',note:'Code checked.'});
   assert.equal($('.application'),null);assert.match($('#page').textContent,/Approved/);clearTimeout(ui.toast.timer);
+});
+
+test('application cards remove sender setup, label the decline reason, and retain filters through an email retry',async()=>{
+  let retried=false;
+  globalThis.testApi=async(path,{body}={})=>{
+    assert.equal(path,'expert-applications.php');
+    if(body){assert.deepEqual(body,{action:'retry_email',uid:'declined'});retried=true;return {message:'Email sent.'};}
+    return {items:[
+      {uid:'pending',full_name:'Sample Pending',email:'pending@example.test',status:'pending'},
+      {uid:'declined',full_name:'Sample Declined',email:'declined@example.test',status:'rejected',note:'A current ID is needed.\nPlease update your credentials.',reviewer_name:'Test Admin',email_status:retried?'sent':'not_configured'},
+    ]};
+  };
+  await ui.expertApplicationsPage($('#page'));
+  assert.equal($('.email-setup'),null);assert.doesNotMatch($('#page').textContent,/Connect the email sender|SMTP_HOST/);
+  assert.equal($('[data-uid=declined] .pill').textContent,'Declined');
+  assert.equal($('[data-uid=declined] .application-note h3').textContent,'Decline reason');
+  assert.match($('[data-uid=declined] .application-note p').textContent,/current ID/);
+  set('q','declined');set('status','rejected');$('.list-filters').onsubmit({preventDefault(){}});
+  assert.equal($('[data-uid=pending]').hidden,true);
+  assert.match($('.result-count').textContent,/1 application/);
+  await $('.retry-email').onclick();
+  assert.equal(retried,true);assert.equal($('[name=q]').value,'declined');assert.equal($('[name=status]').value,'rejected');
+  assert.equal($('[data-uid=pending]').hidden,true);assert.equal($('.retry-email'),null);
+  assert.equal($('[data-uid=declined] [role=status]').textContent,'Email sent');
+  clearTimeout(ui.toast.timer);
 });
 
 test('administrator saves certificate signer and refreshes signature controls',async()=>{

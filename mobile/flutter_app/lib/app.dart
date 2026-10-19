@@ -33,12 +33,17 @@ class ManGroovesApp extends StatelessWidget {
           backgroundColor: Color(0xFFFAF9F5),
           foregroundColor: Color(0xFF203522),
           elevation: 0,
+          scrolledUnderElevation: 0,
           centerTitle: false,
         ),
         cardTheme: const CardThemeData(
           elevation: 0,
           color: Colors.white,
           margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+            side: BorderSide(color: Color(0xFFDCE4D9)),
+          ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
@@ -51,7 +56,7 @@ class ManGroovesApp extends StatelessWidget {
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(52),
+            minimumSize: const Size(132, 52),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             textStyle: const TextStyle(
               fontSize: 15,

@@ -7,16 +7,18 @@ import { randomUUID } from 'node:crypto';
 import { Service } from './service.js';
 import { AppError, integer, now, paginate, password, publicUser, requireRole, ROLES, text, wireDates } from './domain.js';
 import { filterRows } from './list-query.js';
-import { displayHealth, reportLabel, newest, reportList, verifiedNeedsAttention } from './analytics.js';
+import { displayHealth, reportLabel, newest, reportList, filterReports, verifiedNeedsAttention } from './analytics.js';
 import { readInput, sendImage } from './uploads.js';
 import {searchPlaces} from './places.js';
 import {certificateSettings,getCertificate,certificatePdf,shareCertificate,sharedCertificate,verifyCertificate} from './certificates.js';
 import {emailAddress,emailCode,completeRegistration,expertApplications} from './registration.js';
 import {createStaff} from './staff.js';
 import {manageSites} from './sites.js';
+import {manageSpecies} from './species.js';
 
-export function createApi({db, auth, bucket, projectId}) {
-  const service = new Service(db, auth, bucket), app = express();
+/** @param {{db:any, auth:any, bucket:any, projectId:string, mailer?:{send:Function}|null}} options */
+export function createApi({db, auth, bucket, projectId, mailer = null}) {
+  const service = new Service(db, auth, bucket, mailer), app = express();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set({'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', Vary: 'Authorization, Origin'});
@@ -146,7 +148,7 @@ export function createApi({db, auth, bucket, projectId}) {
           const result = await service.submit(user, input, files.photo, files.closeup_photo, Object.keys(files).filter(k=>/^extra_photo_\d+$/.test(k)).sort().map(k=>files[k]));
           return send(res, {report: result.result ?? result, message: result.message ?? 'Report already received.'}, 201);
         }
-        case 'reports.php': only('GET'); return send(res, reportList(await service.reports(user), req.query));
+        case 'reports.php': only('GET'); return send(res, reportList(await service.reports(user), {sort:user.role==='guardian'?'newest':'oldest',...req.query}));
         case 'report.php': only('GET'); return send(res, {report: await service.detail(user, integer(req.query.id, 'report'))});
         case 'photo.php': {
           only('GET'); const id = integer(req.query.id, 'report'), report = await service.get('reports', id);
@@ -168,7 +170,8 @@ export function createApi({db, auth, bucket, projectId}) {
         case 'cluster.php': {
           only('GET'); const id = integer(req.query.id, 'cluster'), cluster = await service.get('clusters', id);
           if (!cluster || !visibleSite(cluster,user) || (user.role === 'guardian' && cluster.barangay_id !== user.barangay_id)) throw new AppError('Cluster not found.', 404);
-          const timeline = (await service.rows('reports', [['cluster_id', '==', id]])).filter(r => r.status === 'verified')
+          if(user.role!=='guardian') await service.ensureStaffNumbers();
+          const timeline = (await service.reportViews(user,await service.rows('reports', [['cluster_id', '==', id]]))).filter(r => r.status === 'verified')
             .sort((a, b) => -newest(a, b)).map(r => {
               const canView = user.role !== 'guardian' || r.user_id === user.id;
               return {id: r.id, report_code: reportLabel(r), submitted_at: r.submitted_at, health: r.final_health,
@@ -182,12 +185,18 @@ export function createApi({db, auth, bucket, projectId}) {
           only('GET'); requireRole(user, 'expert', 'system_admin'); const rows = (await service.reports(user)).filter(r => r.user_id !== user.id);
           const status=req.query.verified_attention==='1'?'verified':req.query.status||'pending';
           if (!['pending','verified','rejected'].includes(status)) throw new AppError('Choose a valid review status.');
+          // Each card counts the same search/date/health scope as the list, across all pages.
+          const scoped = filterReports(rows, {...req.query, status:undefined, needs_attention:undefined, verified_attention:undefined});
           return send(res, {...reportList(rows, {...req.query, status, sort:status==='pending'?'oldest':undefined}), summary: {
-            pending: rows.filter(r => r.status === 'pending').length, verified: rows.filter(r => r.status === 'verified').length,
-            rejected: rows.filter(r => r.status === 'rejected').length, verified_attention: rows.filter(verifiedNeedsAttention).length}, species: await service.species()});
+            pending: scoped.filter(r => r.status === 'pending').length, verified: scoped.filter(r => r.status === 'verified').length,
+            rejected: scoped.filter(r => r.status === 'rejected').length, verified_attention: scoped.filter(verifiedNeedsAttention).length}, species: await service.species()});
         }
         case 'review.php': only('POST'); return send(res, {result: await service.review(user, req.body ?? {}), message: 'Review saved.'});
-        case 'validation-history.php': only('GET'); requireRole(user, 'expert', 'system_admin'); return send(res, paginate(filterRows((await service.rows('verification_logs')).map(r=>({...r,report_code:reportLabel(r)})), req.query, ['report_code', 'verifier_name', 'reviewer'], ['action']).sort(newest), req.query.page));
+        case 'validation-history.php': {
+          only('GET'); requireRole(user, 'expert', 'system_admin');
+          const reports=new Map((await service.reports(user)).map(r=>[r.id,r]));
+          return send(res,paginate(filterRows((await service.rows('verification_logs')).map(r=>({...r,report_code:reportLabel(reports.get(r.report_id)??r)})), req.query, ['report_code', 'verifier_name', 'reviewer'], ['action']).sort(newest),req.query.page));
+        }
         case 'checklist.php': {
           requireRole(user, 'system_admin');
           if (get) return send(res, {criteria: await service.criteria()});
@@ -272,13 +281,7 @@ export function createApi({db, auth, bucket, projectId}) {
           return send(res, {message: 'Account access updated.'});
         }
         case 'species.php': {
-          if (get) return send(res, {species: user.role === 'system_admin' ? await service.rows('species') : await service.species()});
-          requireRole(user, 'system_admin', 'expert'); const input = req.body ?? {}, id = input.id ? integer(input.id, 'species') : (await service.ids())[0];
-          const fields = ['scientific_name', 'common_name', 'local_name', 'family', 'iucn_code', 'iucn_label', 'population_trend', 'root_type', 'leaf_shape', 'bark_texture'];
-          const data = Object.fromEntries(fields.map(k => [k, text(input[k] ?? '', k.replaceAll('_', ' '), 255, ['scientific_name', 'common_name', 'root_type', 'leaf_shape', 'bark_texture'].includes(k))]));
-          data.id = id; data.active = input.active === 0 ? 0 : 1;
-          const batch = db.batch(); batch.set(service.ref('species', id), data, {merge: true}); service.audit(batch, user, 'admin.species_updated', 'species', id); await batch.commit();
-          return send(res, {message: 'Species saved.', species: data});
+          return send(res, await manageSpecies(service,user,get?null:req.body??{}));
         }
         case 'badge-settings.php': {
           requireRole(user, 'system_admin');

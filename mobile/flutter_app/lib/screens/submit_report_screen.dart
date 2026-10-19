@@ -1,7 +1,10 @@
+import '../shared/species_names.dart';
+import '../shared/content_width.dart';
+import '../shared/observation_choice.dart';
+
 import 'dart:math';
 
 import '../core/trait_labels.dart';
-import '../core/display_text.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -15,6 +18,7 @@ import 'package:latlong2/latlong.dart';
 import '../core/api_client.dart';
 import '../core/report_location.dart';
 import '../core/report_draft_store.dart';
+import '../core/report_photos.dart';
 import 'location_picker_screen.dart';
 
 class SubmitReportScreen extends StatefulWidget {
@@ -76,6 +80,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   ReportLocation? _location;
   String? _error;
   bool _busy = false;
+  bool _confirmingSubmit = false;
   bool _gettingLocation = false;
   bool _locationNeedsRetry = false;
   LatLng? _areaCenter;
@@ -365,11 +370,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (!_traits('bark_texture').contains(_barkTexture)) _barkTexture = null;
       final clusterExists = _clusters.any((item) => item['id'] == _clusterId);
       if (!clusterExists) {
-        _clusterId = null;
-        _parentReportId = null;
-        _followup = false;
+        if (_parentReportId != null) {
+          _parentsFailed = true;
+          _followup = true;
+          _error =
+              'This follow-up site is unavailable. Check the original report.';
+        } else {
+          _clusterId = null;
+          _followup = false;
+        }
       }
-      if (_clusterId != null) {
+      if (_clusterId != null && clusterExists) {
         final selected = _clusters.firstWhere((s) => s['id'] == _clusterId);
         _sitio.text = '${selected['sitio_name'] ?? selected['name'] ?? ''}';
         if (_location == null) {
@@ -406,6 +417,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     int clusterId, {
     int? preferredParentId,
   }) async {
+    preferredParentId ??= _parentReportId;
     if (preferredParentId == null) return;
     final request = ++_parentRequest;
     if (mounted) {
@@ -422,15 +434,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       final reports = (response['reports'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList();
-      _previousReports = reports;
-      _parentReportId = reports.any((item) => item['id'] == preferredParentId)
-          ? preferredParentId
-          : null;
+      _previousReports = reports
+          .where((item) => item['id'] == preferredParentId)
+          .toList();
+      _parentReportId = preferredParentId;
       _followup = true;
-      if (_parentReportId == null) {
+      if (_previousReports.isEmpty) {
         _parentsFailed = true;
         _error =
             'This follow-up is no longer available. Check the original report.';
+      } else {
+        _error = null;
       }
     } catch (error) {
       if (!mounted || request != _parentRequest || _clusterId != clusterId) {
@@ -478,12 +492,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     bool closeup = false,
     bool extra = false,
   }) async {
-    if (extra && _extraPhotos.length >= 4) return;
+    if (_pickingPhoto || (extra && _extraPhotos.length >= 4)) return;
     _pickingExtra = extra;
     _pickingCloseup = closeup;
-    _pickingPhoto = true;
-    await _saveDraft();
+    setState(() => _pickingPhoto = true);
     try {
+      await _saveDraft();
       final image = await _picker.pickImage(
         source: source,
         imageQuality: 85,
@@ -492,7 +506,21 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         requestFullMetadata: false,
       );
       if (image != null && mounted) {
+        await validateReportPhotos([
+          if (extra || closeup) ...[
+            if (_photo != null) _photo!.path,
+          ] else
+            image.path,
+          if (extra || !closeup) ...[
+            if (_closeupPhoto != null) _closeupPhoto!.path,
+          ] else
+            image.path,
+          ..._extraPhotos.map((p) => p.path),
+          if (extra) image.path,
+        ]);
+        if (!mounted) return;
         setState(() {
+          _error = null;
           if (extra) {
             _extraPhotos.add(image);
           } else if (closeup) {
@@ -502,14 +530,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           }
         });
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         setState(
-          () => _error = 'Camera or photo access was not available. Check app permissions.',
+          () => _error = error is ApiException ? error.message : 'Camera or photo access was not available. Check app permissions.',
         );
       }
     } finally {
-      _pickingPhoto = false;
+      if (mounted) setState(() => _pickingPhoto = false);
       await _saveDraft();
     }
   }
@@ -563,11 +591,21 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         }
         return;
       }
-      _location = ReportLocation.gps(
+      final captured = ReportLocation.gps(
         latitude: position.latitude,
         longitude: position.longitude,
         accuracy: position.accuracy,
       );
+      if (_outsideFollowUpSite(captured)) {
+        setState(() {
+          _gettingLocation = false;
+          _gpsProgressAccuracy = null;
+          _locationNeedsRetry = true;
+          _locationMessage = 'Keep this follow-up pin inside its requested site. Your previous pin is unchanged.';
+        });
+        return;
+      }
+      _location = captured;
       _selectedPlaceLabel = null;
       _approximatePosition = null;
       _areaCenter = null;
@@ -735,6 +773,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     return LatLng(latitude, longitude);
   }
 
+  bool _outsideFollowUpSite(ReportLocation location) {
+    if (_parentReportId == null) return false;
+    final site = _clusters.where((s) => s['id'] == _clusterId).firstOrNull;
+    final center = _coordinates(site);
+    return center == null ||
+        const Distance().as(LengthUnit.Meter, center, location.point) >
+            ((site?['radius_meters'] as num?)?.toDouble() ?? 75);
+  }
+
   Future<void> _chooseManualLocation({
     LatLng? areaCenter,
     double? areaAccuracy,
@@ -799,6 +846,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
     if (identical(location, _location)) {
       setState(() => _locationMessage = 'Your selected pin is saved.');
+      return;
+    }
+    if (_outsideFollowUpSite(location)) {
+      setState(
+        () => _locationMessage = 'Keep this follow-up pin inside its requested site. Your previous pin is unchanged.',
+      );
       return;
     }
     setState(() {
@@ -1016,6 +1069,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
       return;
     }
+    if (_outsideFollowUpSite(_location!)) {
+      setState(
+        () => _error = 'Keep this follow-up pin inside its requested site.',
+      );
+      return;
+    }
     if (_sitio.text.trim().isEmpty) {
       setState(() => _error = 'Enter the sitio or location name.');
       return;
@@ -1087,31 +1146,52 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   Future<void> _submit() async {
-    if (_busy || _step != 3) return;
+    if (_busy || _confirmingSubmit || _step != 3) return;
     if (!_confirmed) {
       setState(() => _error = 'Confirm these details are from this visit.');
       return;
     }
-    final approved = await showDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: const Text('Submit report?'),
-        content: const Text(
-          'Check that your photo, location and answers are correct.',
+    bool? approved;
+    setState(() => _confirmingSubmit = true);
+    try {
+      await validateReportPhotos([
+        if (_photo != null) _photo!.path,
+        if (_closeupPhoto != null) _closeupPhoto!.path,
+        ..._extraPhotos.map((p) => p.path),
+      ]);
+      if (!mounted || _step != 3) return;
+      approved = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('Submit report?'),
+          content: const Text(
+            'Check that your photo, location and answers are correct.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Submit'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog, false),
-            child: const Text('Keep editing'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialog, true),
-            child: const Text('Submit'),
-          ),
-        ],
-      ),
-    );
-    if (approved != true || !mounted || _busy) return;
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = error is ApiException
+              ? error.message
+              : 'Could not read a photo. Choose it again.',
+        );
+      }
+      return;
+    } finally {
+      if (mounted) setState(() => _confirmingSubmit = false);
+    }
+    if (approved != true || !mounted || _busy || _step != 3) return;
 
     setState(() {
       _busy = true;
@@ -1314,110 +1394,115 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && widget.handleSystemBack) goBack();
       },
-      child: Form(
-        key: _formKey,
-        onChanged: _draftEdited,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
+      child: ContentWidth(
+        maxWidth: _step == 2 ? 1240 : 880,
+        child: Form(
+          key: _formKey,
+          onChanged: _draftEdited,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _parentReportId == null
+                                ? 'New report'
+                                : 'Follow-up report',
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _busy ? null : _cancelReport,
+                          child: const Text('Cancel'),
+                        ),
+                      ],
+                    ),
+                    const Text('Add details, review, then submit.'),
+                    if (compactSteps)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
                         child: Text(
-                          _parentReportId == null
-                              ? 'New report'
-                              : 'Follow-up report',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                          '${_step + 1}. ${stepNames[_step]}',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
-                      TextButton(
-                        onPressed: _busy ? null : _cancelReport,
-                        child: const Text('Cancel'),
+                    if (_draftScope != null)
+                      ValueListenableBuilder<String>(
+                        valueListenable: _draftStatus,
+                        builder: (_, text, _) => text.isEmpty
+                            ? const SizedBox.shrink()
+                            : Text(
+                                text,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                      ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _error!,
+                          style: TextStyle(color: Colors.red.shade900),
+                        ),
                       ),
                     ],
-                  ),
-                  const Text('Add details, review, then submit.'),
-                  if (compactSteps)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        '${_step + 1}. ${stepNames[_step]}',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Stepper(
+                  type: StepperType.horizontal,
+                  currentStep: _step,
+                  onStepTapped: _busy
+                      ? null
+                      : (value) {
+                          if (value < _step || value <= 1) _editStep(value);
+                        },
+                  controlsBuilder: (_, _) => const SizedBox.shrink(),
+                  steps: [
+                    Step(
+                      title: Text(!compactSteps && _step == 0 ? 'Photos' : ''),
+                      isActive: _step >= 0,
+                      state: _step > 0 ? StepState.complete : StepState.indexed,
+                      content: _photosStep(),
                     ),
-                  if (_draftScope != null)
-                    ValueListenableBuilder<String>(
-                      valueListenable: _draftStatus,
-                      builder: (_, text, _) => text.isEmpty
-                          ? const SizedBox.shrink()
-                          : Text(
-                              text,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
+                    Step(
+                      title: Text(
+                        !compactSteps && _step == 1 ? 'Location' : '',
+                      ),
+                      isActive: _step >= 1,
+                      state: _step > 1 ? StepState.complete : StepState.indexed,
+                      content: _siteStep(),
                     ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(11),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(12),
+                    Step(
+                      title: Text(
+                        !compactSteps && _step == 2 ? 'Observations' : '',
                       ),
-                      child: Text(
-                        _error!,
-                        style: TextStyle(color: Colors.red.shade900),
-                      ),
+                      isActive: _step >= 2,
+                      state: _step > 2 ? StepState.complete : StepState.indexed,
+                      content: _healthStep(),
+                    ),
+                    Step(
+                      title: Text(!compactSteps && _step == 3 ? 'Review' : ''),
+                      isActive: _step >= 3,
+                      content: _reviewStep(),
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-            Expanded(
-              child: Stepper(
-                type: StepperType.horizontal,
-                currentStep: _step,
-                onStepTapped: _busy
-                    ? null
-                    : (value) {
-                        if (value < _step || value <= 1) _editStep(value);
-                      },
-                controlsBuilder: (_, _) => const SizedBox.shrink(),
-                steps: [
-                  Step(
-                    title: Text(!compactSteps && _step == 0 ? 'Photos' : ''),
-                    isActive: _step >= 0,
-                    state: _step > 0 ? StepState.complete : StepState.indexed,
-                    content: _photosStep(),
-                  ),
-                  Step(
-                    title: Text(!compactSteps && _step == 1 ? 'Location' : ''),
-                    isActive: _step >= 1,
-                    state: _step > 1 ? StepState.complete : StepState.indexed,
-                    content: _siteStep(),
-                  ),
-                  Step(
-                    title: Text(
-                      !compactSteps && _step == 2 ? 'Observations' : '',
-                    ),
-                    isActive: _step >= 2,
-                    state: _step > 2 ? StepState.complete : StepState.indexed,
-                    content: _healthStep(),
-                  ),
-                  Step(
-                    title: Text(!compactSteps && _step == 3 ? 'Review' : ''),
-                    isActive: _step >= 3,
-                    content: _reviewStep(),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1525,61 +1610,82 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           ],
         ),
       ),
-      _Section(
-        title: 'More views (optional)',
-        subtitle: 'Up to 4 extra photos · 12 MB for all photos',
-        child: Column(
+      Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             for (var i = 0; i < _extraPhotos.length; i++)
-              Row(
-                children: [
-                  Expanded(
-                    child: Image.file(
-                      File(_extraPhotos[i].path),
-                      height: 100,
-                      fit: BoxFit.contain,
+              SizedBox(
+                width: 76,
+                height: 76,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.file(
+                          File(_extraPhotos[i].path),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: 'Remove photo ${i + 1}',
-                    onPressed: () {
-                      setState(() => _extraPhotos.removeAt(i));
-                      _draftEdited();
-                    },
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton.filledTonal(
+                        tooltip: 'Remove photo ${i + 1}',
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 18,
+                        onPressed: () {
+                          setState(() => _extraPhotos.removeAt(i));
+                          _draftEdited();
+                        },
+                        icon: const Icon(Icons.close),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            Wrap(
-              spacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _extraPhotos.length < 4
-                      ? () => _pickPhoto(ImageSource.gallery, extra: true)
-                      : null,
-                  icon: const Icon(Icons.add_photo_alternate_outlined),
-                  label: const Text('Add photos'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _extraPhotos.length < 4
-                      ? () => _pickPhoto(ImageSource.camera, extra: true)
-                      : null,
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('Camera'),
-                ),
-              ],
+            OutlinedButton.icon(
+              onPressed: _extraPhotos.length >= 4
+                  ? null
+                  : () => _pickPhoto(ImageSource.gallery, extra: true),
+              icon: const Icon(Icons.add),
+              label: const Text('Photo'),
             ),
+            if (_extraPhotos.isNotEmpty) Text('${_extraPhotos.length}/4'),
           ],
         ),
       ),
       FilledButton(
-        onPressed: () {
-          if (_photo == null || _closeupPhoto == null) {
-            setState(() => _error = 'Add both photos before continuing.');
-            return;
-          }
-          _editStep(1);
-        },
+        onPressed: _pickingPhoto
+            ? null
+            : () async {
+                if (_photo == null || _closeupPhoto == null) {
+                  setState(() => _error = 'Add both photos before continuing.');
+                  return;
+                }
+                try {
+                  await validateReportPhotos([
+                    _photo!.path,
+                    _closeupPhoto!.path,
+                    ..._extraPhotos.map((photo) => photo.path),
+                  ]);
+                } on ApiException catch (e) {
+                  if (mounted) setState(() => _error = e.message);
+                  return;
+                } catch (_) {
+                  if (mounted) {
+                    setState(() => _error = 'Choose your photos again.');
+                  }
+                  return;
+                }
+                if (!mounted) return;
+                _editStep(1);
+              },
         child: const Text('Continue'),
       ),
     ],
@@ -1688,7 +1794,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
               key: ValueKey('cluster-$_clusterId'),
-              initialValue: _clusterId,
+              initialValue: _clusters.any((s) => s['id'] == _clusterId)
+                  ? _clusterId
+                  : null,
               onChanged: _parentReportId != null ? null : _selectCluster,
               decoration: const InputDecoration(labelText: 'Site'),
               isExpanded: true,
@@ -1763,18 +1871,40 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 ),
             ],
             const SizedBox(height: 12),
-            CheckboxListTile(
-              value: _countUnknown,
-              onChanged: (v) {
-                setState(() => _countUnknown = v ?? false);
-                _draftEdited();
-              },
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Unable to count'),
-              subtitle: const Text(
-                'Too many or not clearly visible. Choose a saved site; this count will be recorded as unknown.',
+            Material(
+              color: _countUnknown
+                  ? const Color(0xFFE5F0DE)
+                  : const Color(0xFFF4F6EF),
+              shape: RoundedRectangleBorder(
+                side: const BorderSide(color: Color(0xFF789466), width: 2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: CheckboxListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                visualDensity: VisualDensity.compact,
+                value: _countUnknown,
+                onChanged: (v) {
+                  setState(() => _countUnknown = v ?? false);
+                  _draftEdited();
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text(
+                  'Unable to count',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                subtitle: _countUnknown
+                    ? Text(
+                        _clusterId == null
+                            ? 'Choose a site. Count will be unknown.'
+                            : 'Count saved as unknown.',
+                        style: const TextStyle(fontSize: 14),
+                      )
+                    : null,
               ),
             ),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _aliveCount,
               enabled: !_countUnknown,
@@ -1799,8 +1929,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           ],
         ),
       ),
-      if (widget.onExit != null)
+      if (widget.onExit != null) ...[
         OutlinedButton(onPressed: goBack, child: const Text('Back')),
+        const SizedBox(height: 12),
+      ],
       FilledButton.icon(
         onPressed: _gettingLocation ? null : _nextFromSite,
         icon: const Icon(Icons.arrow_forward),
@@ -1813,7 +1945,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   Widget _healthStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const Text('Choose what you see.'),
+      const Text(
+        'Tap a circle to select or deselect. Tap a photo to enlarge it. Choose Not Sure if you cannot tell.',
+      ),
+      const SizedBox(height: 12),
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -1822,10 +1957,24 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
-                  label: Text(
-                    i < _criteria.length
-                        ? '${_criteria[i]['name']}'
-                        : ['Roots', 'Leaves', 'Bark'][i - _criteria.length],
+                  label: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: min(
+                        280,
+                        MediaQuery.sizeOf(context).width - 112,
+                      ),
+                    ),
+                    child: Text(
+                      i < _criteria.length
+                          ? '${_criteria[i]['name']}'
+                          : traitHeadings[[
+                              'Root type',
+                              'Leaf shape',
+                              'Bark texture',
+                            ][i - _criteria.length]]!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                   selected: _category == i,
                   onSelected: (_) => setState(() => _category = i),
@@ -2039,8 +2188,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             const SizedBox(width: 10),
             Expanded(
               child: FilledButton(
-                onPressed: _busy ? null : _submit,
-                child: Text(_busy ? 'Submitting...' : 'Submit report'),
+                onPressed: _busy || _confirmingSubmit ? null : _submit,
+                child: Text(
+                  _busy
+                      ? 'Submitting...'
+                      : _confirmingSubmit
+                      ? 'Checking photos...'
+                      : 'Submit report',
+                ),
               ),
             ),
           ],
@@ -2093,70 +2248,30 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         traitHeadings[label] ?? label,
         style: Theme.of(context).textTheme.titleMedium,
       ),
-      const SizedBox(height: 8),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: values
-            .map(
-              (item) => SizedBox(
-                width: 145,
-                child: Semantics(
-                  selected: value == item,
-                  button: true,
-                  label:
-                      '${traitHeadings[label] ?? label}: ${traitLabels[item] ?? item}',
-                  child: InkWell(
-                    onTap: () async {
-                      if (!await _enlargeChoice(
-                            traitLabels[item] ?? item,
-                            () => _traitPhoto(label, item, 320),
-                          ) ||
-                          !mounted) {
-                        return;
-                      }
-                      changed(item);
-                      _draftEdited();
-                      _queuePreview();
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: value == item
-                            ? const Color(0xFFE0EFD8)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: value == item
-                              ? const Color(0xFF285D30)
-                              : const Color(0xFFCED8C8),
-                          width: value == item ? 2 : 1,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          _traitPhoto(label, item, 120),
-                          Text(
-                            traitLabels[item] ?? item,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (value == item)
-                            const Icon(
-                              Icons.check_circle,
-                              color: Color(0xFF285D30),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+      const SizedBox(height: 12),
+      LayoutBuilder(
+        builder: (context, space) => Wrap(
+          spacing: 12,
+          runSpacing: 16,
+          children: values.map((item) {
+            void toggle() {
+              changed(value == item ? null : item);
+              _queuePreview();
+            }
+
+            final columns = (space.maxWidth / 280).floor().clamp(1, 4);
+            return SizedBox(
+              width: (space.maxWidth - 12 * (columns - 1)) / columns,
+              child: ObservationChoice(
+                label: traitLabels[item] ?? item,
+                selected: value == item,
+                thumbnail: _traitPhoto(label, item, 200),
+                picture: _traitPhoto(label, item, 600),
+                onToggle: toggle,
               ),
-            )
-            .toList(),
+            );
+          }).toList(),
+        ),
       ),
     ],
   );
@@ -2186,28 +2301,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     );
   }
 
-  Future<bool> _enlargeChoice(String label, Widget Function() image) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(label),
-          content: SingleChildScrollView(
-            child: SizedBox(width: 400, child: image()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Select this choice'),
-            ),
-          ],
-        ),
-      ) ??
-      false;
-
   Widget _criterionCard(Map<String, dynamic> criterion) {
     final code = '${criterion['code']}',
         selected = _observations[code] ?? <int>[];
@@ -2216,7 +2309,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         .toList();
     final single = criterion['selection_mode'] == 'single';
     Widget picture(Map option, double height) {
-      final path = option['image_path'] ?? criterion['guide_image'];
+      final path = option['image_path'];
       if (path != null) {
         return Image.network(
           _assetUrl('$path'),
@@ -2243,83 +2336,46 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           runSpacing: 12,
           children: options.map((option) {
             final id = option['id'] as int, active = selected.contains(id);
+            void choose() {
+              setState(() {
+                final values = single ? <int>[] : List<int>.from(selected);
+                const special = [
+                  'unknown',
+                  'all_of_the_above',
+                  'none_of_the_above',
+                ];
+                if (active) {
+                  values.remove(id);
+                } else {
+                  if (special.contains(option['code'])) {
+                    values.clear();
+                  } else {
+                    final ids = options
+                        .where((o) => special.contains(o['code']))
+                        .map((o) => o['id'])
+                        .toSet();
+                    values.removeWhere(ids.contains);
+                  }
+                  values.add(id);
+                }
+                _observations[code] = values;
+                if (values.contains(id)) {
+                  _resolveObservationConflict(code, '${option['code']}');
+                }
+              });
+              _queuePreview();
+            }
+
+            final columns = (space.maxWidth / 280).floor().clamp(1, 4);
             return SizedBox(
-              width: space.maxWidth < 250
-                  ? space.maxWidth
-                  : (space.maxWidth - 12) / 2,
-              child: Semantics(
-                key: ValueKey('observation-$code-$id'),
+              width: (space.maxWidth - 12 * (columns - 1)) / columns,
+              child: ObservationChoice(
+                selectionKey: ValueKey('observation-$code-$id'),
+                label: '${option['label']}',
                 selected: active,
-                button: true,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () async {
-                    if (!await _enlargeChoice(
-                          '${option['label']}',
-                          () => picture(option, 320),
-                        ) ||
-                        !mounted) {
-                      return;
-                    }
-                    setState(() {
-                      final values = single
-                          ? <int>[]
-                          : List<int>.from(selected);
-                      const special = [
-                        'unknown',
-                        'all_of_the_above',
-                        'none_of_the_above',
-                      ];
-                      if (!single && active) {
-                        values.remove(id);
-                      } else {
-                        if (special.contains(option['code'])) {
-                          values.clear();
-                        } else {
-                          final ids = options
-                              .where((o) => special.contains(o['code']))
-                              .map((o) => o['id'])
-                              .toSet();
-                          values.removeWhere(ids.contains);
-                        }
-                        values.add(id);
-                      }
-                      _observations[code] = values;
-                      _resolveObservationConflict(code, '${option['code']}');
-                    });
-                    _queuePreview();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: active ? const Color(0xFFE0EFD8) : Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: active
-                            ? const Color(0xFF285D30)
-                            : const Color(0xFFCED8C8),
-                        width: active ? 2 : 1,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        picture(option, 125),
-                        Text(
-                          '${option['label']}',
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Icon(
-                          active ? Icons.check_circle : Icons.zoom_in,
-                          color: const Color(0xFF285D30),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                thumbnail: picture(option, 200),
+                picture: picture(option, 600),
+                onToggle: choose,
               ),
             );
           }).toList(),
@@ -2354,7 +2410,25 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           .where((item) => shouldRemove('${item['code']}'))
           .map((item) => item['id'])
           .toSet();
-      _observations[otherGroup]?.removeWhere(conflicts.contains);
+      final chosen = _observations[otherGroup] ?? <int>[];
+      if (otherGroup == 'negative_signs' &&
+          (criterion['options'] as List).any(
+            (o) => o['code'] == 'all_of_the_above' && chosen.contains(o['id']),
+          )) {
+        _observations[otherGroup] = (criterion['options'] as List)
+            .where(
+              (o) => ![
+                'no_animals',
+                'all_of_the_above',
+                'unknown',
+                'none_of_the_above',
+              ].contains(o['code']),
+            )
+            .map((o) => o['id'] as int)
+            .toList();
+      } else {
+        chosen.removeWhere(conflicts.contains);
+      }
     }
   }
 
@@ -2451,11 +2525,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             if (_rootType != null && _leafShape != null && _barkTexture != null)
-              Text(
-                species == null
-                    ? 'Species unclear. An expert can identify it.'
-                    : '${speciesNames(species)} (${species['confidence']}% trait match)',
-              ),
+              SpeciesNames(species),
           ],
         ],
       ),

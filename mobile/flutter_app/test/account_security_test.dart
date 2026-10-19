@@ -48,6 +48,65 @@ Finder _field(String label) => find.byWidgetPredicate(
 );
 
 void main() {
+  testWidgets(
+    'account actions remain usable on a narrow phone and sign out can retry',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final api = _AccountApi('guardian');
+      var attempts = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.6)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: ProfileScreen(
+              api: api,
+              initialUser: api.user,
+              onUserChanged: (_) {},
+              onSignedOut: () async {
+                if (++attempts == 1) {
+                  throw const ApiException('Connection interrupted.');
+                }
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Sign out'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      final password = find.widgetWithText(OutlinedButton, 'Change password');
+      final signOut = find.widgetWithText(OutlinedButton, 'Sign out');
+      expect(
+        tester.getRect(signOut).top - tester.getRect(password).bottom,
+        greaterThanOrEqualTo(12),
+      );
+      await tester.tap(signOut);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Could not sign out. Please try again.'),
+        findsOneWidget,
+      );
+      expect(tester.widget<OutlinedButton>(signOut).onPressed, isNotNull);
+      // Let the transient error toast dismiss before tapping the action beneath it.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(signOut);
+      await tester.pumpAndSettle();
+      expect(attempts, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
   for (final role in ['guardian', 'expert', 'system_admin']) {
     testWidgets(
       '$role has locked email, no deactivation and can change password',
@@ -86,6 +145,26 @@ void main() {
         await tester.enterText(_field('Current password'), 'oldpassword');
         await tester.enterText(_field('New password'), 'simplepass');
         await tester.enterText(_field('Confirm new password'), 'mismatch');
+        await tester.tap(find.byTooltip('Show new password'));
+        await tester.pump();
+        expect(
+          tester.widget<TextField>(_field('New password')).obscureText,
+          isFalse,
+        );
+        expect(
+          tester.widget<TextField>(_field('Current password')).obscureText,
+          isTrue,
+        );
+        expect(
+          tester.widget<TextField>(_field('Confirm new password')).obscureText,
+          isTrue,
+        );
+        await tester.tap(find.byTooltip('Hide new password'));
+        await tester.pump();
+        expect(
+          tester.widget<TextField>(_field('New password')).controller!.text,
+          'simplepass',
+        );
         await tester.tap(find.text('Update password'));
         await tester.pumpAndSettle();
         expect(find.text('The new passwords do not match.'), findsOneWidget);

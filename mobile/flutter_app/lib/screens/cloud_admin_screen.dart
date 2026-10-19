@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 
 import '../core/api_client.dart';
-import '../core/display_text.dart';
 import '../shared/list_filters.dart';
 
 class CloudAdminScreen extends StatefulWidget {
@@ -111,6 +111,7 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
 
   Future<void> _review(Map<String, dynamic> item, bool approve) async {
     String note = '';
+    final formKey = GlobalKey<FormState>();
     String? reason;
     reason = await showDialog<String>(
       context: context,
@@ -118,22 +119,34 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
         title: Text(
           approve ? 'Approve this expert?' : 'Decline this application?',
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              approve
-                  ? 'They can submit reports and review other users’ reports.'
-                  : 'Give a reason for declining.',
+        content: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  approve
+                      ? 'They can submit reports and review other users’ reports.'
+                      : 'Explain the decision. Your note is included in the email.',
+                ),
+                TextFormField(
+                  onChanged: (value) => note = value,
+                  maxLength: 1000,
+                  minLines: 2,
+                  maxLines: 5,
+                  validator: (value) => !approve && (value ?? '').trim().isEmpty
+                      ? 'Add a reason for declining.'
+                      : null,
+                  decoration: InputDecoration(
+                    labelText: approve
+                        ? 'Message to applicant (optional)'
+                        : 'Message to applicant',
+                  ),
+                ),
+              ],
             ),
-            TextField(
-              onChanged: (value) => note = value,
-              maxLength: 1000,
-              decoration: InputDecoration(
-                labelText: approve ? 'Note (optional)' : 'Reason',
-              ),
-            ),
-          ],
+          ),
         ),
         actions: [
           TextButton(
@@ -141,7 +154,11 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, note),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, note.trim());
+              }
+            },
             child: Text(approve ? 'Approve' : 'Decline'),
           ),
         ],
@@ -154,7 +171,7 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
     }
     setState(() => _busy = true);
     try {
-      await widget.api.cloudRequest(
+      final result = await widget.api.cloudRequest(
         'expert-applications.php',
         body: {
           'uid': item['uid'],
@@ -163,12 +180,45 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
         },
       );
       await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${result['message']}')));
+      }
     } catch (e) {
       if (mounted) {
         setState(
           () => _error = e is ApiException
               ? e.message
               : 'Could not save the review.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _retryEmail(Map<String, dynamic> item) async {
+    setState(() => _busy = true);
+    try {
+      final result = await widget.api.cloudRequest(
+        'expert-applications.php',
+        body: {'uid': item['uid'], 'action': 'retry_email'},
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${result['message']}')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e is ApiException
+                  ? e.message
+                  : 'Could not send the email. Try again.',
+            ),
+          ),
         );
       }
     } finally {
@@ -249,6 +299,195 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
     }
   }
 
+  String _applicationDate(dynamic value) {
+    final date = DateTime.tryParse('$value');
+    return date == null
+        ? ''
+        : DateFormat('MMM d, y · h:mm a')
+              .format(date.toUtc().add(const Duration(hours: 8)));
+  }
+
+  Widget _applicationTag(String label, Color background, Color foreground) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(color: foreground, fontWeight: FontWeight.w600),
+        ),
+      );
+
+  Widget _applicationCard(Map<String, dynamic> item) {
+    final pending = item['status'] == 'pending';
+    final declined = item['status'] == 'rejected';
+    final sent = item['email_status'] == 'sent';
+    final sending = item['email_status'] == 'sending';
+    final attempted = DateTime.tryParse('${item['email_attempted_at']}');
+    final recentSend =
+        sending &&
+        attempted != null &&
+        DateTime.now().difference(attempted) < const Duration(minutes: 2);
+    final note = '${item['note'] ?? ''}'.trim();
+    final reviewer = '${item['reviewer_name'] ?? ''}';
+    final reviewed = _applicationDate(item['reviewed_at']);
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Card(
+      key: ValueKey('application-${item['uid']}'),
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  '${item['full_name']}',
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                _applicationTag(
+                  pending
+                      ? 'Pending review'
+                      : declined
+                      ? 'Declined'
+                      : 'Approved',
+                  pending
+                      ? const Color(0xFFFFF2D6)
+                      : declined
+                      ? const Color(0xFFFBE5DF)
+                      : const Color(0xFFE2F0DF),
+                  pending
+                      ? const Color(0xFF755114)
+                      : declined
+                      ? const Color(0xFFA13724)
+                      : const Color(0xFF245B2B),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            SelectableText('${item['email']}', style: TextStyle(color: muted)),
+            if (item['id_code'] != null) ...[
+              const SizedBox(height: 12),
+              Text('Expert ID', style: TextStyle(color: muted)),
+              SelectableText(
+                '${item['id_code']}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+            if (item['has_id_photo'] == true)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _busy ? null : () => _viewId(item),
+                  icon: const Icon(Icons.badge_outlined),
+                  label: const Text('View previous ID photo'),
+                ),
+              ),
+            if (pending) ...[
+              const SizedBox(height: 12),
+              if (item['created_at'] != null) ...[
+                Text(
+                  'Submitted ${_applicationDate(item['created_at'])}',
+                  style: TextStyle(color: muted),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Wrap(
+                spacing: 10,
+                runSpacing: 6,
+                children: [
+                  FilledButton(
+                    onPressed: _busy ? null : () => _review(item, true),
+                    child: const Text('Approve expert'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _busy ? null : () => _review(item, false),
+                    child: const Text('Decline'),
+                  ),
+                ],
+              ),
+            ] else ...[
+              if (note.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F7F4),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        declined ? 'Decline reason' : 'Message to applicant',
+                        style: TextStyle(
+                          color: muted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SelectableText(note),
+                    ],
+                  ),
+                ),
+              ],
+              if (reviewer.isNotEmpty || reviewed.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  '${reviewer.isEmpty ? 'Reviewed' : 'Reviewed by $reviewer'}${reviewed.isEmpty ? '' : ' · $reviewed'}',
+                  style: TextStyle(color: muted),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _applicationTag(
+                    sent
+                        ? 'Email sent'
+                        : sending
+                        ? 'Sending email…'
+                        : 'Email not sent',
+                    sent
+                        ? const Color(0xFFE2F0DF)
+                        : sending
+                        ? const Color(0xFFE6EFFA)
+                        : const Color(0xFFFFF2D6),
+                    sent
+                        ? const Color(0xFF245B2B)
+                        : sending
+                        ? const Color(0xFF204F7C)
+                        : const Color(0xFF755114),
+                  ),
+                  if (!sent)
+                    OutlinedButton(
+                      onPressed: _busy || recentSend
+                          ? null
+                          : () => _retryEmail(item),
+                      child: Text(
+                        item['email_status'] == null
+                            ? 'Send email'
+                            : 'Retry email',
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -259,7 +498,13 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
     body: RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.symmetric(
+          vertical: 16,
+          horizontal: ((MediaQuery.sizeOf(context).width - 760) / 2).clamp(
+            16.0,
+            double.infinity,
+          ),
+        ),
         children: [
           if (_error != null)
             Text(
@@ -364,7 +609,10 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
               textAlign: TextAlign.center,
             ),
           ] else if (_items != null) ...[
-            const Text('Check the ID code before approving expert access.'),
+            const Text(
+              'Review credentials and send your decision to the applicant.',
+            ),
+            const SizedBox(height: 12),
             ListFilters(
               hint: 'Applicant name or email',
               filterLabel: 'Status',
@@ -380,7 +628,16 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
                 _status = status;
               }),
             ),
-            Text('${_filteredItems.length} results'),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                '${_filteredItems.length} application${_filteredItems.length == 1 ? '' : 's'} · ${_status == 'pending'
+                    ? 'Oldest first'
+                    : _status.isEmpty
+                    ? 'Pending first'
+                    : 'Latest decisions first'}',
+              ),
+            ),
             if (_filteredItems.isEmpty)
               Padding(
                 padding: EdgeInsets.all(24),
@@ -390,58 +647,7 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
                       : 'No expert applications yet.',
                 ),
               ),
-            for (final item in _filteredItems)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        '${item['full_name']}',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      Text('${item['email']}'),
-                      Text(statusLabel(item['status'])),
-                      if (item['id_code'] != null) ...[
-                        const SizedBox(height: 12),
-                        const Text('Expert ID code'),
-                        SelectableText(
-                          '${item['id_code']}',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      if (item['has_id_photo'] == true)
-                        TextButton.icon(
-                          onPressed: () => _viewId(item),
-                          icon: const Icon(Icons.badge_outlined),
-                          label: const Text('View previous ID photo'),
-                        ),
-                      if (item['status'] == 'pending')
-                        Wrap(
-                          spacing: 12,
-                          children: [
-                            FilledButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () => _review(item, true),
-                              child: const Text('Approve'),
-                            ),
-                            OutlinedButton(
-                              onPressed: _busy
-                                  ? null
-                                  : () => _review(item, false),
-                              child: const Text('Decline'),
-                            ),
-                          ],
-                        )
-                      else
-                        Text('${item['note'] ?? ''}'),
-                    ],
-                  ),
-                ),
-              ),
+            for (final item in _filteredItems) _applicationCard(item),
           ],
         ],
       ),

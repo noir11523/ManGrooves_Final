@@ -90,7 +90,7 @@ void main() {
     (tester) async {
       await smallPhone(tester, Scaffold(body: AnalyticsScreen(api: _Api())));
       for (final entry in {
-        'Verified reports': '12',
+        'Total Reports Verified': '12',
         'Pending': '7',
         'Rejected': '3',
         'Needs attention': '2',

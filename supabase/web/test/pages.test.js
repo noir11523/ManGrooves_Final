@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {build} from 'esbuild';
 import {JSDOM} from 'jsdom';
 const dom=new JSDOM('<div id="app"></div><div id="toast" hidden></div>',{url:'https://example.test/#badges'});
+dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
 for(const key of ['window','document','location','history','navigator','FormData','File','Event'])Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
 const bundle=await build({entryPoints:[fileURLToPath(new URL('../src/app.js',import.meta.url))],bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'adapters',setup(b){
  b.onResolve({filter:/client\.js$/},()=>({path:'client',namespace:'stub'}));
@@ -16,6 +17,23 @@ const bundle=await build({entryPoints:[fileURLToPath(new URL('../src/app.js',imp
 await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const $=s=>document.querySelector(s);
+
+test('profile password visibility is independent and validation happens before confirmation',async()=>{
+ history.replaceState(null,'','#profile');
+ const user={id:1,role:'guardian',first_name:'Test',last_name:'Guardian',email:'test@example.test',full_name:'Test Guardian',barangay_id:1};
+ globalThis.testApi=async path=>path==='me.php'?{user}:{user,barangays:[{id:1,name:'Inayawan'}]};
+ await globalThis.restoreTestAccount({id:'user'});await tick();
+ const form=$('#password');
+ form.elements.current.value='old-password';form.elements.next.value='new-password';form.elements.confirmation.value='does-not-match';
+ const eye=$('[aria-controls="security-next"]');eye.click();
+ assert.equal(form.elements.next.type,'text');assert.equal(form.elements.current.type,'password');assert.equal(form.elements.confirmation.type,'password');
+ eye.click();assert.equal(form.elements.next.type,'password');assert.equal(form.elements.next.value,'new-password');
+ form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await tick();
+ assert.match(form.querySelector('.error').textContent,/passwords do not match/);
+ form.elements.next.value=form.elements.confirmation.value='old-password';
+ form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await tick();
+ assert.match(form.querySelector('.error').textContent,/different new password/);
+});
 
 test('review queue and history expose filters and retain them on later pages',async()=>{
  for(const [route,path,key,value] of [['verification','verification.php','health','Unknown'],['history','validation-history.php','action','correct']]){
@@ -71,6 +89,13 @@ test('verification cards apply the selected status, reset pagination and keep se
  const verified=[...document.querySelectorAll('.verification-stats a')].find(a=>a.textContent==='Verified9');verified.click();await new Promise(resolve=>setTimeout(resolve,20));
  assert.equal(calls.at(-1).status,'verified');assert.equal(calls.at(-1).verified_attention,undefined);
  assert.equal($('.report-table a').textContent,'View');
+ for(const [status,label,count] of [['rejected','Rejected',2],['pending','Pending',8]]){
+  const card=[...document.querySelectorAll('.verification-stats a')].find(a=>a.textContent===`${label}${count}`);
+  card.click();await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(calls.at(-1).status,status);assert.equal(calls.at(-1).verified_attention,undefined);
+  assert.equal(calls.at(-1).q,'coast');assert.equal(calls.at(-1).date_from,'2026-10-01');
+  assert.equal(card.querySelector('strong').textContent,String(count));
+ }
 });
 test('badges display artwork and progress, with certificates only for earned awards',async()=>{
  history.replaceState(null,'','#badges');

@@ -23,7 +23,7 @@ $navigation = $role === 'guardian'
     ]
     : [
         ['Dashboard', 'dashboard.php', 'bi-grid-1x2-fill'],
-        ['Verification', 'admin/verification.php', 'bi-clipboard2-check-fill'],
+        ['Review reports', 'admin/verification.php', 'bi-clipboard2-check-fill'],
         $analyticsNavigation,
     ];
 

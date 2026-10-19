@@ -149,11 +149,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
             mainAxisExtent: MediaQuery.textScalerOf(context).scale(16) > 20
-                ? 195
-                : 160,
+                ? 180
+                : 130,
             children: [
               _AnalyticsStat(
-                'Verified reports',
+                'Total Reports Verified',
                 '${verification['total'] ?? 0}',
               ),
               _AnalyticsStat('Pending', '${verification['pending'] ?? 0}'),
@@ -181,10 +181,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 : Column(
                     children: [
                       SizedBox(
-                        height: 220,
+                        height: 300,
                         child: PieChart(
                           PieChartData(
-                            centerSpaceRadius: 40,
+                            centerSpaceRadius: 46,
                             sectionsSpace: 3,
                             sections: healthValues.entries
                                 .where((entry) => entry.value > 0)
@@ -193,7 +193,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                     value: entry.value,
                                     color: colors[entry.key],
                                     title: '${entry.value.toInt()}',
-                                    radius: 68,
+                                    radius: 78,
                                     titleStyle: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w800,
@@ -224,7 +224,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       child: Text('No verified reports in this period.'),
                     )
                   : SizedBox(
-                      height: 240,
+                      height: 320,
                       child: LineChart(
                         LineChartData(
                           minY: 0,
@@ -333,19 +333,25 @@ class _AnalyticsStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
+    color: switch (label) {
+      'Total Reports Verified' => const Color(0xFFE5F0DE),
+      'Pending' => const Color(0xFFFFF4D2),
+      'Rejected' => const Color(0xFFF5E6E2),
+      'Needs attention' => const Color(0xFFFFE8DD),
+      _ => null,
+    },
     child: Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.insights_outlined),
           Text(
             value,
-            style: Theme.of(context).textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
           ),
-          Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 4),
+          Text(label, maxLines: 3, overflow: TextOverflow.ellipsis),
         ],
       ),
     ),

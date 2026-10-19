@@ -5,7 +5,7 @@ export const $$ = selector => [...document.querySelectorAll(selector)];
 export const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]));
 export const displayLabel = value => ({pending:'Pending',verified:'Verified',rejected:'Rejected',approved:'Approved',declined:'Declined',active:'Active',inactive:'Inactive',confirm:'Confirmed',correct:'Corrected',reject:'Rejected',auto_verify:'Verified automatically'}[value] ?? value ?? 'Not available');
 export const reportStatus = report => report.status;
-export const speciesNames = s => [s?.local_name ?? s?.species_local_name, s?.common_name ?? s?.species_common_name, s?.scientific_name ?? s?.species_name ?? s?.final_species_name ?? s?.suggested_species_name].filter(Boolean).map(esc).join('<br>') || 'Needs identification';
+export const speciesNames = s => [[s?.local_name ?? s?.species_local_name,'strong'],[s?.common_name ?? s?.species_common_name,'span'],[s?.scientific_name ?? s?.species_name ?? s?.final_species_name ?? s?.suggested_species_name,'em']].filter(([name])=>name).map(([name,tag])=>`<${tag}${tag==='strong'?' class="species-local"':''}>${esc(name)}</${tag}>`).join('<br>') || 'Needs identification';
 export const pill = value => `<span class="pill ${esc(String(value).toLowerCase().replaceAll(' ', '-'))}">${esc(displayLabel(value))}</span>`;
 export const field = (name, label, value = '', type = 'text', extra = '') => `<label class="field"><span>${esc(label)}</span><input name="${esc(name)}" type="${type}" value="${esc(value)}" ${extra}></label>`;
 export const select = (name, label, options, value = '', extra = '') => `<label class="field"><span>${esc(label)}</span><select name="${esc(name)}" ${extra}>${options.map(([id, label]) => `<option value="${esc(id)}" ${String(id) === String(value ?? '') ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`;
@@ -64,12 +64,15 @@ export function mapMarkers(canvas, items, {timelineMode = 'health', fit = true} 
     markers.push(marker);
     const content = document.createElement('div');
     const title = document.createElement('strong'); title.textContent = item.name ?? item.report_code;
-    const label = document.createElement('p'); label.textContent = health ?? 'Unknown';
+    const location = document.createElement('div'); location.textContent = [item.cluster_code,item.barangay_name].filter(Boolean).join(' · ');
+    const label = document.createElement('p'); label.textContent = health ?? 'Unknown'; label.style.color = healthColor(health);
+    const species = document.createElement('div');
+    if ([item.local_name,item.species_local_name,item.common_name,item.species_common_name,item.scientific_name,item.species_name].some(Boolean)) species.innerHTML = speciesNames(item);
     const link = document.createElement('a'); link.textContent = item.name ? (timelineMode==='growth'?'View growth timeline':'View health history') : 'View report'; link.href = item.name ? `#cluster/${item.id}?tab=${timelineMode}` : `#report/${item.id}`;
-    content.append(title, label, link); marker.bindPopup(content);
-    if (item.name) marker.on('mouseover', () => marker.openPopup());
+    content.append(title, location, label, species, link);
+    marker.bindPopup(content, {minWidth:120, maxWidth:Math.max(120,Math.min(280,canvas.getSize().x-60)), autoPanPadding:[12,12], autoPanPaddingTopLeft:[12,canvas.getSize().x<420?84:12]});
   }
-  if (fit && bounds.length) canvas.fitBounds(bounds, {padding: [30, 30], maxZoom: 16});
+  if (fit && bounds.length) canvas.fitBounds(bounds, {padding: [30, 30], maxZoom: 16, animate: false});
   return {bounds, markers};
 }
 export function map(container, items, {onClick, timelineMode = 'health', onTileError} = {}) {

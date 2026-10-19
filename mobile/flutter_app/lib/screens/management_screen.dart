@@ -1,7 +1,11 @@
+import '../shared/species_names.dart';
+
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../shared/list_filters.dart';
+import '../shared/catalog_widgets.dart';
+import '../shared/content_width.dart';
 import 'sites_screen.dart';
 
 class ManagementScreen extends StatefulWidget {
@@ -120,9 +124,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
     };
     final form = GlobalKey<FormState>();
     bool busy = false;
+    String successMessage = 'Saved.';
     String? error;
     final saved = await showModalBottomSheet<bool>(
       context: context,
+      constraints: const BoxConstraints(maxWidth: 680),
       isScrollControlled: true,
       useSafeArea: true,
       isDismissible: false,
@@ -287,9 +293,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
                       ] else ...[
                         if (_species)
                           for (final key in [
-                            'scientific_name',
-                            'common_name',
                             'local_name',
+                            'common_name',
+                            'scientific_name',
                             'family',
                             'iucn_code',
                             'iucn_label',
@@ -300,7 +306,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
                           ])
                             input(
                               key,
-                              key.replaceAll('_', ' '),
+                              key.startsWith('iucn_')
+                                  ? 'IUCN ${key.substring(5)}'
+                                  : '${key[0].toUpperCase()}${key.substring(1).replaceAll('_', ' ')}',
                               required: [
                                 'scientific_name',
                                 'common_name',
@@ -384,6 +392,87 @@ class _ManagementScreenState extends State<ManagementScreen> {
                               : 'Save',
                         ),
                       ),
+                      if (_species && item != null) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .error,
+                          ),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Delete species'),
+                          onPressed: busy
+                              ? null
+                              : () async {
+                                  update(() {
+                                    busy = true;
+                                    error = null;
+                                  });
+                                  try {
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (dialogContext) => AlertDialog(
+                                        title: const Text('Delete species?'),
+                                        content: Text(
+                                          'Remove “${item['local_name'] ?? item['common_name'] ?? item['scientific_name']}” from the species list? Existing reports are kept. This cannot be undone here.',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(
+                                              dialogContext,
+                                              false,
+                                            ),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          FilledButton(
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: Theme.of(context)
+                                                  .colorScheme
+                                                  .error,
+                                              foregroundColor: Theme.of(context)
+                                                  .colorScheme
+                                                  .onError,
+                                            ),
+                                            onPressed: () => Navigator.pop(
+                                              dialogContext,
+                                              true,
+                                            ),
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirmed != true || !context.mounted) {
+                                      return;
+                                    }
+                                    await widget.api.cloudRequest(
+                                      'species.php',
+                                      body: {
+                                        'id': item['id'],
+                                        'action': 'delete',
+                                      },
+                                    );
+                                    successMessage = 'Species deleted. Existing reports are kept.';
+                                    if (context.mounted) {
+                                      Navigator.pop(context, true);
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      update(
+                                        () => error = e is ApiException
+                                            ? e.message
+                                            : 'Could not delete. Try again.',
+                                      );
+                                    }
+                                  } finally {
+                                    if (context.mounted) {
+                                      update(() => busy = false);
+                                    }
+                                  }
+                                },
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -395,7 +484,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
     );
     if (saved == true && mounted) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Saved.')));
+          .showSnackBar(SnackBar(content: Text(successMessage)));
       await _load();
     }
   }
@@ -405,187 +494,223 @@ class _ManagementScreenState extends State<ManagementScreen> {
     appBar: AppBar(
       title: Text(_title),
       bottom: _species
-          ? PreferredSize(
-              preferredSize: const Size.fromHeight(52),
-              child: Row(
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'Species',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => SitesScreen(api: widget.api),
-                      ),
-                    ),
-                    child: const Text('Sites'),
-                  ),
-                ],
+          ? CatalogTabs(
+              selected: 'species',
+              textScaler: MediaQuery.textScalerOf(context),
+              onSelected: (_) => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => SitesScreen(api: widget.api),
+                ),
               ),
             )
           : null,
     ),
-    body: RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          ListFilters(
-            hint: _users
-                ? 'Name, email, or phone'
-                : _species
-                ? 'Species name'
-                : 'Badge name',
-            filterLabel: 'Status',
-            options: _users
-                ? const {
-                    '': 'All statuses',
-                    'active': 'Active',
-                    'inactive': 'Inactive',
-                    'pending_approval': 'Awaiting approval',
-                    'rejected': 'Declined',
-                  }
-                : const {'': 'All statuses', '1': 'Active', '0': 'Archived'},
-            onApply: (q, status) {
-              setState(() {
-                _query = q;
-                _status = status;
-                _page = 1;
-              });
-              if (_users) _load();
-            },
-          ),
-          if (_users)
-            ExpansionTile(
-              title: const Text('Role and barangay'),
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _role,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Role'),
-                  items: {'': 'All roles', ...roles}.entries
-                      .map(
-                        (e) => DropdownMenuItem(
-                          value: e.key,
-                          child: Text(e.value),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) {
-                    setState(() {
-                      _role = v ?? '';
-                      _page = 1;
-                    });
-                    _load();
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _barangay,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Barangay'),
-                  items:
-                      {
-                            '': 'All barangays',
-                            for (final b in _barangays)
-                              '${b['id']}': '${b['name']}',
-                          }.entries
-                          .map(
-                            (e) => DropdownMenuItem(
-                              value: e.key,
-                              child: Text(e.value),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: (v) {
-                    setState(() {
-                      _barangay = v ?? '';
-                      _page = 1;
-                    });
-                    _load();
-                  },
-                ),
-              ],
-            ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _loading ? null : () => _edit(null),
-            icon: const Icon(Icons.add),
-            label: Text(
-              _users
-                  ? 'Create staff account'
+    body: ContentWidth(
+      maxWidth: 960,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            ListFilters(
+              applyLabel: 'Filter',
+              clearLabel: 'Reset',
+              hint: _users
+                  ? 'Name, email, or phone'
                   : _species
-                  ? 'Add species'
-                  : 'Add badge',
+                  ? 'Local, common, or scientific name'
+                  : 'Badge name',
+              filterLabel: 'Status',
+              options: _users
+                  ? const {
+                      '': 'All statuses',
+                      'active': 'Active',
+                      'inactive': 'Inactive',
+                      'pending_approval': 'Awaiting approval',
+                      'rejected': 'Declined',
+                    }
+                  : const {'': 'All statuses', '1': 'Active', '0': 'Archived'},
+              onApply: (q, status) {
+                setState(() {
+                  _query = q;
+                  _status = status;
+                  _page = 1;
+                });
+                if (_users) _load();
+              },
             ),
-          ),
-          if (_loading) const LinearProgressIndicator(),
-          if (_error.isNotEmpty)
-            TextButton(onPressed: _load, child: Text('$_error Retry')),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text('${_users ? _total : _visible.length} results'),
-          ),
-          if (!_loading && _visible.isEmpty)
-            const Text('No results. Try another search or clear the filters.'),
-          for (final item in _visible)
-            Card(
-              child: ListTile(
-                contentPadding: const EdgeInsets.all(12),
-                title: Text(
-                  '${item[_users
-                      ? 'full_name'
-                      : _species
-                      ? 'common_name'
-                      : 'badge_name']}',
-                ),
-                subtitle: Text(
-                  _users
-                      ? '${item['email']}\n${item['barangay_name'] ?? ''} · ${roles[item['role']] ?? ''} · ${item['status']}'
-                      : _species
-                      ? '${item['scientific_name']}\nRoots: ${item['root_type']}\nLeaves: ${item['leaf_shape']}\n${item['active'] == 0 ? 'Archived' : 'Active'}'
-                      : '${metrics[item['metric']] ?? item['metric']} ≥ ${item['target_value']} · ${item['earned_count'] ?? 0} earned\n${item['active'] == 0 ? 'Archived' : 'Active'}',
-                ),
-                trailing:
-                    !_users || ['active', 'inactive'].contains(item['status'])
-                    ? IconButton(
-                        tooltip: 'Edit',
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => _edit(item),
-                      )
-                    : null,
+            if (_users)
+              ExpansionTile(
+                title: const Text('Role and barangay'),
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: _role,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Role'),
+                    items: {'': 'All roles', ...roles}.entries
+                        .map(
+                          (e) => DropdownMenuItem(
+                            value: e.key,
+                            child: Text(e.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      setState(() {
+                        _role = v ?? '';
+                        _page = 1;
+                      });
+                      _load();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _barangay,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Barangay'),
+                    items:
+                        {
+                              '': 'All barangays',
+                              for (final b in _barangays)
+                                '${b['id']}': '${b['name']}',
+                            }.entries
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e.key,
+                                child: Text(e.value),
+                              ),
+                            )
+                            .toList(),
+                    onChanged: (v) {
+                      setState(() {
+                        _barangay = v ?? '';
+                        _page = 1;
+                      });
+                      _load();
+                    },
+                  ),
+                ],
+              ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _loading ? null : () => _edit(null),
+              icon: const Icon(Icons.add),
+              label: Text(
+                _users
+                    ? 'Create staff account'
+                    : _species
+                    ? 'Add species'
+                    : 'Add badge',
               ),
             ),
-          if (_users && _pages > 1)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: _page > 1 && !_loading
-                      ? () {
-                          _page--;
-                          _load();
-                        }
-                      : null,
-                  child: const Text('Previous'),
-                ),
-                Text('$_page / $_pages'),
-                TextButton(
-                  onPressed: _page < _pages && !_loading
-                      ? () {
-                          _page++;
-                          _load();
-                        }
-                      : null,
-                  child: const Text('Next'),
-                ),
-              ],
+            if (_loading) const LinearProgressIndicator(),
+            if (_error.isNotEmpty)
+              TextButton(onPressed: _load, child: Text('$_error Retry')),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text('${_users ? _total : _visible.length} results'),
             ),
+            if (!_loading && _visible.isEmpty)
+              const Text(
+                'No results. Try another search or clear the filters.',
+              ),
+            for (final item in _visible)
+              _species
+                  ? _speciesCard(context, item)
+                  : Card(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        title: _species
+                            ? SpeciesNames(item)
+                            : Text(
+                                '${item[_users
+                                    ? 'full_name'
+                                    : _species
+                                    ? 'common_name'
+                                    : 'badge_name']}',
+                              ),
+                        subtitle: Text(
+                          _users
+                              ? '${item['email']}\n${item['barangay_name'] ?? ''} · ${roles[item['role']] ?? ''} · ${item['status']}'
+                              : _species
+                              ? 'Roots: ${item['root_type']}\nLeaves: ${item['leaf_shape']}\n${item['active'] == 0 ? 'Archived' : 'Active'}'
+                              : '${metrics[item['metric']] ?? item['metric']} ≥ ${item['target_value']} · ${item['earned_count'] ?? 0} earned\n${item['active'] == 0 ? 'Archived' : 'Active'}',
+                        ),
+                        trailing:
+                            !_users ||
+                                ['active', 'inactive'].contains(item['status'])
+                            ? IconButton(
+                                tooltip: 'Edit',
+                                icon: const Icon(Icons.edit_outlined),
+                                onPressed: () => _edit(item),
+                              )
+                            : null,
+                      ),
+                    ),
+            if (_users && _pages > 1)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: _page > 1 && !_loading
+                        ? () {
+                            _page--;
+                            _load();
+                          }
+                        : null,
+                    child: const Text('Previous'),
+                  ),
+                  Text('$_page / $_pages'),
+                  TextButton(
+                    onPressed: _page < _pages && !_loading
+                        ? () {
+                            _page++;
+                            _load();
+                          }
+                        : null,
+                    child: const Text('Next'),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _speciesCard(BuildContext context, Map<String, dynamic> item) => Card(
+    key: ValueKey('species-${item['id']}'),
+    margin: const EdgeInsets.only(bottom: 16),
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SpeciesNames(item),
+          const SizedBox(height: 16),
+          CatalogDetail('Roots', '${item['root_type'] ?? ''}'),
+          CatalogDetail('Leaves', '${item['leaf_shape'] ?? ''}'),
+          CatalogDetail('Bark', '${item['bark_texture'] ?? ''}'),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              CatalogStatus(item['active'] == 0 ? 'Archived' : 'Active'),
+              Tooltip(
+                message: 'Edit',
+                child: OutlinedButton.icon(
+                  onPressed: () => _edit(item),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Edit'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     ),

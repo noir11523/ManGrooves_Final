@@ -1,5 +1,6 @@
 import {AppError,integer,text,password,publicUser,now,requireRole} from './domain.js';
 import {sendImage} from './uploads.js';
+import {sendApplicationEmail,emailNotice} from './application-email.js';
 
 export const emailAddress=value=>{
   const email=text(value,'your email',190).toLowerCase();
@@ -52,14 +53,25 @@ export async function completeRegistration(service,input,_files,claims) {
     service.audit(tx,user,'account.registered','user',id,{role:details.role,status:user.status});
   });
   await service.auth.revokeRefreshTokens(claims.uid);
-  return {user:publicUser(user),pending_approval:user.status==='pending_approval',message:user.status==='active'?'Email verified. Your account is ready.':'Email verified. An administrator will review your expert ID code.'};
+  return {user:publicUser(user),pending_approval:user.status==='pending_approval',message:user.status==='active'?'Email verified. Your account is ready.':`Application submitted. Your expert application is under review. We'll email the decision and any admin note to ${user.email}. Check your Inbox and Spam folder for updates. You can also sign in to check your application status.`};
+}
+export function compareApplications(a,b) {
+  const pending=a.status==='pending',otherPending=b.status==='pending';
+  if(pending!==otherPending)return pending?-1:1;
+  const dateA=String((pending?a.created_at:a.reviewed_at||a.created_at)||''),dateB=String((pending?b.created_at:b.reviewed_at||b.created_at)||'');
+  return (pending?dateA.localeCompare(dateB):dateB.localeCompare(dateA))||String(a.uid).localeCompare(String(b.uid));
 }
 export async function expertApplications(service,user,input,res) {
   requireRole(user,'system_admin');
-  if(!input) return {items:(await service.rows('expert_applications')).map(({id_path,...row})=>({...row,has_id_photo:!!id_path})).sort((a,b)=>b.created_at.localeCompare(a.created_at))};
+  if(!input) return {items:(await service.rows('expert_applications')).map(({id_path,...row})=>({...row,has_id_photo:!!id_path})).sort(compareApplications)};
   const uid=text(input.uid,'the application',80),ref=service.ref('expert_applications',uid);
   const application=await service.get('expert_applications',uid);
   if(!application) throw new AppError('Application not found.',404);
+  if(input.action==='retry_email') {
+    await service.limited(`expert-email:${uid}`,5);
+    const email_status=await sendApplicationEmail(service,user,uid);
+    return {email_status,message:emailNotice(email_status)};
+  }
   if(input.action==='photo') {
     if(!application.id_path) throw new AppError('This application uses an ID code.',404);
     await sendImage(service.bucket,application.id_path,res); return null;
@@ -75,5 +87,6 @@ export async function expertApplications(service,user,input,res) {
     service.audit(tx,user,`expert.${input.action}`,'user',target.id,{note});
   });
   await service.auth.revokeRefreshTokens(uid);
-  return {message:input.action==='approve'?'Expert approved. They can now sign in.':'Application declined.'};
+  const email_status=await sendApplicationEmail(service,user,uid);
+  return {email_status,message:`${input.action==='approve'?'Expert approved. They can now sign in.':'Application declined. The applicant can read your reason when signing in.'} ${emailNotice(email_status)}`};
 }

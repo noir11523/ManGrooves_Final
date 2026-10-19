@@ -73,6 +73,21 @@ class _Api extends ApiClient {
 Finder _field(String label) => find.byWidgetPredicate(
   (w) => w is TextField && w.decoration?.labelText == label,
 );
+
+class _TraitsApi extends _Api {
+  @override
+  bool get supportsCloudAccounts => true;
+  @override
+  Future<Map<String, dynamic>> traitImages() async => {
+    'traits': {
+      'root_type': ['Prop roots'],
+      'leaf_shape': ['Elliptic'],
+      'bark_texture': ['Rough bark'],
+    },
+    'trait_images': <String, dynamic>{},
+  };
+}
+
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   if (finder.evaluate().isEmpty) {
     await tester.scrollUntilVisible(
@@ -88,6 +103,30 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets('live checklist search finds choices and species features', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(home: ChecklistScreen(api: _TraitsApi())),
+    );
+    await tester.pumpAndSettle();
+    expect(_field('Search'), findsOneWidget);
+    await tester.enterText(_field('Search'), ' GREEN ');
+    await tester.pumpAndSettle();
+    expect(find.text('Leaf color'), findsOneWidget);
+    expect(find.text('Klase sa Gamot (Root Type)'), findsNothing);
+    await tester.enterText(_field('Search'), 'prop roots');
+    await tester.pumpAndSettle();
+    expect(find.text('Leaf color'), findsNothing);
+    expect(find.text('Prop roots'), findsOneWidget);
+    expect(find.text('No matches. Try a category or choice.'), findsNothing);
+    await tester.enterText(_field('Search'), 'no-matching-choice');
+    await tester.pumpAndSettle();
+    expect(find.text('No matches. Try a category or choice.'), findsOneWidget);
+    await _tap(tester, find.text('Clear'));
+    expect(find.text('Leaf color'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'admin checklist fits small phones and confirms, saves, and reloads edits',
     (tester) async {
@@ -102,10 +141,10 @@ void main() {
       await tester.enterText(_field('Name'), 'Leaf appearance');
       await _tap(tester, find.byType(DropdownButtonFormField<int>).first);
       await _tap(tester, find.text('1').last);
-      await _tap(tester, find.text('Save checklist'));
+      await _tap(tester, find.text('Save changes'));
       await _tap(tester, find.text('Cancel'));
       expect(api.saves, 0);
-      await _tap(tester, find.text('Save checklist'));
+      await _tap(tester, find.text('Save changes'));
       await _tap(tester, find.text('Save'));
       expect(api.sent!['name'], 'Leaf appearance');
       expect((api.sent!['options'] as List).first['points'], 1);
@@ -129,7 +168,7 @@ void main() {
     expect(find.text('Changed'), findsOneWidget);
     await _tap(tester, find.byType(BackButton));
     await _tap(tester, find.text('Discard'));
-    expect(find.text('Save checklist'), findsNothing);
+    expect(find.text('Save changes'), findsNothing);
     expect(api.saves, 0);
     expect(tester.takeException(), isNull);
   });
@@ -166,7 +205,8 @@ void main() {
       await _tap(tester, find.text('Add choice'));
       expect(find.byType(DropdownButtonFormField<String>), findsNothing);
       final regularCard = find.byWidgetPredicate(
-        (w) => w is Card && w.key is ValueKey && (w.key as ValueKey).value == -1,
+        (w) =>
+            w is Card && w.key is ValueKey && (w.key as ValueKey).value == -1,
       );
       final regularField = find.descendant(
         of: regularCard,
@@ -189,7 +229,7 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       await tester.enterText(allField, 'Mixed colors');
-      await _tap(tester, find.text('Save checklist'));
+      await _tap(tester, find.text('Save changes'));
       await _tap(tester, find.text('Save'));
       final choices = api.sent!['options'] as List;
       expect(

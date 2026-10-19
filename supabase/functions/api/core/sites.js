@@ -9,6 +9,7 @@ export async function manageSites(service,user,input) {
     requireRole((await tx.get(service.ref('users',user.uid))).data(),'system_admin','expert');
     const ref=service.ref('clusters',id),previous=(await tx.get(ref)).data();
     if(!previous||previous.deleted_at)throw new AppError('Site not found.',404);
+    if(input.action==='approve'&&previous.location_pending)throw new AppError('Set the site pin before adding it to the site list.');
     if(input.version!==undefined&&input.version!==(previous.version??''))throw new AppError('This site changed. Reload before saving.',409);
     const lockRef=service.ref('meta','clusters'),lock=(await tx.get(lockRef)).data();
     if(['approve','delete'].includes(input.action)){
@@ -16,7 +17,7 @@ export async function manageSites(service,user,input) {
       const update=input.action==='approve'?{visibility:'shared',approved_by:user.id,approved_by_name:user.full_name,approved_at:now()}:{deleted_at:now(),active:0};
       tx.update(ref,{...update,version:randomUUID(),updated_at:now()});tx.set(lockRef,{version:(lock?.version??0)+1});
       service.audit(tx,user,`site.${input.action}`,'cluster',id,{name:previous.name});
-      return {message:input.action==='approve'?'Site approved. It is now available in the shared site list.':'Site deleted from the catalog. Existing reports are kept.'};
+      return {message:input.action==='approve'?'Site added to the shared site list.':'Site deleted from the catalog. Existing reports are kept.'};
     }
   });
   const barangayId=integer(input.barangay_id,'barangay'),barangay=await service.get('barangays',barangayId);
@@ -36,7 +37,7 @@ export async function manageSites(service,user,input) {
     if(active&&sites.some(s=>s.id!==id&&!s.deleted_at&&Number(s.active)!==0&&(s.visibility!=='personal'||s.created_by===previous?.created_by)&&s.name.trim().toLowerCase()===name.toLowerCase()))throw new AppError('An active site with this name already exists in this barangay.',409);
     const site={...(previous??{visibility:'shared',created_by:user.id,created_by_name:user.full_name,approved_by:user.id,approved_at:now(),id,cluster_code:`MGC-${id}`,initial_seedlings:0,verified_count:0,latest_health:'Unknown',created_at:now()}),
       name,sitio_name,barangay_id:barangayId,barangay_name:barangay.name,center_lat:location.latitude,center_lng:location.longitude,
-      radius_meters:radius,active,updated_at:now(),version:randomUUID()};
+      radius_meters:radius,active,location_pending:false,updated_at:now(),version:randomUUID()};
     tx.set(ref,site);tx.set(lockRef,{version:(lock?.version??0)+1});
     service.audit(tx,user,previous?'admin.site_updated':'admin.site_created','cluster',id,{name,active});
     return {site,message:active?'Site saved.':'Site archived. Existing reports are kept.'};

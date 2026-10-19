@@ -97,6 +97,7 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
               ),
             for (final item in items)
               Card(
+                margin: const EdgeInsets.only(bottom: 16),
                 child: ListTile(
                   title: Text(
                     '${item['report_code']} · ${reviewActionLabel(item['action'])}',

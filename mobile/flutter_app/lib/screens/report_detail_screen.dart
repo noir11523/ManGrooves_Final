@@ -1,3 +1,4 @@
+import '../shared/species_names.dart';
 import 'follow_up_screen.dart';
 
 import 'package:flutter/material.dart';
@@ -59,6 +60,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 CheckboxListTile(
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
                   value: needed,
                   onChanged: (v) => update(() => needed = v ?? false),
                   title: const Text('Needs follow-up'),
@@ -213,12 +216,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           },
         ),
         const SizedBox(height: 12),
+        SpeciesNames(_report!),
         _InfoCard(
-          title: 'Species name',
+          title: 'Species features',
           rows: {
-            'Name': speciesNames(_report!).isEmpty
-                ? 'Unidentified'
-                : speciesNames(_report!),
             'Root type': _report!['root_type'],
             'Leaf shape': _report!['leaf_shape'],
             'Bark texture': _report!['bark_texture'],
