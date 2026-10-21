@@ -136,6 +136,9 @@ test('all roles keep account actions in the top bar and reachable mobile navigat
     assert.equal(topbar.querySelectorAll('a[href="/settings.php"]').length,1,role);
     assert.equal(topbar.querySelectorAll('a[href="/notifications.php"]').length,1,role);
     assert.equal(topbar.querySelector('.notification-count').textContent,'2');
+    const pending=[...doc.querySelectorAll('a')].find(a=>a.querySelector('.small')?.textContent==='Pending');
+    assert.equal(pending.getAttribute('href'),role==='guardian'?'/reports.php?status=pending':'/admin/verification.php?status=pending');
+    assert.equal(doc.querySelector('a[href*="photo-credits"]'),null);
     const bottom=[...doc.querySelectorAll('.mobile-bottom-nav > a')].map(a=>a.getAttribute('href'));
     if(role==='guardian')assert.equal(doc.querySelector('.mobile-bottom-nav a[href="/submit-report.php"] span').textContent,'Submit Report');
     if(role!=='admin')assert.equal(sidebar.querySelector('a[href="/submit-report.php"] span').textContent,'Submit Report');
@@ -143,7 +146,7 @@ test('all roles keep account actions in the top bar and reachable mobile navigat
     assert.equal(new Set(bottom).size,bottom.length,role);
     assert.equal(more.some(href=>bottom.includes(href)||href==='/analytics.php'),false,role);
     const insights=topbar.querySelector('[aria-label="Analytics and timelines"]').parentElement;
-    assert.deepEqual([...insights.querySelectorAll('a')].map(a=>a.textContent),['Analytics','Mangrove timeline','Photo credits']);
+    assert.deepEqual([...insights.querySelectorAll('a')].map(a=>a.textContent),['Analytics','Mangrove timeline']);
     // Follow every workspace entry to catch removed access and incorrect role routes.
     const routes=new Set([...sidebar.querySelectorAll('nav a'),...topbar.querySelectorAll('a'),...doc.querySelectorAll('.mobile-bottom-nav a')].map(a=>a.getAttribute('href')));
     for(const route of routes)assert.equal((await b.request(route)).res.status,200,role+' '+route);

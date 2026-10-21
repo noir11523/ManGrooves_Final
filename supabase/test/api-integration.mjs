@@ -322,6 +322,7 @@ try {
       assert.equal(dash.stats[key],(await request(`reports.php?${filter}`,actor)).total);
     }
     assert.equal(dash.stats.map_clusters,(await request('clusters.php',actor)).clusters.length);
+    if(actor===expert||actor===admin)assert.equal(dash.stats.pending_review_reports,(await request('verification.php?status=pending',actor)).total);
   }
   pass('dashboard cards match their lists for every role; verification totals follow search, health and dates across all pages');
   assert.equal((await request('reports.php?q=Table%20test',guardianSession)).total,0);

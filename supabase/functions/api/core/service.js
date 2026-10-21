@@ -91,7 +91,7 @@ export class Service extends Store {
     const reminders = user.role === 'guardian' ? rows.filter(r => followUpAvailable(r) && !children.has(r.id))
       .map(r => ({id: r.id, report_code: reportLabel(r), cluster_id: r.cluster_id, cluster_name: r.cluster_name,
         follow_up_note:r.follow_up_note, due_state:'requested'})) : [];
-    return {user: publicUser(user), stats: dashboardStats(rows, clusters), latest_reports: reportList(rows).items.slice(0, 6), reminders, clusters};
+    return {user: publicUser(user), stats: {...dashboardStats(rows, clusters), pending_review_reports: rows.filter(r=>r.status==='pending'&&r.user_id!==user.id).length}, latest_reports: reportList(rows).items.slice(0, 6), reminders, clusters};
   }
   async analytics(user, query = {}) { return analyticsForUser(user, await this.reports(user), await this.clusters(user), query); }
   async detail(user, id) {
@@ -239,7 +239,7 @@ export class Service extends Store {
           const fresh = await tx.get(this.ref('criteria', c.id));
           if (fresh.data()?.version !== c.version) throw new AppError('The checklist changed. Review your answers again.', 409);
         }
-        const verified = false; // Every observation requires an independent staff review.
+        // Every observation requires an independent staff review.
         const time = now(), best = matching.best;
         if (!cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: fields.sitio_name, visibility:'personal', created_by:user.id, created_by_name:user.full_name, active:1, barangay_id: user.barangay_id,
           barangay_name: barangay.name, center_lat: location.latitude, center_lng: location.longitude, radius_meters: 75, sitio_name: fields.sitio_name,
@@ -255,34 +255,27 @@ export class Service extends Store {
           guardian_name: user.full_name, barangay_id: user.barangay_id, barangay_name: barangay.name, ...fields, ...location,
           cluster_id: cluster?.id ?? null, cluster_name: cluster?.name ?? null, parent_report_id: parentId, active_child_id: null,
           observed_alive_count: count, count_unknown:countUnknown, needs_follow_up:false, follow_up_note:null, health_score: classification.health_score, health_max_score: 6, context_score: classification.context_score,
-          environmental_score: classification.environmental_score, suggested_health: classification.status, final_health: verified ? 'Healthy' : null,
+          environmental_score: classification.environmental_score, suggested_health: classification.status, final_health: null,
           species_local_name:best?.local_name??null, species_common_name:best?.common_name??null, suggested_species_id: best?.id ?? null, suggested_species_name: best?.scientific_name ?? null, species_confidence: best?.confidence ?? null,
-          final_species_id: verified ? best?.id ?? null : null, final_species_name: verified ? best?.scientific_name ?? null : null,
-          rarity_level: cluster?.rarity_level ?? 'Unassigned', status: verified ? 'verified' : 'pending', needs_attention: 0,
+          final_species_id: null, final_species_name: null,
+          rarity_level: cluster?.rarity_level ?? 'Unassigned', status: 'pending', needs_attention: 0,
           photo_path: upload.path, closeup_photo_path:closeupUpload?.path??null, extra_photo_paths:extraUploads.map(p=>p.path), photo_hashes:hashes, photo_sha256: hash, submission_token:submissionToken||null, submission_digest: digest, observation_snapshots: classification.observations,
-          expert_id: null, expert_feedback: null, submitted_at: time, verified_at: verified ? time : null,
-          next_followup_date: verified ? manilaDate(Date.now() + 30 * 86400000) : null};
+          expert_id: null, expert_feedback: null, submitted_at: time, verified_at: null,
+          next_followup_date: null};
         tx.create(this.ref('reports', id), report);
         for(const ref of imageClaims) tx.create(ref,{report_id:id});
         tx.create(claimRef, {report_id: id, digest, submission_token:submissionToken||null, report_code: report.report_code, status: report.status, cluster_id: report.cluster_id});
         tx.set(lockRef, {version: (lock.data()?.version ?? 0) + 1});
         if (parentRef) tx.update(parentRef, {active_child_id: id});
-        if(!verified && cluster.id===clusterId) tx.set(this.ref('clusters',cluster.id),cluster);
-        if (verified) {
-          tx.set(this.ref('clusters', cluster.id), {...cluster, verified_count: cluster.verified_count + 1,
-            latest_health: report.final_health, latest_report_at: time, latest_report_id: id, observed_alive_count: count,
-            species_id: report.final_species_id, scientific_name: report.final_species_name});
-          this.logReview(tx, report, null, 'auto_verify', null);
-        }
-        this.notification(tx, noticeId, user.id, verified ? 'report_verified' : 'report_submitted', verified ? 'Report verified' : 'Report submitted',
-          verified ? 'Your healthy report was verified automatically.' : 'An expert will review your report.', id);
+        if(cluster.id===clusterId) tx.set(this.ref('clusters',cluster.id),cluster);
+        this.notification(tx, noticeId, user.id, 'report_submitted', 'Report submitted', 'An expert will review your report.', id);
         this.audit(tx, user, 'report.submitted', 'report', id, {status: report.status});
         return {report_id: id, report_code: report.report_code, status: report.status, cluster_id: report.cluster_id, new_badges: [], created: true};
       });
       stored = !!result.created;
       if (!stored) await Promise.all([upload.path,closeupUpload?.path,...extraUploads.map(p=>p.path)].filter(Boolean).map(path=>this.bucket.file(path).delete().catch(()=>{})));
       delete result.created;
-      return {result, message: result.status === 'verified' ? 'Healthy report verified.' : 'Report submitted for review.'};
+      return {result, message: 'Report submitted for review.'};
     } catch (error) { if (!stored) await Promise.all([upload.path,closeupUpload?.path,...extraUploads.map(p=>p.path)].filter(Boolean).map(path=>this.bucket.file(path).delete().catch(()=>{}))); throw error; }
   }
   repeatedSubmission(claim, digest, token = '') {
@@ -291,7 +284,7 @@ export class Service extends Store {
   }
   logReview(tx, report, reviewer, action, previous) {
     tx.create(this.ref('verification_logs', randomUUID()), {report_id: report.id, report_number: report.report_number ?? null, report_code: report.report_code,
-      verifier_id: reviewer?.id ?? null, verifier_name: reviewer?.full_name ?? 'Automatic verification', reviewer: reviewer?.full_name ?? 'Automatic verification',
+      verifier_id: reviewer?.id ?? null, verifier_name: reviewer?.full_name ?? 'Former reviewer', reviewer: reviewer?.full_name ?? 'Former reviewer',
       action, previous_status: previous?.status ?? 'pending', new_status: report.status, status: report.status,
       previous_health: previous?.final_health ?? previous?.suggested_health ?? report.suggested_health, new_health: report.final_health, health: report.final_health,
       previous_species_id: previous?.final_species_id ?? previous?.suggested_species_id ?? null, new_species_id: report.final_species_id,

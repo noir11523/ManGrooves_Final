@@ -829,6 +829,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
           ),
           const SizedBox(height: 12),
           const Text('Badges', style: TextStyle(fontWeight: FontWeight.w600)),
+          const Text('Milestones from verified observations.'),
           if ((item['badges'] as List? ?? []).isEmpty)
             const Text('No badges yet')
           else
@@ -837,9 +838,17 @@ class _ManagementScreenState extends State<ManagementScreen> {
               runSpacing: 4,
               children: [
                 for (final badge in item['badges'] as List)
-                  Chip(label: Text('${badge['name']}')),
+                  Tooltip(
+                    message:
+                        '${badge['description'] ?? 'Earned through verified observations'}',
+                    child: Chip(label: Text('${badge['name']}')),
+                  ),
               ],
             ),
+          const SizedBox(height: 8),
+          Text(
+            '${item['report_counts']?['verified'] ?? 0} verified · ${item['report_counts']?['total'] ?? 0} total reports',
+          ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,

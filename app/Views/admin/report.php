@@ -121,7 +121,7 @@ $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $old
         <div class="card mb-4">
             <div class="card-header"><h2 class="h5 mb-0">Expert decision</h2></div>
             <div class="card-body">
-                <dl class="row mb-0"><dt class="col-5">Reviewed by</dt><dd class="col-7"><?= e($report['expert_name'] ?: ($report['status'] === 'verified' ? 'System (automatic)' : 'Unknown')) ?></dd><dt class="col-5">Reviewed at</dt><dd class="col-7"><?= e(format_datetime($report['verified_at'])) ?></dd><dt class="col-5">Feedback</dt><dd class="col-7"><?= nl2br(e($report['expert_feedback'] ?: 'No feedback.')) ?></dd><?php if ($report['cluster_name']): ?><dt class="col-5">Cluster</dt><dd class="col-7"><?= e($report['cluster_code']) ?> — <?= e($report['cluster_name']) ?></dd><?php endif; ?></dl>
+                <dl class="row mb-0"><dt class="col-5">Reviewed by</dt><dd class="col-7"><?= e($report['expert_name'] ?: ($report['status'] === 'verified' ? 'Legacy verification' : 'Unknown')) ?></dd><dt class="col-5">Reviewed at</dt><dd class="col-7"><?= e(format_datetime($report['verified_at'])) ?></dd><dt class="col-5">Feedback</dt><dd class="col-7"><?= nl2br(e($report['expert_feedback'] ?: 'No feedback.')) ?></dd><?php if ($report['cluster_name']): ?><dt class="col-5">Cluster</dt><dd class="col-7"><?= e($report['cluster_code']) ?> — <?= e($report['cluster_name']) ?></dd><?php endif; ?></dl>
             </div>
         </div>
         <?php endif; ?>

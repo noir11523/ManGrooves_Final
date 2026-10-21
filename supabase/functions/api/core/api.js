@@ -67,9 +67,10 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
           return {verified_reports:reports.filter(r=>r.status==='verified').length,clusters:clusters.filter(c=>c.verified_count>0).length,species:species.filter(s=>Number(s.active)!==0).length,guardians:users.filter(u=>u.role==='guardian'&&u.status==='active').length};
         };
         if (req.query.summary_only === '1') return send(res, {summary: await summary()});
-        const [totals,sites,species]=await Promise.all([summary(),service.rows('clusters'),service.rows('species')]);
-        const clusters = sites.filter(c => sharedSite(c) && c.verified_count > 0).map(c => ({id: c.id, name: c.name,
-          latitude: c.center_lat, longitude: c.center_lng, latest_health: c.latest_health, barangay_name: c.barangay_name, verified_count: c.verified_count, species_id:c.species_id??null}));
+        const [totals,sites,species,barangays]=await Promise.all([summary(),service.rows('clusters'),service.rows('species'),service.rows('barangays')]);
+        const places=new Map(barangays.map(b=>[b.id,b]));
+        const clusters = sites.filter(c => sharedSite(c) && Number(c.active)!==0 && !c.location_pending && c.verified_count > 0).map(c => ({id: c.id, name: c.name,
+          latitude: c.center_lat, longitude: c.center_lng, latest_health: c.latest_health, barangay_name: c.barangay_name, barangay_id:c.barangay_id, city_municipality:places.get(c.barangay_id)?.city_municipality??null, cluster_code:c.cluster_code??null, verified_count: c.verified_count, species_id:c.species_id??null}));
         const catalog=species.filter(s=>Number(s.active)!==0).map(s=>({id:s.id,scientific_name:s.scientific_name,common_name:s.common_name,local_name:s.local_name,family:s.family,iucn_code:s.iucn_code}));
         return send(res, {clusters,species:catalog,summary:totals});
       }
@@ -196,7 +197,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
         case 'validation-history.php': {
           only('GET'); requireRole(user, 'expert', 'system_admin');
           const reports=new Map((await service.reports(user)).map(r=>[r.id,r]));
-          return send(res,paginate(filterRows((await service.rows('verification_logs')).map(r=>({...r,report_code:reportLabel(reports.get(r.report_id)??r)})), req.query, ['report_code', 'verifier_name', 'reviewer'], ['action']).sort(newest),req.query.page));
+          return send(res,paginate(filterRows((await service.rows('verification_logs')).map(r=>({...r,...(r.action==='auto_verify'?{reviewer:'Legacy record',verifier_name:'Legacy record'}:{}),report_code:reportLabel(reports.get(r.report_id)??r)})), req.query, ['report_code', 'verifier_name', 'reviewer'], ['action']).sort(newest),req.query.page));
         }
         case 'checklist.php': {
           requireRole(user, 'system_admin');
@@ -258,8 +259,8 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
         case 'users.php': {
           requireRole(user, 'system_admin');
           if (get) {
-            const [users,barangays,badges,awards,applications]=await Promise.all(['users','barangays','badges','user_badges','expert_applications'].map(name=>service.rows(name)));
-            const {rows,summary}=userDirectory(users,barangays,badges,awards,applications,req.query);
+            const [users,barangays,badges,awards,applications,reports]=await Promise.all(['users','barangays','badges','user_badges','expert_applications','reports'].map(name=>service.rows(name)));
+            const {rows,summary}=userDirectory(users,barangays,badges,awards,applications,req.query,reports);
             return send(res,{...paginate(rows,req.query.page),barangays,summary});
           }
           const {input,files}=await readInput(req);

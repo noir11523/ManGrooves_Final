@@ -1,7 +1,5 @@
 import 'report_history_screen.dart';
 
-import 'package:url_launcher/url_launcher.dart';
-
 import 'management_screen.dart';
 import 'checklist_screen.dart';
 import 'cloud_admin_screen.dart';
@@ -18,6 +16,7 @@ import 'submit_report_screen.dart';
 import 'verification_screen.dart';
 import 'notifications_screen.dart';
 import 'cluster_timeline_screen.dart';
+import 'explore_sites_screen.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -214,15 +213,6 @@ class _HomeShellState extends State<HomeShell> {
               tooltip: 'Analytics and timelines',
               icon: const Icon(Icons.insights_outlined),
               onSelected: (choice) async {
-                if (choice == 'credits') {
-                  await launchUrl(
-                    Uri.parse(
-                      'https://mangrooves-php.vercel.app/assets/observation-photo-credits.html',
-                    ),
-                    mode: LaunchMode.externalApplication,
-                  );
-                  return;
-                }
                 if (choice == 'analytics' && !_guardian) {
                   setState(() => _index = 3);
                   return;
@@ -235,6 +225,8 @@ class _HomeShellState extends State<HomeShell> {
                             appBar: AppBar(title: const Text('Analytics')),
                             body: AnalyticsScreen(api: widget.api),
                           )
+                        : choice == 'explore'
+                        ? ExploreSitesScreen(api: widget.api, user: widget.user)
                         : ClustersScreen(
                             api: widget.api,
                             initialTab: choice == 'growth' ? 1 : 0,
@@ -245,10 +237,13 @@ class _HomeShellState extends State<HomeShell> {
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'analytics', child: Text('Analytics')),
                 PopupMenuItem(
+                  value: 'explore',
+                  child: Text('Explore mangrove sites'),
+                ),
+                PopupMenuItem(
                   value: 'timeline',
                   child: Text('Mangrove timeline'),
                 ),
-                PopupMenuItem(value: 'credits', child: Text('Photo credits')),
               ],
             ),
             IconButton(

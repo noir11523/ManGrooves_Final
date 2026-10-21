@@ -384,11 +384,7 @@ final class ReportService
                 }
 
                 $status = 'pending';
-                if ($classification['status'] === 'Healthy') {
-                    (new VerificationService($pdo))->autoVerifyHealthy($reportId);
-                    $status = 'verified';
-                }
-                if ($status === 'pending') (new NotificationService($pdo))->syncStaff();
+                (new NotificationService($pdo))->syncStaff();
 
                 \Audit::logRequired('report.submitted', 'report', $reportId, [
                     'report_code' => $reportCode,

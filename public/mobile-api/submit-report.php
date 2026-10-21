@@ -20,9 +20,7 @@ try {
     );
     json_response([
         'ok' => true,
-        'message' => $result['status'] === 'verified'
-            ? 'Report automatically verified as Healthy.'
-            : 'Report submitted for expert or admin review.',
+        'message' => 'Report submitted for expert or admin review.',
         'report' => $result,
     ], 201);
 } catch (InvalidArgumentException $exception) {

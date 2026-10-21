@@ -4,6 +4,7 @@ import '../core/api_client.dart';
 import '../shared/follow_up_card.dart';
 import 'report_detail_screen.dart';
 import 'reports_screen.dart';
+import 'verification_screen.dart';
 import 'cluster_health_map.dart';
 import 'cluster_timeline_screen.dart';
 import 'report_map_screen.dart';
@@ -40,17 +41,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool attention = false,
     int? clusterId,
   }) {
+    final review = status == 'pending' && _data?['user']?['role'] != 'guardian';
     Navigator.push(
       context,
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Reports')),
-          body: ReportsScreen(
-            api: widget.api,
-            initialStatus: status,
-            needsAttention: attention,
-            clusterId: clusterId,
-          ),
+          appBar: AppBar(title: Text(review ? 'Review reports' : 'Reports')),
+          body: review
+              ? VerificationScreen(api: widget.api)
+              : ReportsScreen(
+                  api: widget.api,
+                  initialStatus: status,
+                  needsAttention: attention,
+                  clusterId: clusterId,
+                ),
         ),
       ),
     ).then((_) {
@@ -140,7 +144,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 _StatCard(
                   'Pending',
-                  stats['pending_reports'],
+                  user['role'] == 'guardian'
+                      ? stats['pending_reports']
+                      : stats['pending_review_reports'] ??
+                            stats['pending_reports'],
                   Icons.hourglass_top,
                   () => _openReports(status: 'pending'),
                 ),

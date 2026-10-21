@@ -92,7 +92,7 @@ Future<void> _open(WidgetTester tester, _Api api) async {
   await tester.pump(const Duration(milliseconds: 30));
 }
 
-Finder get _searchField => find.byType(TextField);
+Finder get _searchField => find.byKey(const ValueKey('map-place-search'));
 MapController _controller(WidgetTester tester) =>
     tester.widget<FlutterMap>(find.byType(FlutterMap)).mapController!;
 Future<void> _search(WidgetTester tester, String value) async {
@@ -150,6 +150,7 @@ void main() {
         _controller(tester).camera.center.latitude,
         closeTo(10.3264, .0000001),
       );
+      await _scrollPage(tester);
       await tester.ensureVisible(
         find.byType(DropdownButtonFormField<String>).first,
       );

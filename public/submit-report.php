@@ -22,9 +22,7 @@ if (is_post()) {
         clear_old_input();
         flash(
             'success',
-            $result['status'] === 'verified'
-                ? 'Report ' . $result['report_code'] . ' was automatically verified as Healthy.'
-                : 'Report ' . $result['report_code'] . ' was submitted for expert or admin review. '
+            'Report ' . $result['report_code'] . ' was submitted for expert or admin review. '
                     . 'Suggested health: ' . $result['suggested_health'] . '.'
         );
         redirect('reports.php?id=' . $result['id']);

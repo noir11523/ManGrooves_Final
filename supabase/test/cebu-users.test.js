@@ -37,3 +37,13 @@ test('user badges and roles distinguish applicants and suspended experts without
   for(const q of ['09171234567','0917','+63 917 123 4567'])assert.equal(run({q}).rows[0].id,1);
   assert.equal(run({q:'09171234567',status:'inactive'}).rows.length,0);
 });
+
+test('badge column keeps actual milestone names and counts only the matching user reports',()=>{
+ const users=[1,2].map(id=>({id,uid:String(id),full_name:`User ${id}`,role:'guardian',status:'active'}));
+ const badges=[{id:7,code:'first_report',badge_name:'First Report',description:'One verified report',threshold:1,metric:'verified_reports'}];
+ const reports=[{user_id:1,status:'verified'},{user_id:1,status:'pending'},{user_id:1,status:'rejected'},{user_id:2,status:'verified'}];
+ const {rows}=userDirectory(users,[],badges,[{user_id:1,badge_id:7}],[],{},reports);
+ assert.equal(rows[0].badges[0].name,'First Report');assert.equal(rows[0].badges[0].description,'One verified report');
+ assert.deepEqual(rows[0].report_counts,{total:3,verified:1,pending:1,rejected:1});
+ assert.deepEqual(rows[1].report_counts,{total:1,verified:1,pending:0,rejected:0});assert.equal(rows[1].badges.length,0);
+});

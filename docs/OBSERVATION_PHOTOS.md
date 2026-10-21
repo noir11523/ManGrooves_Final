@@ -1,6 +1,6 @@
 # Observation choice photographs
 
-The current catalog contains **29 individual real photographs**, including 13 optimized images from the user's shared Drive folder. No active checklist or trait mapping uses an AI image or collage. Labels remain on each choice; source and resizing details are in the separate [Photo credits page](../public/assets/observation-photo-credits.html), accessible from the web and app menus.
+The current catalog contains **29 individual real photographs**, including 13 optimized images from the user's shared Drive folder. No active checklist or trait mapping uses an AI image or collage. Labels remain on each choice; source and resizing details are in the separate [Photo credits page](../public/assets/observation-photo-credits.html), retained as an attribution resource without a separate navigation tab.
 
 ## Matching visible features
 

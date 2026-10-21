@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mangrooves_mobile/core/api_client.dart';
 import 'package:mangrooves_mobile/screens/dashboard_screen.dart';
+import 'package:mangrooves_mobile/screens/verification_screen.dart';
 import 'package:mangrooves_mobile/screens/cluster_health_map.dart';
 import 'package:mangrooves_mobile/screens/cluster_timeline_screen.dart';
 
@@ -13,6 +14,29 @@ class _Api extends ApiClient {
   final String role;
   String? status;
   bool? attention;
+  bool reviewOpened = false;
+  @override
+  Future<Map<String, dynamic>> verification({
+    int page = 1,
+    String query = '',
+    String health = '',
+    String status = 'pending',
+    bool verifiedAttention = false,
+    String dateFrom = '',
+    String dateTo = '',
+  }) async {
+    this.status = status;
+    attention = false;
+    reviewOpened = true;
+    return {
+      'items': [],
+      'page': 1,
+      'pages': 1,
+      'total': 0,
+      'summary': {'pending': 0},
+    };
+  }
+
   int? openedCluster;
   @override
   Future<Map<String, dynamic>> clusters({
@@ -89,6 +113,13 @@ void main() {
           await tester.tap(find.text(label));
           await tester.pumpAndSettle();
           expect(api.status, status);
+          if (status == 'pending') {
+            expect(api.reviewOpened, role != 'guardian');
+            expect(
+              find.byType(VerificationScreen),
+              role == 'guardian' ? findsNothing : findsOneWidget,
+            );
+          }
           expect(api.attention, false);
           await tester.tap(find.byType(BackButton));
           await tester.pumpAndSettle();
@@ -199,9 +230,9 @@ void main() {
         expect(find.text(name), findsOneWidget);
         expect(find.text('MGC-1713 · Inayawan'), findsOneWidget);
         expect(find.text('Avicennia rumphiana'), findsOneWidget);
-        await tester.ensureVisible(find.text('View timeline'));
+        await tester.ensureVisible(find.text('Health history'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('View timeline'));
+        await tester.tap(find.text('Health history'));
         await tester.pumpAndSettle();
         expect(api.openedCluster, 7);
         expect(find.text('Mangrove timeline'), findsOneWidget);

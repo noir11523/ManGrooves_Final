@@ -9,7 +9,7 @@ $pageScripts = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" in
     . '<script src="' . e(asset('js/maps.js')) . '"></script>';
 $statCards = [
     ['label' => 'Total Reports Verified', 'value' => $stats['total_reports'] ?? 0, 'icon' => 'bi-files', 'tone' => 'success', 'href' => url('reports.php?status=verified')],
-    ['label' => 'Pending', 'value' => $stats['pending_reports'] ?? 0, 'icon' => 'bi-hourglass-split', 'tone' => 'warning', 'href' => url('reports.php?status=pending')],
+    ['label' => 'Pending', 'value' => ($isGuardian ? ($stats['pending_reports'] ?? 0) : ($stats['pending_review_reports'] ?? $stats['pending_reports'] ?? 0)), 'icon' => 'bi-hourglass-split', 'tone' => 'warning', 'href' => url($isGuardian ? 'reports.php?status=pending' : 'admin/verification.php?status=pending')],
     ['label' => 'Rejected', 'value' => $stats['rejected_reports'] ?? 0, 'icon' => 'bi-x-circle', 'tone' => 'danger', 'href' => url('reports.php?status=rejected')],
     ['label' => 'Needs attention', 'value' => $stats['needs_attention'] ?? 0, 'icon' => 'bi-exclamation-triangle', 'tone' => 'danger', 'href' => url('reports.php?needs_attention=1')],
     ['label' => 'Clusters', 'value' => $stats['map_clusters'] ?? 0, 'icon' => 'bi-geo-alt', 'tone' => 'primary', 'href' => url('clusters.php')],

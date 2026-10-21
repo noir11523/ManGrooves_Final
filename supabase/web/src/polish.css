@@ -144,6 +144,50 @@ button:disabled { cursor: progress; }
 .map-search-card #map-search-status:empty { display: none; }
 .report-map-page .report-map-canvas { height: clamp(280px, 52vh, 480px); }
 .search-map-pin { display: grid; place-items: center; border: 3px solid white; border-radius: 50%; color: white; background: #1769ba; box-shadow: 0 1px 6px #0006; }
+.map-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin:18px 0 12px; }
+.map-toolbar p { margin:0; }
+.map-search-input input { border:1px solid var(--border); border-radius:10px; padding:12px; font:inherit; background:white; }
+.map-report-filters .row { display:grid; grid-template-columns:2fr 1fr 1fr; gap:16px; }
+.report-map-canvas { height:clamp(340px,58vh,620px); border-radius:16px; border:1px solid var(--border); }
+.report-map-page .report-map-canvas { height:clamp(340px,58vh,620px); }
+.map-results,.species-guide { margin:24px 0; border:1px solid var(--border); border-radius:14px; padding:18px; background:white; }
+.map-results summary,.species-guide summary { cursor:pointer; font-weight:600; padding:4px 0; }
+.map-results[open] summary,.species-guide[open] summary { margin-bottom:18px; }
+.map-results .report-row,.explore-results .report-row { align-items:flex-start; gap:16px; }
+.map-results .actions,.explore-results .actions { flex-shrink:0; }
+.leaflet-tooltip { max-width:min(280px,65vw); white-space:normal; overflow-wrap:anywhere; padding:8px 12px; }
+.leaflet-interactive:focus-visible { outline:3px solid #183c21; outline-offset:4px; }
+.map-status { font-size:.85rem; margin:10px 0; }
+.explore-page .page-head,.explore-page form { text-align:left; }
+.explore-page #explore-filters .row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.explore-results h3 { margin:0 0 8px; overflow-wrap:anywhere; }
+.timeline-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:24px 0 16px; }
+.timeline-summary .card { display:flex; flex-direction:column; align-items:flex-start; gap:10px; margin:0; }
+.timeline-summary strong { font-size:1.4rem; }
+.timeline-shortcuts { display:flex; flex-wrap:wrap; gap:12px; margin:16px 0 24px; }
+.timeline-charts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.timeline-charts .card { min-width:0; }
+.timeline-section { scroll-margin-top:100px; }
+.timeline-section h2 { margin-top:0; }
+.timeline-section .empty { padding:24px 12px; }
+.timeline-charts .chart { height:260px; }
+.earned-badges { display:flex; flex-wrap:wrap; gap:6px; }
+.badge-name { display:inline-block; background:#edf3e9; color:#24512c; border:1px solid #cadcc3; border-radius:8px; padding:4px 8px; font-weight:600; font-size:.8rem; }
+.badge-report-counts { display:block; margin-top:10px; }
+@media(max-width:700px) {
+  .timeline-charts { grid-template-columns:1fr; }
+  .timeline-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .timeline-summary .card { padding:14px; gap:8px; }
+  .timeline-summary .card:last-child { grid-column:1/-1; }
+  .timeline-summary strong { font-size:1.2rem; }
+  .map-report-filters .row { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .map-report-filters .row > .field:first-child { grid-column:1/-1; }
+  .explore-page #explore-filters .row { grid-template-columns:1fr; }
+  .map-results .report-row,.explore-results .report-row { flex-direction:column; }
+  .map-results .actions,.explore-results .actions { flex-wrap:wrap; }
+  .map-toolbar button { width:100%; }
+  .timeline-shortcuts button { flex:1 1 130px; }
+}
 @media(max-width: 420px) { .map-search-input { flex-wrap: wrap; } .map-search-input input { width: 100%; } }
 
 /* Report lists retain table hierarchy on desktop and labelled cards on phones. */

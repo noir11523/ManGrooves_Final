@@ -20,6 +20,7 @@ class ReportMapScreen extends StatefulWidget {
 
 class _ReportMapScreenState extends State<ReportMapScreen> {
   final _query = TextEditingController();
+  final _reportQuery = TextEditingController();
   final _map = MapController();
   final _mapKey = GlobalKey();
   Timer? _searchTimer;
@@ -45,6 +46,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
     _searchTimer?.cancel();
     _searchVersion++;
     _query.dispose();
+    _reportQuery.dispose();
     _map.dispose();
     super.dispose();
   }
@@ -60,6 +62,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
         page: page,
         status: _status,
         health: _health,
+        query: _reportQuery.text.trim(),
       );
       if (!mounted || generation != _generation) return;
       setState(() => _data = data);
@@ -262,8 +265,12 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .85,
+      ),
       builder: (sheet) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -281,6 +288,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
               ),
               if (item['status'] != 'verified')
                 const Text('Health is a system suggestion.'),
+              const SizedBox(height: 16),
               FilledButton(
                 onPressed: () {
                   Navigator.pop(sheet);
@@ -307,6 +315,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
+            key: const ValueKey('map-place-search'),
             controller: _query,
             decoration: InputDecoration(
               labelText: 'Find a location',
@@ -352,13 +361,28 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
               ),
             ),
           const SizedBox(height: 12),
+          TextField(
+            key: const ValueKey('map-report-search'),
+            controller: _reportQuery,
+            decoration: const InputDecoration(
+              labelText: 'Find submitted reports',
+              hintText: 'Site, barangay, species or report number',
+              prefixIcon: Icon(Icons.filter_alt_outlined),
+            ),
+            onSubmitted: (_) {
+              _followReports = true;
+              _load();
+            },
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
+                  key: ValueKey('map-status-$_status'),
                   isExpanded: true,
                   initialValue: _status,
-                  decoration: const InputDecoration(labelText: 'Status'),
+                  decoration: const InputDecoration(labelText: 'Review status'),
                   items:
                       {
                             '': 'All reports',
@@ -383,6 +407,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   isExpanded: true,
+                  key: ValueKey('map-health-$_health'),
                   initialValue: _health,
                   decoration: const InputDecoration(labelText: 'Health'),
                   items: ['', 'Healthy', 'Stressed', 'At Risk', 'Unknown']
@@ -402,16 +427,62 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
             ],
           ),
           const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                onPressed: _loading
+                    ? null
+                    : () {
+                        _followReports = true;
+                        _load();
+                      },
+                child: const Text('Apply filters'),
+              ),
+              OutlinedButton(
+                onPressed: () {
+                  _reportQuery.clear();
+                  setState(() {
+                    _status = '';
+                    _health = '';
+                    _followReports = true;
+                  });
+                  _load();
+                },
+                child: const Text('Reset filters'),
+              ),
+              OutlinedButton.icon(
+                onPressed: located.isEmpty
+                    ? null
+                    : () {
+                        _searchVersion++;
+                        _searchTimer?.cancel();
+                        setState(() {
+                          _selectedPlace = null;
+                          _query.clear();
+                          _searchMessage = null;
+                          _places = [];
+                          _followReports = true;
+                        });
+                        _fitReports();
+                      },
+                icon: const Icon(Icons.center_focus_strong),
+                label: const Text('Show matching pins'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           if (_loading) const LinearProgressIndicator(),
           if (_error != null)
             TextButton(onPressed: _load, child: Text('$_error Tap to retry.')),
           if (_loading) const Text('Loading reports...'),
           if (_data != null)
             Text(
-              '${located.length} pins · ${_data!['total'] ?? items.length} reports · Page $page of $pages',
+              '${located.length} pins on this page · ${_data!['total'] ?? items.length} reports total · Page $page of $pages',
             ),
           const Text(
-            'Tap a report pin to view its details. A blue pin marks your search.',
+            'Tap a pin for details. Colors show health; pending and rejected reports show the system suggestion. A blue pin marks your search.',
           ),
           const SizedBox(height: 8),
           SizedBox(
@@ -474,7 +545,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
                         height: 48,
                         child: IconButton(
                           tooltip:
-                              '${item['report_code']}: ${item['display_health']}',
+                              '${item['report_code']}: ${item['display_health']} · ${statusLabel(item['status'])}',
                           onPressed: () => _pin(item),
                           icon: Icon(
                             Icons.location_on,

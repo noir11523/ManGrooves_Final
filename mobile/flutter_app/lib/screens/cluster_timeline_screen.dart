@@ -22,9 +22,11 @@ class ClusterTimelineScreen extends StatefulWidget {
 class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
   Map<String, dynamic>? _data;
   String? _error;
+  late int _section;
   @override
   void initState() {
     super.initState();
+    _section = widget.initialTab == 1 ? 1 : 0;
     _load();
   }
 
@@ -89,26 +91,75 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Health and living mangroves recorded during verified visits. Counts may change when a different area is surveyed; they do not measure tree height.',
+                    'Health history and mangrove counts from verified field visits, together in one timeline.',
                   ),
-                  if (entries.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      'Health by visit',
-                      style: Theme.of(context).textTheme.titleLarge,
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Latest health: ${entries.isEmpty ? 'Awaiting review' : entries.last['health']}',
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Latest count: ${counts.isEmpty ? 'Not recorded' : '${counts.last['observed_alive_count']} living mangroves'}',
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${entries.length} verified visits · ${counts.length} with counts',
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    VisitChart(entries: entries, growth: false),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Living mangroves',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Health history'),
+                        selected: _section == 0,
+                        onSelected: (_) => setState(() => _section = 0),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Mangrove counts'),
+                        selected: _section == 1,
+                        onSelected: (_) => setState(() => _section = 1),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    _section == 0 ? 'Health history' : 'Mangrove counts',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  if (_section == 0) ...[
+                    if (entries.isNotEmpty)
+                      VisitChart(entries: entries, growth: false)
+                    else
+                      const Text(
+                        'No verified health results yet. Reports appear after staff review.',
+                      ),
+                    if (entries.length == 1)
+                      const Text(
+                        'First verified visit. More visits will show changes over time.',
+                      ),
+                  ] else ...[
                     if (counts.isNotEmpty)
                       VisitChart(entries: counts, growth: true)
                     else
-                      const Text('No mangrove counts recorded yet.'),
+                      const Text(
+                        'No counts recorded yet. A verified report needs a living-mangrove count. Unable to count stays blank, never zero.',
+                      ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Previously Growth timeline. These are living-mangrove counts, not tree height. Compare visits covering the same area.',
+                    ),
                   ],
                   const SizedBox(height: 24),
                   Text(
@@ -125,7 +176,11 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${entry['submitted_at']}'.split(' ').first),
+                            Text(
+                              '${entry['submitted_at']}'
+                                  .split(RegExp('[ T]'))
+                                  .first,
+                            ),
                             const SizedBox(height: 8),
                             Text(
                               '${entry['health']}',
@@ -214,8 +269,8 @@ class VisitChart extends StatelessWidget {
         height: 245,
         child: LineChart(
           LineChartData(
-            minY: 0,
-            maxY: growth ? null : 2,
+            minY: growth ? 0 : -.25,
+            maxY: growth ? null : 2.25,
             minX: 0,
             maxX: entries.length == 1 ? 1 : (entries.length - 1).toDouble(),
             titlesData: FlTitlesData(
@@ -258,8 +313,11 @@ class VisitChart extends StatelessWidget {
                   getTitlesWidget: (value, meta) => Text(
                     growth
                         ? value.toInt().toString()
-                        : {0: 'At Risk', 1: 'Stressed', 2: 'Healthy'}[value
-                                  .toInt()] ??
+                        : {
+                                0.0: 'At Risk',
+                                1.0: 'Stressed',
+                                2.0: 'Healthy',
+                              }[value] ??
                               '',
                     style: const TextStyle(fontSize: 11),
                   ),

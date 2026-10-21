@@ -1,3 +1,5 @@
+import {mangroveTimeline} from './timeline-page.js';
+import {exploreSites} from './explore-page.js';
 import {barangayPicker,bindBarangayPicker,contactFields} from './address-fields.js';
 import './observations.css';
 import './style.css';
@@ -37,12 +39,7 @@ function landing() {
     <section class="features" id="about-section"><article class="card"><h2>Coastal protection</h2><p>Mangrove roots slow waves and help keep soil in place.</p></article><article class="card"><h2>Shelter for wildlife</h2><p>Mangrove roots shelter fish, crabs, birds, and other wildlife.</p></article><article class="card"><h2>Climate protection</h2><p>Mangroves store carbon and help communities adapt to change.</p></article><article class="card"><h2>Community care</h2><p>Repeat visits help us see how each site changes over time.</p></article></section><section class="hero" id="how-section"><h2>How it works</h2><p>1. Take a field photo, place your map pin, and answer the checklist.</p><p>2. Review the suggested health and species before submitting.</p><p>3. Experts review every submitted observation. Return to the site to track its changes.</p><a class="button outline" href="#explore">Explore the cluster map</a></section></main><footer><a href="#privacy">Privacy notice</a> · ManGROOVES</footer>`;
 }
 async function explorePage() {
-  authLayout('<h1>Explore mangrove sites</h1><p class="muted">Explore sites with verified reports.</p><div id="explore-map" class="map large"></div>');
-  const node = $('.auth'); node.style.maxWidth = '1100px';
-  const data = await api('explore.php', {anonymous: true});
-  if (!node.isConnected) return;
-  const canvas = map($('#explore-map'), data.clusters); cleanup = () => canvas.remove();
-  node.insertAdjacentHTML('beforeend', `${legend}<p class="muted">Sign in to view the health history available to your account.</p><a class="button" href="#login">Sign in</a>`);
+  authLayout('<p>Loading sites…</p>');const node=$('.auth');node.style.maxWidth='1100px';cleanup=await exploreSites(node,{},viewer);
 }
 async function loginPage() {
   return signInPage(authLayout);
@@ -55,7 +52,7 @@ function shell(route) {
     ...(!admin && staff ? [['species','Species and Sites']] : []),
     ...(admin ? [['label', 'Administration'], ['checklist', 'Health checklist'], ['users', 'Users'], ['expert-applications','Expert applications'], ['certificate-settings','Certificate signer'], ['species', 'Species and Sites'], ['badge-settings', 'Manage badges'], ['audit', 'Audit log']] : []),
     ['label', 'Account'], ['profile', 'Profile settings']];
-  $('#app').innerHTML = `<a class="skip-link" href="#content">Skip to content</a><div class="shell"><aside class="sidebar" id="site-menu" aria-label="Main menu"><button class="menu-close outline" aria-label="Close menu">Close menu ×</button><a class="brand" href="#dashboard">♣ ManGROOVES</a><nav aria-label="Main navigation">${links.map(([key, label]) => key === 'label' ? `<span class="nav-label">${label}</span>` : `<a class="${route === key ? 'active' : ''}" href="#${key}" ${route === key ? 'aria-current="page"' : ''}>${label}</a>`).join('')}</nav><a class="sidebar-link" href="/assets/observation-photo-credits.html">Photo credits</a></aside><button class="menu-backdrop" hidden tabindex="-1" aria-label="Close menu"></button><div class="shell-main"><header class="topbar"><div><button class="mobile-menu outline" aria-label="Open menu" aria-controls="site-menu" aria-expanded="false">☰ Menu</button></div><div class="user"><a class="icon-button" href="#notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></a><span class="avatar">${esc(viewer.first_name?.[0] ?? viewer.full_name[0])}</span><div class="user-name"><strong>${esc(viewer.full_name)}</strong><small>${esc(roleLabel[viewer.role])}</small></div><button class="outline" id="signout">Sign out</button></div></header><main class="workspace" id="content" tabindex="-1"><p class="loading">Loading…</p></main></div></div>`;
+  $('#app').innerHTML = `<a class="skip-link" href="#content">Skip to content</a><div class="shell"><aside class="sidebar" id="site-menu" aria-label="Main menu"><button class="menu-close outline" aria-label="Close menu">Close menu ×</button><a class="brand" href="#dashboard">♣ ManGROOVES</a><nav aria-label="Main navigation">${links.map(([key, label]) => key === 'label' ? `<span class="nav-label">${label}</span>` : `<a class="${route === key ? 'active' : ''}" href="#${key}" ${route === key ? 'aria-current="page"' : ''}>${label}</a>`).join('')}</nav></aside><button class="menu-backdrop" hidden tabindex="-1" aria-label="Close menu"></button><div class="shell-main"><header class="topbar"><div><button class="mobile-menu outline" aria-label="Open menu" aria-controls="site-menu" aria-expanded="false">☰ Menu</button></div><div class="user"><a class="icon-button" href="#notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></a><span class="avatar">${esc(viewer.first_name?.[0] ?? viewer.full_name[0])}</span><div class="user-name"><strong>${esc(viewer.full_name)}</strong><small>${esc(roleLabel[viewer.role])}</small></div><button class="outline" id="signout">Sign out</button></div></header><main class="workspace" id="content" tabindex="-1"><p class="loading">Loading…</p></main></div></div>`;
   cleanupMenu = bindMenu($('.shell'));
   $('.skip-link').onclick = event => { event.preventDefault(); $('#content').focus(); };
   $('#signout').onclick = async () => { if (await confirm('Sign out?', 'You can sign in again to continue your saved draft on this device.')) { await reportDraft.flush(); reportDraft.reset(); await logout(); } };
@@ -64,7 +61,7 @@ function shell(route) {
 async function dashboardPage(node) {
   const data = await api('dashboard.php'), s = data.stats;
   set(node, `<p class="eyebrow">Your coastal workspace</p><h1>Hi, ${esc(viewer.first_name || viewer.full_name.split(' ')[0])}!</h1><p class="muted">Your latest mangrove updates.</p><div class="stats">${[
-    ['Total Reports Verified', s.total_reports, 'reports?status=verified'], ['Pending', s.pending_reports, 'reports?status=pending'],
+    ['Total Reports Verified', s.total_reports, 'reports?status=verified'], ['Pending', viewer.role==='guardian'?s.pending_reports:s.pending_review_reports??s.pending_reports, viewer.role==='guardian'?'reports?status=pending':'verification?status=pending'],
     ['Rejected', s.rejected_reports, 'reports?status=rejected'], ['Needs attention', s.needs_attention, 'reports?needs_attention=1'], ['Clusters', s.map_clusters, 'clusters']
   ].map(([label, value, path]) => `<a class="stat" href="#${path}"><strong>${value ?? 0}</strong><span>${label} →</span></a>`).join('')}</div>
     ${data.reminders.length ? `<section class="card"><h2>Follow-up requests</h2>${data.reminders.map(r => `<p><a href="#submit?parent=${r.id}&cluster=${r.cluster_id}">${esc(r.cluster_name ?? r.report_code)}</a> · ${esc(r.follow_up_note||'Awaiting follow-up')}</p>`).join('')}</section>` : ''}
@@ -151,25 +148,13 @@ async function analyticsPage(node, query) {
 }
 async function clustersPage(node, growth = false, query = {}) {
   const {clusters} = await api('clusters.php', {query});
-  set(node, `${title('Mangrove timeline', 'Select a cluster to see health, mangrove counts and verified visits.')}<div id="map" class="map large"></div>${legend}<h2>Clusters</h2>${clusters.length ? `<div class="list">${clusters.map(c => `<a class="report-row" href="#cluster/${c.id}?tab=${growth ? 'growth' : 'health'}"><div><strong>${esc(c.name)}</strong><small>${c.verified_count} verified visits · ${esc(c.barangay_name)}</small></div>${pill(c.latest_health)}</a>`).join('')}</div>` : '<p class="empty">Clusters appear after reports are verified.</p>'}`);
+  set(node, `${title('Mangrove timeline', 'Select a site to open Health history, Mangrove counts and verified visits.')}<div id="map" class="map large"></div>${legend}<h2>Clusters</h2>${clusters.length ? `<div class="list">${clusters.map(c => `<a class="report-row" href="#cluster/${c.id}?tab=${growth ? 'growth' : 'health'}"><div><strong>${esc(c.name)}</strong><small>${c.verified_count} verified visits · ${esc(c.barangay_name)}</small></div>${pill(c.latest_health)}</a>`).join('')}</div>` : '<p class="empty">Clusters appear after reports are verified.</p>'}`);
   node.querySelector('.page-head').insertAdjacentHTML('afterend',listFilters(query,[['health','Health',[['','All health'],...['Healthy','Stressed','At Risk','Unknown'].map(v=>[v,v])]]],'Cluster name, code, or barangay'));
   bindListFilters(node,query,q=>listRoute(growth?'growth':'clusters',q),clusters.length);
   if (!clusters.length && (query.q || query.health)) node.querySelector('.empty').textContent='No clusters match. Try another search or clear the filters.';
   back(); const canvas = map($('#map'), clusters, {timelineMode:growth?'growth':'health'}); cleanup = () => canvas.remove();
 }
-async function timelinePage(node,id,query){
-  const {cluster,timeline}=await api('cluster.php',{query:{id}});
-  const ordered=[...timeline].sort((a,b)=>a.submitted_at.localeCompare(b.submitted_at)||a.id-b.id);
-  const counts=ordered.filter(r=>r.observed_alive_count!=null), entries=[...ordered].reverse();
-  const delta=r=>{const i=counts.findIndex(c=>c.id===r.id);if(i<=0)return 'First recorded count';const d=r.observed_alive_count-counts[i-1].observed_alive_count;return `${d>0?'+':''}${d} since previous count`;};
-  set(node,`${title('Mangrove timeline',cluster.name)}<p class="muted">Health and living mangroves recorded during verified visits. Counts may change when a different area is surveyed; they do not measure tree height.</p>${entries.length?'<div class="row"><section class="card"><h2>Health by visit</h2><div class="chart"><canvas id="health-chart"></canvas></div></section><section class="card"><h2>Living mangroves</h2>'+(counts.length?'<div class="chart"><canvas id="count-chart"></canvas></div>':'<p>No mangrove counts recorded yet.</p>')+'</section></div>':''}<h2>Verified visits</h2><div class="timeline">${entries.map(r=>`<article class="card visit"><small>${esc(r.submitted_at.slice(0,10))} · ${esc(r.report_code)}</small><h3>${esc(r.health)}</h3><p>${esc(r.species_name??'Species not confirmed')}</p>${r.observed_alive_count!=null?`<p><strong>${esc(r.observed_alive_count)} living mangroves</strong><br><small>${esc(delta(r))}</small></p>`:'<p>Count not recorded</p>'}${r.expert_feedback?`<p>${esc(r.expert_feedback)}</p>`:''}${r.can_view_details?`<a href="#report/${r.id}">View report</a>`:'<small>Community observation</small>'}</article>`).join('')||'<p class="empty">No verified visits yet.</p>'}</div>`);back();
-  const charts=[],levels={'At Risk':0,Stressed:1,Healthy:2};
-  for(const [selector,points,growth] of [['#health-chart',ordered,false],['#count-chart',counts,true]]){
-    if(!points.length)continue;
-    charts.push(new Chart($(selector),{type:'line',data:{labels:points.map(r=>r.submitted_at.slice(0,10)),datasets:[{label:growth?'Living mangroves':'Health',data:points.map(r=>growth?r.observed_alive_count:levels[r.health]??null),borderColor:'#35713d',pointRadius:5,tension:0,stepped:!growth,spanGaps:false}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>growth?c.parsed.y+' living mangroves':['At Risk','Stressed','Healthy'][c.parsed.y]}}},scales:{y:growth?{beginAtZero:true,ticks:{precision:0}}:{min:0,max:2,ticks:{stepSize:1,callback:v=>['At Risk','Stressed','Healthy'][v]}}}}}));
-  }
-  cleanup=()=>charts.forEach(c=>c.destroy());
-}
+async function timelinePage(node,id,query){cleanup=await mangroveTimeline(node,id,query,title,back);}
 async function notificationsPage(node, query) {
   const data = await api('notifications.php', {query});
   set(node, `${title('Notifications', `${data.unread} unread`)}<button id="mark-all" class="outline" ${data.unread ? '' : 'hidden'}>Mark all read</button><div class="list" style="margin-top:20px">${data.notifications.map(n => `<button class="report-row notification" data-id="${n.id}" data-report="${n.report_id ?? ''}"><div><strong>${n.read_at ? '' : '● '}${esc(n.title)}</strong><p>${esc(n.message)}</p><small>${esc(n.created_at.slice(0, 10))}</small></div></button>`).join('') || '<p class="empty">Report activity and reminders will appear here.</p>'}</div>${pager(data, 'notifications')}`); back();
@@ -193,7 +178,7 @@ function historyTabs(reviews){return `<nav class="actions" aria-label="Report hi
 async function historyPage(node, query) {
   const data = await api('validation-history.php', {query});
   set(node, `${title('Report history', 'Reports and their review decisions.')}${historyTabs(true)}<div class="list">${data.items.map(v => `<a class="report-row" href="#report/${v.report_id}"><div><strong>${esc(v.report_code)} · ${esc(displayLabel(v.action))}</strong><p>${esc(v.verifier_name ?? v.reviewer ?? 'Automatic check')} · ${esc(v.created_at)}</p><small>${esc(v.previous_health ?? 'Unknown')} → ${esc(v.new_health ?? v.health ?? 'Unconfirmed')}</small></div>${pill(v.new_status ?? v.status)}</a>`).join('') || '<p class="empty">No reviews yet.</p>'}</div>${pager(data, 'reports', {...query,view:'reviews'})}`); back();
-  node.querySelector('.list').insertAdjacentHTML('beforebegin',listFilters(query,[['action','Decision',[['','All decisions'],['confirm','Confirmed'],['correct','Corrected'],['reject','Rejected'],['auto_verify','Automatic verification']]]],'Report number or reviewer'));
+  node.querySelector('.list').insertAdjacentHTML('beforebegin',listFilters(query,[['action','Decision',[['','All decisions'],['confirm','Confirmed'],['correct','Corrected'],['reject','Rejected']]]],'Report number or reviewer'));
   node.querySelector('.pagination')?.remove();node.insertAdjacentHTML('beforeend',pager(data,'reports',{...query,view:'reviews'}));
   bindListFilters(node,query,q=>listRoute('reports',{...q,view:'reviews'}),data.total);
   if (!data.items.length && (query.q || query.action)) node.querySelector('.empty').textContent='No reviews match. Try another search or clear the filters.';
@@ -286,16 +271,7 @@ export async function renderEmbedded(name, node, query, user) {
     case 'register': return registrationPage(layout);
     case 'forgot-password': return recoveryPage(layout);
     case 'login': return signInPage(layout);
-    case 'explore': {
-      set(node, `<section class="explore-page"><header class="explore-intro">${title('Explore mangrove sites')}<p>Find mangrove species and sites with verified reports.</p><form id="species-search" class="filters">${field('q','Search species','','search','placeholder="Local, common or scientific name"')}<button type="submit">Search</button><button class="outline" type="button" id="all-sites">Show all sites</button></form></header><div id="explore-map" class="map large" aria-label="Mangrove sites with verified reports"></div>${legend}<h2>Species</h2><div id="species-results" class="row"></div></section>`); back();
-      const data = await api('explore.php', {anonymous:true}); let canvas=map($('#explore-map'),data.clusters);
-      const showMap=items=>{canvas.remove();canvas=map($('#explore-map'),items);};
-      const results=search=>{const q=search.trim().toLowerCase();$('#species-results').innerHTML=(data.species??[]).filter(s=>[s.scientific_name,s.common_name,s.local_name].some(v=>String(v??'').toLowerCase().includes(q))).map(s=>`<article class="card"><h3>${speciesNames(s)}</h3><p class="muted">${esc(s.family??'')} ${s.iucn_code?`· ${esc(s.iucn_code)}`:''}</p><button class="outline" data-show-species="${Number(s.id)}">Show on map</button></article>`).join('')||'<p class="empty">No species match your search.</p>';};results('');
-      $('#species-search').onsubmit=event=>{event.preventDefault();results(formValues(event.target).q);};
-      $('#all-sites').onclick=()=>showMap(data.clusters);
-      $('#species-results').onclick=event=>{const button=event.target.closest('[data-show-species]');if(!button)return;const clusters=data.clusters.filter(c=>Number(c.species_id)===Number(button.dataset.showSpecies));showMap(clusters);if(!clusters.length)toast('No verified sites for this species yet.');$('#explore-map').scrollIntoView({block:'center',behavior:'smooth'});};
-      cleanup=()=>canvas.remove();return;
-    }
+    case 'explore': cleanup=await exploreSites(node,query,viewer);return;
     case 'report-map': {
       set(node, `${title('Report map')}<div id="report-map-content"></div>`); back();
       cleanup=reportMapPage($('#report-map-content'),query);return;

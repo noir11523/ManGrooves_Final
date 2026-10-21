@@ -577,7 +577,7 @@ try {
         }
     });
 
-    test_case('healthy submissions automatically verify with cluster, notification, badge and follow-up', static function () use ($pdo): void {
+    test_case('healthy submissions remain pending until an independent staff review', static function () use ($pdo): void {
         $temporary = tempnam(sys_get_temp_dir(), 'mgr-auto-');
         copy(APP_ROOT . '/public/assets/img/guides/leaf-color.png', $temporary);
         $storedPath = null;
@@ -585,27 +585,26 @@ try {
         try {
             $result = (new ReportService($pdo))->submitGuardianReport(1, [
                 'field_confirmation' => '1', 'latitude' => '10.279', 'longitude' => '123.879',
-                'location_source' => 'manual', 'sitio_name' => 'Automatic verification test',
+                'location_source' => 'manual', 'sitio_name' => 'Independent review test',
                 'observed_alive_count' => '50', 'root_type' => 'Prop roots',
                 'leaf_shape' => 'Elliptic', 'bark_texture' => 'Rough, grayish to brown',
                 'observations' => ['leaf_color' => 1, 'leaf_condition' => 4, 'pests' => 8, 'roots' => 11, 'bark_trunk' => 15],
             ], ['error' => UPLOAD_ERR_OK, 'tmp_name' => $temporary, 'size' => filesize($temporary), 'name' => 'healthy.png']);
-            same('verified', $result['status']);
+            same('pending', $result['status']);
             $id = (int) $result['id'];
             $row = $pdo->query('SELECT * FROM reports WHERE id = ' . $id)->fetch();
             $storedPath = APP_ROOT . '/' . $row['photo_path'];
-            same('Healthy', $row['final_health']);
+            same('Healthy', $row['suggested_health']);
+            same(null, $row['final_health']);
             same(null, $row['expert_id']);
-            check($row['verified_at'] !== null);
-            same($pdo->query('SELECT DATE_ADD(CURDATE(), INTERVAL 30 DAY)')->fetchColumn(), $row['next_followup_date']);
-            $cluster = $pdo->query('SELECT * FROM mangrove_clusters WHERE id = ' . (int) $row['cluster_id'])->fetch();
-            same('Healthy', $cluster['latest_health']);
-            same(1, (int) $cluster['verified_count']);
-            same(50, (int) $cluster['initial_seedlings']);
-            same(1, (int) $pdo->query("SELECT COUNT(*) FROM notifications WHERE type = 'report_verified' AND link = 'reports.php?id={$id}'")->fetchColumn());
-            same(1, (int) $pdo->query("SELECT COUNT(*) FROM audit_logs WHERE action = 'report.auto_verified' AND entity_id = '{$id}'")->fetchColumn());
-            check((int) $pdo->query('SELECT COUNT(*) FROM user_badges WHERE user_id = 1')->fetchColumn() > 0);
-            throws(static fn () => (new VerificationService($pdo))->review($id, 2, ['action' => 'confirm']), DomainException::class);
+            same(null, $row['verified_at']);
+            same(null, $row['next_followup_date']);
+            same(0, (int) $pdo->query("SELECT COUNT(*) FROM notifications WHERE type = 'report_verified' AND link = 'reports.php?id={$id}'")->fetchColumn());
+            same(0, (int) $pdo->query("SELECT COUNT(*) FROM audit_logs WHERE action = 'report.auto_verified' AND entity_id = '{$id}'")->fetchColumn());
+            (new VerificationService($pdo))->review($id, 2, ['action' => 'confirm']);
+            $reviewed = $pdo->query('SELECT * FROM reports WHERE id = ' . $id)->fetch();
+            same('verified', $reviewed['status']);
+            same(2, (int) $reviewed['expert_id']);
         } finally {
             if ($pdo->inTransaction()) $pdo->rollBack();
             if ($storedPath && is_file($storedPath)) unlink($storedPath);

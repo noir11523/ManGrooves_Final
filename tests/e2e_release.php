@@ -1180,10 +1180,10 @@ try {
         $mobileReport['location_accuracy'] === null
         && abs((float) $mobileReport['latitude'] - (float) $manualPayload['latitude']) < 0.00000001
         && abs((float) $mobileReport['longitude'] - (float) $manualPayload['longitude']) < 0.00000001
-        && $mobileReport['status'] === 'verified' && $mobileReport['final_health'] === 'Healthy'
-        && $mobileReport['expert_id'] === null && $mobileReport['verified_at'] !== null
-        && ($mobileSubmissionJson['report']['status'] ?? '') === 'verified',
-        'mobile Healthy report saves manual coordinates and automatically verifies without an expert'
+        && $mobileReport['status'] === 'pending' && $mobileReport['suggested_health'] === 'Healthy' && $mobileReport['final_health'] === null
+        && $mobileReport['expert_id'] === null && $mobileReport['verified_at'] === null
+        && ($mobileSubmissionJson['report']['status'] ?? '') === 'pending',
+        'mobile Healthy report saves manual coordinates and waits for staff review'
     );
 
     $healthyPage = $guardian->request('GET', '/submit-report.php');
@@ -1203,10 +1203,10 @@ try {
     $firstStatement->execute(['user_id' => $guardianId]);
     $healthyReport = $firstStatement->fetch();
     record_result($healthySubmission->status === 200
-        && str_contains($healthySubmission->body, 'automatically verified as Healthy')
-        && $healthyReport['status'] === 'verified' && $healthyReport['expert_id'] === null
+        && str_contains($healthySubmission->body, 'submitted for expert or admin review')
+        && $healthyReport['status'] === 'pending' && $healthyReport['expert_id'] === null
         && (int) $healthyReport['environmental_score'] === 5,
-        'web submission stores aggregate choices and automatically verifies Healthy reports');
+        'web submission stores aggregate choices and leaves Healthy reports pending review');
     $uploadedPaths[] = (string) $healthyReport['photo_path'];
 
     $notificationPage = $guardian->request('GET', '/notifications.php?filter=unread');

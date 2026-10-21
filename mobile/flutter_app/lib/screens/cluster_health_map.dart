@@ -12,11 +12,15 @@ class ClusterHealthMap extends StatelessWidget {
     required this.onOpenReports,
     this.tileProvider,
     this.onOpenTimeline,
+    this.canOpenSite,
+    this.title = 'Cluster health map',
   });
   final List<Map<String, dynamic>> clusters;
   final ValueChanged<int> onOpenReports;
   final TileProvider? tileProvider;
   final void Function(int id, int tab)? onOpenTimeline;
+  final bool Function(Map<String, dynamic>)? canOpenSite;
+  final String title;
 
   static Color healthColor(String health) => switch (health) {
     'Healthy' => const Color(0xFF2D5A27),
@@ -98,28 +102,34 @@ class ClusterHealthMap extends StatelessWidget {
                 SpeciesNames(cluster),
               ],
               const SizedBox(height: 16),
-              if (onOpenTimeline != null)
+              if (canOpenSite?.call(cluster) == false)
+                const Text(
+                  'This site is outside your barangay. Its shared summary is visible here.',
+                ),
+              if (onOpenTimeline != null && canOpenSite?.call(cluster) != false)
                 FilledButton(
                   onPressed: () {
                     Navigator.pop(sheet);
                     onOpenTimeline!(int.parse('${cluster['id']}'), 0);
                   },
-                  child: const Text('View timeline'),
+                  child: const Text('Health history'),
                 ),
-              OutlinedButton(
-                onPressed: () {
-                  Navigator.pop(sheet);
-                  onOpenReports(int.parse('${cluster['id']}'));
-                },
-                child: const Text('View reports'),
-              ),
-              if (onOpenTimeline != null) ...[
+              if (canOpenSite?.call(cluster) != false)
+                OutlinedButton(
+                  onPressed: () {
+                    Navigator.pop(sheet);
+                    onOpenReports(int.parse('${cluster['id']}'));
+                  },
+                  child: const Text('View reports'),
+                ),
+              if (onOpenTimeline != null &&
+                  canOpenSite?.call(cluster) != false) ...[
                 TextButton(
                   onPressed: () {
                     Navigator.pop(sheet);
                     onOpenTimeline!(int.parse('${cluster['id']}'), 1);
                   },
-                  child: const Text('Growth timeline'),
+                  child: const Text('Mangrove counts'),
                 ),
               ],
             ],
@@ -136,7 +146,7 @@ class ClusterHealthMap extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Cluster health map',
+          title,
           style: Theme.of(context).textTheme.titleLarge
               ?.copyWith(fontWeight: FontWeight.w700),
         ),

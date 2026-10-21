@@ -231,7 +231,7 @@ test('site catalog filters and saves through the admin editor without leaving Si
  globalThis.testApi=async(path,{body}={})=>{assert.equal(path,'sites.php');if(body){saved=body;return {message:'Saved'};}return {sites,barangays:reference.barangays};};
  const dispose=await ui.adminPage($('#page'),'species',{tab:'sites'});
  try {
-  const filters=$('.list-filters');filters.querySelector('[name=active]').value='1';filters.dispatchEvent(new Event('submit',{cancelable:true}));
+  const filters=$('.list-filters');filters.querySelector('[name=state]').value='active';filters.dispatchEvent(new Event('submit',{cancelable:true}));
   assert.equal(document.querySelectorAll('tbody tr:not([hidden])').length,1);
   $('.edit-site').click();const dialog=$('#admin-editor');dialog.querySelector('[name=name]').value='Renamed nursery';
   const form=dialog.querySelector('form');await form.onsubmit({preventDefault(){},target:form,submitter:form.querySelector('[type=submit]')});await tick();

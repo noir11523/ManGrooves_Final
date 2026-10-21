@@ -24,6 +24,6 @@ String reviewActionLabel(dynamic value) => switch (value?.toString()) {
   'confirm' => 'Confirmed',
   'correct' => 'Corrected',
   'reject' => 'Rejected',
-  'auto_verify' => 'Verified automatically',
+  'auto_verify' => 'Legacy verification',
   _ => statusLabel(value),
 };

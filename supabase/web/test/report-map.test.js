@@ -146,6 +146,27 @@ test('PHP dashboard pin popup shows the site summary and a working timeline URL'
     assert.equal(popup.querySelector('script'),null);
     const link=new URL(popup.querySelector('a').href);
     assert.equal(link.pathname,'/cluster.php');assert.equal(link.searchParams.get('id'),'7');
-    assert.equal(popup.querySelector('a').textContent,'View timeline');
+    assert.equal(popup.querySelector('a').textContent,'View mangrove timeline');
   }finally{$('#report-map')._mangroovesMap?.remove();globalThis.fetch=previousFetch;}
+});
+
+test('pin hover and keyboard focus show escaped summaries and Enter opens details',async()=>{
+ root.innerHTML='<div id="report-map"></div>';
+ const canvas=map($('#report-map'),[{...site,name:'Coast <script>bad()</script>'}]);
+ try{
+  const pin=markers()[0];pin.fire('mouseover');assert.match($('.leaflet-tooltip').textContent,/Coast/);assert.equal($('.leaflet-tooltip script'),null);
+  pin.fire('mouseout');const element=pin.getElement();assert.equal(element.getAttribute('role'),'button');element.dispatchEvent(new Event('focus'));
+  assert.ok($('.leaflet-tooltip'));element.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}));assert.ok($('.leaflet-popup'));
+ }finally{canvas.remove();}
+});
+
+test('report search, list pin controls and reset preserve map functionality',async()=>{
+ const queries=[];globalThis.testApi=async(path,{query})=>{queries.push(query);return {items:[row(1),row(2)],pages:1};};
+ const dispose=reportMapPage(root);
+ try{
+  await tick();$('[name=q]').value='Avicennia';$('#map-filters').dispatchEvent(new Event('submit',{cancelable:true}));await tick();
+  assert.equal(queries.at(-1).q,'Avicennia');$('#map-report-list [data-pin="2"]').click();assert.match($('.leaflet-popup').textContent,/Report #2/);
+  $('#reset-map-filters').click();await tick();assert.equal(queries.at(-1).q,'');assert.equal(queries.at(-1).status,'');
+  $('#fit-reports').click();assert.equal(markers().length,2);assert.match($('#map-results-label').textContent,/2/);
+ }finally{dispose();}
 });

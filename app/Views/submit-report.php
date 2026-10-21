@@ -239,7 +239,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
         <h2 class="h4" id="step-four-title">4. Review your report</h2>
         <p>Check your details. Tap Edit to make changes.</p>
         <div data-report-summary></div>
-        <p class="small text-body-secondary">Healthy reports are verified automatically. Others go for review.</p>
+        <p class="small text-body-secondary">Every report is reviewed by an expert before it is verified.</p>
         <div class="form-check mb-4">
             <input class="form-check-input" type="checkbox" name="field_confirmation" value="1" id="confirmation" required <?= (string) old('field_confirmation') === '1' ? 'checked' : '' ?>>
             <label class="form-check-label" for="confirmation">These details are from this visit.</label>

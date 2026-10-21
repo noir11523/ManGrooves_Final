@@ -3,7 +3,7 @@ import { api, apiUrl } from './client.js';
 export const $ = selector => document.querySelector(selector);
 export const $$ = selector => [...document.querySelectorAll(selector)];
 export const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]));
-export const displayLabel = value => ({pending:'Pending',verified:'Verified',rejected:'Rejected',approved:'Approved',declined:'Declined',active:'Active',inactive:'Inactive',confirm:'Confirmed',correct:'Corrected',reject:'Rejected',auto_verify:'Verified automatically'}[value] ?? value ?? 'Not available');
+export const displayLabel = value => ({pending:'Pending',verified:'Verified',rejected:'Rejected',approved:'Approved',declined:'Declined',active:'Active',inactive:'Inactive',confirm:'Confirmed',correct:'Corrected',reject:'Rejected',auto_verify:'Legacy verification'}[value] ?? value ?? 'Not available');
 export const reportStatus = report => report.status;
 export const speciesNames = s => [[s?.local_name ?? s?.species_local_name,'strong'],[s?.common_name ?? s?.species_common_name,'span'],[s?.scientific_name ?? s?.species_name ?? s?.final_species_name ?? s?.suggested_species_name,'em']].filter(([name])=>name).map(([name,tag])=>`<${tag}${tag==='strong'?' class="species-local"':''}>${esc(name)}</${tag}>`).join('<br>') || 'Needs identification';
 export const pill = value => `<span class="pill ${esc(String(value).toLowerCase().replaceAll(' ', '-'))}">${esc(displayLabel(value))}</span>`;
@@ -53,7 +53,7 @@ export function mapPoint(item) {
   const [lat, lng] = values.map(Number);
   return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 85.05112878 && Math.abs(lng) <= 180 ? [lat, lng] : null;
 }
-export function mapMarkers(canvas, items, {timelineMode = 'health', fit = true} = {}) {
+export function mapMarkers(canvas, items, {timelineMode = 'health', fit = true, canOpenTimeline = true} = {}) {
   const bounds = [], markers = [];
   for (const item of items) {
     const point = mapPoint(item);
@@ -64,23 +64,30 @@ export function mapMarkers(canvas, items, {timelineMode = 'health', fit = true} 
     markers.push(marker);
     const content = document.createElement('div');
     const title = document.createElement('strong'); title.textContent = item.name ?? item.report_code;
-    const location = document.createElement('div'); location.textContent = [item.cluster_code,item.barangay_name].filter(Boolean).join(' · ');
+    const location = document.createElement('div'); location.textContent = [item.name?item.cluster_code:item.cluster_name||item.sitio_name,item.barangay_name,item.city_municipality].filter(Boolean).join(' · ');
     const label = document.createElement('p'); label.textContent = health ?? 'Unknown'; label.style.color = healthColor(health);
     const species = document.createElement('div');
     if ([item.local_name,item.species_local_name,item.common_name,item.species_common_name,item.scientific_name,item.species_name].some(Boolean)) species.innerHTML = speciesNames(item);
-    const link = document.createElement('a'); link.textContent = item.name ? (timelineMode==='growth'?'View growth timeline':'View health history') : 'View report'; link.href = item.name ? `#cluster/${item.id}?tab=${timelineMode}` : `#report/${item.id}`;
-    content.append(title, location, label, species, link);
+    const link = document.createElement('a'); link.textContent = item.name ? (canOpenTimeline?'View mangrove timeline':'Sign in to view timeline') : 'View report'; link.href = item.name ? (canOpenTimeline?`#cluster/${item.id}?tab=${timelineMode}`:'#login') : `#report/${item.id}`;
+    const status=document.createElement('p');status.className='map-status';
+    status.textContent=item.status?`${displayLabel(item.status)}${item.status!=='verified'?' · Health is a suggestion':''}`:`${item.verified_count??0} verified visits`;
+    content.append(title, location, label, species, status, link);
     marker.bindPopup(content, {minWidth:120, maxWidth:Math.max(120,Math.min(280,canvas.getSize().x-60)), autoPanPadding:[12,12], autoPanPaddingTopLeft:[12,canvas.getSize().x<420?84:12]});
+    const summary=document.createElement('span');summary.textContent=[item.name??item.report_code,health??'Unknown',item.status?displayLabel(item.status):item.barangay_name].filter(Boolean).join(' · ');
+    marker.bindTooltip(summary,{direction:'top',offset:[0,-8],opacity:1});
+    const element=marker.getElement();
+    if(element){element.setAttribute('tabindex','0');element.setAttribute('role','button');element.setAttribute('aria-label',`${summary.textContent}. Open details`);element.addEventListener('focus',()=>marker.openTooltip());element.addEventListener('blur',()=>marker.closeTooltip());element.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();marker.closeTooltip();marker.openPopup();}});}
   }
   if (fit && bounds.length) canvas.fitBounds(bounds, {padding: [30, 30], maxZoom: 16, animate: false});
   return {bounds, markers};
 }
-export function map(container, items, {onClick, timelineMode = 'health', onTileError} = {}) {
-  const canvas = L.map(container, {scrollWheelZoom: false}).setView([10.2833, 123.8833], 14);
+export function map(container, items, {onClick, timelineMode = 'health', onTileError, canOpenTimeline = true} = {}) {
+  // Instant zoom avoids a late CSS transition accessing a map removed by navigation.
+  const canvas = L.map(container, {scrollWheelZoom: false, zoomAnimation: false}).setView([10.2833, 123.8833], 14);
   const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19});
   if (onTileError) tiles.on('tileerror', onTileError);
   tiles.addTo(canvas);
-  mapMarkers(canvas, items, {timelineMode});
+  mapMarkers(canvas, items, {timelineMode,canOpenTimeline});
   if (onClick) canvas.on('click', onClick);
   return canvas;
 }

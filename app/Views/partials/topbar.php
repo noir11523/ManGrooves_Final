@@ -18,7 +18,6 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
             <ul class="dropdown-menu dropdown-menu-end shadow border-0">
                 <li><a class="dropdown-item" href="<?= e(url('analytics.php')) ?>">Analytics</a></li>
                 <li><a class="dropdown-item" href="<?= e(url('clusters.php')) ?>">Mangrove timeline</a></li>
-                <li><a class="dropdown-item" href="<?= e(url('assets/observation-photo-credits.html')) ?>">Photo credits</a></li>
             </ul>
         </div>
         <a class="icon-button position-relative" href="<?= e(url('notifications.php')) ?>" aria-label="Notifications<?= $unreadNotificationCount ? ', ' . $unreadNotificationCount . ' unread' : '' ?>">

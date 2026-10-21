@@ -6,6 +6,7 @@ import '../core/report_location.dart';
 import '../shared/list_filters.dart';
 import '../shared/catalog_widgets.dart';
 import '../shared/content_width.dart';
+import '../shared/barangay_picker.dart';
 import 'location_picker_screen.dart';
 
 class SitesScreen extends StatefulWidget {
@@ -155,7 +156,12 @@ class _SitesScreenState extends State<SitesScreen> {
     final sites = _sites
         .where(
           (s) =>
-              (_status.isEmpty || (_status == '1') == (s['active'] != 0)) &&
+              (_status.isEmpty ||
+                  (_status == 'needs_pin'
+                      ? s['location_pending'] == true
+                      : _status == '0'
+                      ? s['active'] == 0
+                      : s['active'] != 0 && s['location_pending'] != true)) &&
               '${s['name']} ${s['sitio_name']} ${s['barangay_name']}'
                   .toLowerCase()
                   .contains(_query.toLowerCase()),
@@ -186,7 +192,8 @@ class _SitesScreenState extends State<SitesScreen> {
                 options: const {
                   '': 'All statuses',
                   '1': 'Active',
-                  '0': 'Not active',
+                  '0': 'Archived',
+                  'needs_pin': 'Needs map location',
                 },
                 onApply: (q, status) => setState(() {
                   _query = q;
@@ -382,7 +389,8 @@ class _SiteEditorState extends State<_SiteEditor> {
           initialLocation: _pin,
           initialName: _locationName.text,
           barangayCenter: b == null ? null : center,
-          maxDistanceMeters: 5000,
+          maxDistanceMeters:
+              (b?['monitoring_radius_meters'] as num?)?.toDouble() ?? 5000,
         ),
       ),
     );
@@ -454,20 +462,11 @@ class _SiteEditorState extends State<_SiteEditor> {
                 v == null || v.trim().isEmpty ? 'Enter a site name.' : null,
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _barangay,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Barangay'),
-            items: widget.barangays
-                .map(
-                  (b) => DropdownMenuItem(
-                    value: b['id'] as int,
-                    child: Text('${b['name']}'),
-                  ),
-                )
-                .toList(),
+          BarangayPicker(
+            items: widget.barangays,
+            value: _barangay,
+            enabled: !_busy,
             onChanged: (v) => setState(() => _barangay = v),
-            validator: (v) => v == null ? 'Choose a barangay.' : null,
           ),
           const SizedBox(height: 16),
           TextFormField(

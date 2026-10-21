@@ -87,7 +87,6 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
                 'confirm': 'Confirmed',
                 'correct': 'Corrected',
                 'reject': 'Rejected',
-                'auto_verify': 'Automatic verification',
               },
               busy: _loading,
               onApply: (query, action) {

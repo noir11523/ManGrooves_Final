@@ -232,57 +232,6 @@ final class VerificationService
         return $result;
     }
 
-    /**
-     * Complete automatic verification inside the report submission transaction.
-     * No human verifier is attributed to a system decision.
-     */
-    public function autoVerifyHealthy(int $reportId): void
-    {
-        $pdo = $this->pdo;
-        if (!$pdo->inTransaction()) {
-            throw new DomainException('Automatic verification requires a report transaction.');
-        }
-        $statement = $pdo->prepare('SELECT * FROM reports WHERE id = :id FOR UPDATE');
-        $statement->execute(['id' => $reportId]);
-        $report = $statement->fetch();
-        if (!$report || $report['status'] !== 'pending' || $report['suggested_health'] !== 'Healthy') {
-            throw new DomainException('Only a pending Healthy report can be automatically verified.');
-        }
-
-        $speciesId = $report['suggested_species_id'] === null ? null : (int) $report['suggested_species_id'];
-        $clusterId = $this->assignCluster($pdo, $report, $speciesId, (string) $report['rarity_level']);
-        $update = $pdo->prepare(
-            "UPDATE reports SET cluster_id = :cluster_id, final_species_id = :species_id,
-                    final_health = 'Healthy', status = 'verified', needs_attention = 0,
-                    expert_id = NULL, expert_feedback = NULL, verified_at = NOW(),
-                    next_followup_date = DATE_ADD(CURDATE(), INTERVAL 30 DAY)
-             WHERE id = :id AND status = 'pending'"
-        );
-        $update->execute(['cluster_id' => $clusterId, 'species_id' => $speciesId, 'id' => $reportId]);
-        if ($update->rowCount() !== 1) {
-            throw new DomainException('The report changed during automatic verification.');
-        }
-        $this->refreshCluster($pdo, $clusterId);
-        $notification = $pdo->prepare(
-            'INSERT INTO notifications (user_id, type, title, message, link)
-             VALUES (:user_id, :type, :title, :message, :link)'
-        );
-        $notification->execute([
-            'user_id' => $report['user_id'],
-            'type' => 'report_verified',
-            'title' => 'Report automatically verified',
-            'message' => 'Your report ' . $report['report_code'] . ' was automatically verified as Healthy. A follow-up is due in 30 days.',
-            'link' => 'reports.php?id=' . $reportId,
-        ]);
-        (new BadgeEngine($pdo))->evaluateForUser((int) $report['user_id']);
-        \Audit::logRequired('report.auto_verified', 'report', $reportId, [
-            'verification_method' => 'automatic',
-            'new_status' => 'verified',
-            'health' => 'Healthy',
-            'cluster_id' => $clusterId,
-        ], (int) $report['user_id']);
-    }
-
     /** @return int The assigned cluster ID. */
     private function assignCluster(PDO $pdo, array $report, ?int $speciesId, string $rarity): int
     {
