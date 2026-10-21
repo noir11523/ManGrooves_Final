@@ -12,7 +12,7 @@ if (in_array($path, ['/downloads/ManGROOVES-Supabase.apk', '/downloads/ManGROOVE
     return true;
 }
 if (is_string($path) && !str_contains($path, '..') && !str_contains($path, '%') && !str_contains($path, '\\')
-    && (($path === '/manifest.webmanifest') || preg_match('~^/assets/[a-zA-Z0-9_./-]+\.(css|js|png|jpg|jpeg|webp|svg|gif|ico)$~D', $path))
+    && (in_array($path, ['/manifest.webmanifest', '/assets/observation-photo-credits.html'], true) || preg_match('~^/assets/[a-zA-Z0-9_./-]+\.(css|js|png|jpg|jpeg|webp|svg|gif|ico)$~D', $path))
     && is_file($root . $path)) {
     return false;
 }

@@ -264,7 +264,12 @@ class _BrandHeader extends StatelessWidget {
           color: Theme.of(context).colorScheme.primary,
           borderRadius: BorderRadius.circular(18),
         ),
-        child: const Icon(Icons.park, color: Colors.white, size: 34),
+        child: Image.asset(
+          'assets/brand/mangrooves.png',
+          width: 54,
+          height: 54,
+          semanticLabel: 'ManGROOVES',
+        ),
       ),
       const SizedBox(width: 12),
       const Flexible(

@@ -269,7 +269,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           );
         }),
         if (_report!['cluster_id'] != null)
-          for (final mode in [0, 1])
+          for (final mode in [0])
             TextButton.icon(
               onPressed: () => Navigator.push(
                 context,
@@ -282,7 +282,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 ),
               ),
               icon: const Icon(Icons.timeline),
-              label: Text(mode == 0 ? 'Health history' : 'Growth timeline'),
+              label: Text('Mangrove timeline'),
             ),
         if (_report!['needs_follow_up'] == true ||
             _report!['follow_up_state'] != null)

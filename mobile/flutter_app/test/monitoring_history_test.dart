@@ -221,9 +221,14 @@ void main() {
     },
   );
   testWidgets(
-    'health and growth pages stay separate and redact private report links',
+    'merged timeline shows health and counts and redacts private report links',
     (tester) async {
       await _phone(tester, ClusterTimelineScreen(api: _Api(), clusterId: 1));
+      await tester.scrollUntilVisible(
+        find.text('Community observation'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Community observation'), findsOneWidget);
       expect(find.text('View Report #7'), findsOneWidget);
       expect(find.text('View Report #1'), findsNothing);
@@ -242,8 +247,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Health history'), findsNothing);
       expect(find.byType(TabBar), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('10 living mangroves'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('10 living mangroves'), findsOneWidget);
-      expect(find.text('+2 since last visit'), findsOneWidget);
+      expect(find.text('+2 since previous count'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -262,34 +272,32 @@ void main() {
       expect(find.textContaining('Roots are stable.'), findsOneWidget);
     },
   );
-  testWidgets(
-    'edited assessment disables confirm and saves an explicit correction',
-    (tester) async {
-      final api = _Api();
-      await _phone(
-        tester,
-        ReviewReportScreen(
-          api: api,
-          reportId: 1,
-          species: const [
-            {'id': 1, 'common_name': 'One', 'scientific_name': 'Species one'},
-          ],
-        ),
-      );
-      await _tap(tester, find.byType(DropdownButtonFormField<String>).first);
-      await _tap(tester, find.text('Healthy').last);
-      final confirm = find.widgetWithText(FilledButton, 'Confirm suggestion');
-      await tester.ensureVisible(confirm);
-      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
-      await _tap(tester, find.text('Save correction and verify'));
-      expect(find.textContaining('Health: Healthy'), findsOneWidget);
-      await _tap(tester, find.text('Cancel'));
-      expect(api.decision, isNull);
-      await _tap(tester, find.text('Save correction and verify'));
-      await _tap(tester, find.text('Continue'));
-      expect(api.decision?['action'], 'correct');
-      expect(api.decision?['final_health'], 'Healthy');
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('correction has its own inputs and saves the explicit decision', (
+    tester,
+  ) async {
+    final api = _Api();
+    await _phone(
+      tester,
+      ReviewReportScreen(
+        api: api,
+        reportId: 1,
+        species: const [
+          {'id': 1, 'common_name': 'One', 'scientific_name': 'Species one'},
+        ],
+      ),
+    );
+    await _tap(tester, find.byType(DropdownButtonFormField<String>).first);
+    await _tap(tester, find.text('Correction').last);
+    await _tap(tester, find.byType(DropdownButtonFormField<String>).at(1));
+    await _tap(tester, find.text('Healthy').last);
+    await _tap(tester, find.text('Save correction'));
+    expect(find.textContaining('Health: Healthy'), findsOneWidget);
+    await _tap(tester, find.text('Cancel'));
+    expect(api.decision, isNull);
+    await _tap(tester, find.text('Save correction'));
+    await _tap(tester, find.text('Continue'));
+    expect(api.decision?['action'], 'correct');
+    expect(api.decision?['final_health'], 'Healthy');
+    expect(tester.takeException(), isNull);
+  });
 }

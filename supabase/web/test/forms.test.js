@@ -37,8 +37,9 @@ const ui = await import(`data:text/javascript;base64,${Buffer.from(bundle.output
 const $ = selector => document.querySelector(selector);
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const change = element => element.dispatchEvent(new Event('change', {bubbles: true}));
-const set = (name, value) => { const input = $(`[name=${name}]`); input.value = value; change(input); };
+const set = (name, value) => { if(name==='barangay_id'&&$('[data-barangay-search]')) { const input=$('[data-barangay-search]');input.value=$('datalist option').value;change(input);set('phone','09171234567');set('address_line','Test Street');return; } const input = $(`[name=${name}]`); input.value = value; change(input); };
 const submit = () => { const form = $('#report-form'); return form.onsubmit({preventDefault() {}, submitter: $('#next')}); };
+const finishCategories = async () => { for(const c of reference.criteria)if(!(ui.reportDraft.observations[c.code]?.length))$(`[name=obs_${c.code}][value="${c.options.find(o=>o.code==='none_of_the_above'||o.code==='no_animals')?.id??c.options[0].id}"]`).click();for(let i=0;i<reference.criteria.length+3&&ui.reportDraft.step===2;i++)await submit(); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };
 
 test('species editor uses local-first names and deletion requires confirmation, preserves errors and refreshes',async()=>{
@@ -108,16 +109,16 @@ test('observation choices select in one tap without a guide or enlarge control',
  }finally{dispose();ui.reportDraft.reset();}
 });
 
-test('individual photos, credits and text-only answers preview and select without losing trait deselection',async()=>{
+test('individual real photos and text-only answers preview and select without inline credits or lost deselection',async()=>{
  const traits=Object.fromEntries(Object.entries(catalog.traits).map(([key,values])=>[key,Object.keys(values)]));
  globalThis.testApi=async()=>({criteria:reference.criteria.map(withPhotoCredits),traits,trait_images:catalog.traits,photo_credits:photoCredits,clusters:[],location:{}});
  ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:2,owner:undefined});
  const dispose=await ui.reportWizard($('#page'),{});
  try{
   const choice=$('.choice'), input=choice.querySelector('input'),preview=choice.querySelector('.choice-picture');
-  assert.match(preview.querySelector('img').src,/observations\/v1-green-leaf\.jpg/);
+  assert.match(preview.querySelector('img').src,/observations\/v2-drive-avicennia_marina-leaf_01\.jpg/);
   assert.equal(preview.querySelector('img').loading,'lazy');
-  assert.ok(choice.querySelector('.photo-credit a'));
+  assert.equal(choice.querySelector('.photo-credit'),null);
   assert.ok([...choice.children].indexOf(input)>[...choice.children].indexOf(choice.querySelector('span')));
   preview.click();assert.equal(input.checked,false);
   assert.equal($('.observation-preview .actions button:last-child').textContent,'Select');
@@ -131,7 +132,7 @@ test('individual photos, credits and text-only answers preview and select withou
   const special=$('[data-code=unknown]').closest('.choice');
   assert.equal(special.querySelector('img'),null);assert.ok(special.classList.contains('choice-text-only'));
   const trait=$('[name=root_type]'),card=trait.closest('.choice');
-  assert.match(card.querySelector('.photo-credit').textContent,/AI illustration/);
+  assert.equal(card.querySelector('.photo-credit'),null);assert.match(card.querySelector('img').src,/observations\/v2-drive/);
   card.querySelector('.choice-picture').click();$('.observation-preview .actions button:last-child').click();
   assert.equal(ui.reportDraft.fields.root_type,trait.value);
   card.querySelector('.choice-picture').click();$('.observation-preview .actions button:last-child').click();
@@ -293,12 +294,12 @@ test('mobile report location omits technical copy and never calls the IP provide
 test('user search resets the page, keeps filters in pagination, and routes pending accounts to approval',async()=>{
   globalThis.testApi=async(path,{query})=>{
     assert.equal(path,'users.php');assert.equal(query.role,'expert');
-    return {page:2,pages:3,total:43,items:[{id:88,full_name:'Pending Reviewer',email:'pending@example.test',role:'expert',status:'pending_approval'}]};
+    return {page:2,pages:3,total:43,items:[{id:88,full_name:'Pending Reviewer',email:'pending@example.test',role:'expert',status:'pending_approval',uid:'pending-user',application_uid:'pending-user'}]};
   };
   await ui.adminPage($('#page'),'users',{page:'2',q:'coast',role:'expert'});
   assert.match($('.pagination a').href,/q=coast/);assert.match($('.pagination a').href,/role=expert/);
   assert.equal($('.user-form [name=role]'),null);assert.equal($('.user-form button'),null);
-  assert.equal($('.admin-table a').getAttribute('href'),'#expert-applications');
+  assert.equal($('.admin-table a').getAttribute('href'),'#expert-applications?uid=pending-user');
   const form=$('.list-filters');form.querySelector('[name=q]').value='  New name  ';
   form.dispatchEvent(new Event('submit',{cancelable:true}));
   assert.equal(location.hash,'#users?q=New+name&role=expert');
@@ -308,14 +309,14 @@ test('user search resets the page, keeps filters in pagination, and routes pendi
 test('staff creation is available in Users and requests credentials for expert accounts',async()=>{
   let sent;
   globalThis.testApi=async(path,{body}={})=>{
-    if(body){sent=body;return {message:'Created.'};}
+    if(body){sent=JSON.parse(body.get('payload'));return {message:'Created.'};}
     return {items:[],total:0,page:1,pages:1,barangays:[{id:1,name:'Inayawan'}]};
   };
   await ui.adminPage($('#page'),'users',{});$('#add').click();
   const dialog=$('#admin-editor'),form=dialog.querySelector('form');
-  assert.equal(dialog.open,true);assert.equal(form.elements.expert_id_code.required,true);
+  assert.equal(dialog.open,true);assert.equal(form.elements.id_photo.required,true);
   form.elements.role.value='system_admin';change(form.elements.role);
-  assert.equal(form.elements.expert_id_code.required,false);assert.equal($('#staff-credential').hidden,true);
+  assert.equal(form.elements.id_photo.required,false);assert.equal($('#staff-credential').hidden,true);
   for(const [key,value] of Object.entries({first_name:'Admin',last_name:'Staff',email:'staff@example.test',barangay_id:'1',password:'initialpass12',password_confirmation:'initialpass12'}))form.elements[key].value=value;
   await form.onsubmit({preventDefault(){},target:form,submitter:form.querySelector('button[type=submit]')});
   assert.equal(sent.action,'create_staff');assert.equal(sent.role,'system_admin');assert.equal(sent.barangay_id,'1');
@@ -397,7 +398,7 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
     const none = multi.options.find(o => o.code === 'none_of_the_above');
     $(`[name=obs_${multi.code}][value="${none.id}"]`).click();
     assert.deepEqual(ui.reportDraft.observations[multi.code], [none.id]);
-    await submit(); assert.equal(ui.reportDraft.step, 3);
+    await finishCategories(); assert.equal(ui.reportDraft.step, 3);
     assert.match($('#step-body').textContent, /6 \/ 6 health points/);
     assert.equal(document.querySelectorAll('.edit').length, 3);
     $('#field-confirm').click(); assert.ok(ui.reportDraft.preview);
@@ -406,7 +407,7 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
     assert.equal(submissions.length, 0);
     $('.edit[data-step="0"]').click(); await tick();
     assert.equal(ui.reportDraft.photo, photo); set('sitio_name', 'Updated location');
-    await submit(); await submit(); await submit();
+    await submit(); await submit(); await finishCategories();
     assert.match($('#step-body').textContent, /Updated location/);
     $('#field-confirm').click(); const final = submit(); await tick(); closeConfirm('confirm'); await final;
     assert.equal(submissions.length, 1); assert.equal(submissions[0].sitio_name, 'Updated location');
@@ -456,7 +457,7 @@ test('report draft restores fields, photo, checklist and step after reload, isol
     assert.equal(ui.reportDraft.photo,null);assert.equal($('[name=sitio_name]').value,'');
     dispose();ui.reportDraft.reset();
     dispose = await ui.reportWizard($('#page'),{}, {id:'draft-a'});
-    await submit();$('#field-confirm').click();let sending=submit();await tick();closeConfirm('confirm');await sending;
+    await finishCategories();$('#field-confirm').click();let sending=submit();await tick();closeConfirm('confirm');await sending;
     assert.match($('.error').textContent,/interrupted/);assert.equal(ui.reportDraft.dirty,true);
     await ui.reportDraft.flush();dispose();ui.reportDraft.reset();
     dispose = await ui.reportWizard($('#page'),{}, {id:'draft-a'});
@@ -566,7 +567,7 @@ function authApi({expert=false,completeError,loginError}={}){
       return {verification_token:'proof'};
     }
     if(path==='complete-registration.php'){
-      assert.equal(options.token,'proof');assert.equal(options.body.first_name,'Test');
+      assert.equal(options.token,'proof');assert.equal(JSON.parse(options.body.get('payload')).first_name,'Test');
       if(completeError)throw completeError;
       return {pending_approval:expert};
     }
@@ -587,7 +588,7 @@ test('registration separates account, code, and profile; invalid code and missin
   set('code','123456');await submitAccount();assert.equal($('[data-step="2"]').hidden,false);
   await submitAccount();assert.equal(calls.some(c=>c.path==='complete-registration.php'),false);
   set('barangay_id',reference.barangays[0].id);await submitAccount();
-  assert.equal(calls.at(-1).path,'login');assert.equal(calls.at(-2).body.privacy_consent,'1');
+  assert.equal(calls.at(-1).path,'login');assert.equal(JSON.parse(calls.at(-2).body.get('payload')).privacy_consent,'1');
   clearTimeout(ui.toast.timer);
 });
 test('registration keeps each password visibility separate and explains the length rule',async()=>{
@@ -601,14 +602,14 @@ test('registration keeps each password visibility separate and explains the leng
 });
 test('expert ID is collected after verification, retained when going back, and sent for approval',async()=>{
   const calls=authApi({expert:true});await ui.registrationPage(authLayout);basicAccount('expert@example.test');await submitAccount();
-  set('code','123456');await submitAccount();set('role','expert');set('barangay_id',reference.barangays[0].id);
-  assert.equal($('#expert-proof').hidden,false);assert.equal($('input[type=file]'),null);
+  set('code','123456');await submitAccount();set('role','expert');set('barangay_id',reference.barangays[0].id);$('#registration').reportValidity=()=>true;
+  assert.equal($('#expert-proof').hidden,false);assert.ok($('input[type=file]'));
   await submitAccount();assert.equal(calls.some(c=>c.path==='complete-registration.php'),false);
-  set('expert_id_code',' WORK-2026/001 ');$('#registration-back').click();
+  Object.defineProperty($('[name=id_photo]'),'files',{value:[new File(['proof'],'id.jpg',{type:'image/jpeg'})]});change($('[name=id_photo]'));$('#registration-back').click();
   assert.equal($('[name=first_name]').value,'Test');await submitAccount();
   assert.equal($('[data-step="2"]').hidden,false);assert.equal(calls.filter(c=>c.path==='register.php').length,1);
-  assert.equal($('[name=expert_id_code]').value,' WORK-2026/001 ');await submitAccount();
-  assert.equal(calls.at(-1).body.expert_id_code,'WORK-2026/001');assert.match($('#page').textContent,/Application submitted/);
+  assert.equal($('[name=id_photo]').files[0].name,'id.jpg');await submitAccount();
+  assert.equal(calls.at(-1).body.get('id_photo').name,'id.jpg');assert.match($('#page').textContent,/Application submitted/);
   assert.match($('#page').textContent,/We'll email the decision and any admin note to expert@example.test/);
   assert.match($('#page').textContent,/Check your Inbox and Spam folder for updates/);
   assert.match($('#page').textContent,/sign in to check your application status/);

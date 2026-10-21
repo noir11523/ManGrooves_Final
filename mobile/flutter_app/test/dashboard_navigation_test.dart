@@ -15,6 +15,11 @@ class _Api extends ApiClient {
   bool? attention;
   int? openedCluster;
   @override
+  Future<Map<String, dynamic>> clusters({
+    String query = '',
+    String health = '',
+  }) async => {'clusters': []};
+  @override
   Future<Map<String, dynamic>> cluster(int id) async {
     openedCluster = id;
     return {
@@ -59,7 +64,7 @@ class _Tiles extends TileProvider {
 void main() {
   for (final role in ['guardian', 'expert', 'system_admin']) {
     testWidgets(
-      '$role totals open filtered reports and clusters scroll to map',
+      '$role totals open filtered reports and clusters open the scoped list',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = const Size(360, 800);
@@ -97,11 +102,8 @@ void main() {
         await tester.ensureVisible(find.text('Clusters'));
         await tester.tap(find.text('Clusters'));
         await tester.pumpAndSettle();
-        expect(find.text('Cluster health map').hitTestable(), findsOneWidget);
-        expect(
-          tester.getTopLeft(find.text('Cluster health map')).dy,
-          greaterThan(tester.getTopLeft(find.text('Latest reports')).dy),
-        );
+        expect(find.byType(ClustersScreen), findsOneWidget);
+        expect(find.text('No clusters found.'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
@@ -202,7 +204,7 @@ void main() {
         await tester.tap(find.text('View timeline'));
         await tester.pumpAndSettle();
         expect(api.openedCluster, 7);
-        expect(find.text('Health history'), findsOneWidget);
+        expect(find.text('Mangrove timeline'), findsOneWidget);
         expect(find.text('Selected mangrove site'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },

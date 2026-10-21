@@ -28,6 +28,7 @@ await copy('app/Views/cloud');
 for(const name of ['public-nav','sidebar','topbar','mobile-nav','brand','footer','flashes','privacy-dialog','privacy-content'])await copy(`app/Views/partials/${name}.php`);
 await copy('public/index.php');
 await copy('public/assets/css/app.css','assets/css/app.css');
+await copy('public/assets/observation-photo-credits.html','assets/observation-photo-credits.html');
 for(const name of ['app','maps'])await copy(`public/assets/js/${name}.js`,`assets/js/${name}.js`);
 async function images(dir,destination){for(const entry of await readdir(dir,{withFileTypes:true})){
   if(entry.isSymbolicLink())continue;

@@ -148,7 +148,7 @@ void main() {
     'review history shows the saved reviewer and decision from the cloud API',
     (tester) async {
       await smallPhone(tester, ValidationHistoryScreen(api: _Api()));
-      expect(find.text('Review history'), findsOneWidget);
+      expect(find.text('Report history'), findsOneWidget);
       expect(find.textContaining('Clement'), findsOneWidget);
       expect(find.textContaining('Verified · Healthy'), findsOneWidget);
       expect(find.textContaining('null'), findsNothing);

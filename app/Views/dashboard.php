@@ -12,7 +12,7 @@ $statCards = [
     ['label' => 'Pending', 'value' => $stats['pending_reports'] ?? 0, 'icon' => 'bi-hourglass-split', 'tone' => 'warning', 'href' => url('reports.php?status=pending')],
     ['label' => 'Rejected', 'value' => $stats['rejected_reports'] ?? 0, 'icon' => 'bi-x-circle', 'tone' => 'danger', 'href' => url('reports.php?status=rejected')],
     ['label' => 'Needs attention', 'value' => $stats['needs_attention'] ?? 0, 'icon' => 'bi-exclamation-triangle', 'tone' => 'danger', 'href' => url('reports.php?needs_attention=1')],
-    ['label' => 'Clusters', 'value' => $stats['map_clusters'] ?? 0, 'icon' => 'bi-geo-alt', 'tone' => 'primary', 'href' => '#cluster-map'],
+    ['label' => 'Clusters', 'value' => $stats['map_clusters'] ?? 0, 'icon' => 'bi-geo-alt', 'tone' => 'primary', 'href' => url('clusters.php')],
 ];
 ?>
 <a class="btn btn-outline-success mb-3" href="<?= e(url('report-map.php')) ?>"><i class="bi bi-map me-1" aria-hidden="true"></i>Report map</a>

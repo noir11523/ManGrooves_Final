@@ -6,7 +6,14 @@ import '../shared/list_filters.dart';
 import 'report_detail_screen.dart';
 
 class ValidationHistoryScreen extends StatefulWidget {
-  const ValidationHistoryScreen({super.key, required this.api});
+  const ValidationHistoryScreen({
+    super.key,
+    required this.api,
+    this.embedded = false,
+    this.active = true,
+  });
+  final bool embedded;
+  final bool active;
   final ApiClient api;
   @override
   State<ValidationHistoryScreen> createState() =>
@@ -21,7 +28,13 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.active) _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant ValidationHistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _load();
   }
 
   Future<void> _load({int page = 1}) async {
@@ -58,7 +71,9 @@ class _ValidationHistoryScreenState extends State<ValidationHistoryScreen> {
     final page = (_data?['page'] as num?)?.toInt() ?? 1,
         pages = (_data?['pages'] as num?)?.toInt() ?? 1;
     return Scaffold(
-      appBar: AppBar(title: const Text('Review history')),
+      appBar: widget.embedded
+          ? null
+          : AppBar(title: const Text('Report history')),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -154,7 +169,7 @@ class ValidationHistoryCard extends StatelessWidget {
     final history = (report['verification_history'] as List? ?? []).cast<Map>();
     return Card(
       child: ExpansionTile(
-        title: const Text('Review history'),
+        title: const Text('Review activity'),
         initiallyExpanded: true,
         children: [
           if (history.isEmpty)

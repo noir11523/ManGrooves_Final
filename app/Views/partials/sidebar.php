@@ -8,8 +8,7 @@ $roleLabel = match ($role) {
 };
 
 $analyticsNavigation = ['Analytics', 'analytics.php', 'bi-bar-chart-fill', [
-    ['Health history', 'clusters.php?view=health', 'bi-clock-history'],
-    ['Growth timeline', 'clusters.php?view=growth', 'bi-graph-up-arrow'],
+    ['Mangrove timeline', 'clusters.php', 'bi-clock-history'],
 ]];
 
 $navigation = $role === 'guardian'
@@ -40,12 +39,11 @@ if ($role === 'system_admin') {
 if (defined('MANGROOVES_CLOUD')) {
     $roleLabel = match ($role) { 'expert' => 'Expert', 'system_admin' => 'Administrator', default => 'Coastal Guardian' };
     if ($role !== 'guardian') {
-        array_splice($navigation, 1, 0, [['Reports', 'reports.php', 'bi-journal-text']]);
-        $navigation[] = ['Review history', 'admin/validation-history.php', 'bi-clock-history'];
+        array_splice($navigation, 2, 0, [['Report history', 'reports.php', 'bi-journal-text']]);
     }
     if ($role === 'expert') {
         $navigation[] = ['Species and Sites', 'admin/species.php', 'bi-tree-fill'];
-        array_splice($navigation, 2, 0, [['Submit Report', 'submit-report.php', 'bi-camera-fill']]);
+        array_splice($navigation, 3, 0, [['Submit Report', 'submit-report.php', 'bi-camera-fill']]);
         $navigation[] = ['My badges', 'badges.php', 'bi-award-fill'];
     }
     if ($role === 'system_admin') {
@@ -63,8 +61,8 @@ $mobileItems = $role === 'guardian'
     ]
     : [
         ['Home', 'dashboard.php', 'bi-house-door-fill'],
-        ['Reports', 'reports.php', 'bi-journal-text'],
         ['Review', 'admin/verification.php', 'bi-clipboard2-check-fill'],
+        ['History', 'reports.php', 'bi-journal-text'],
         ['Analytics', 'analytics.php', 'bi-bar-chart-fill'],
     ];
 // The overflow menu contains only destinations absent from the bottom bar
@@ -115,7 +113,7 @@ $isActive = static function (string $href) use ($requestPath, $navigationQuery):
 
     </nav>
 
-    <div class="sidebar-footer">
+    <div class="sidebar-footer"><a class="sidebar-link" href="<?= e(url('assets/observation-photo-credits.html')) ?>"><i class="bi bi-image" aria-hidden="true"></i><span>Photo credits</span></a>
         <a class="sidebar-link" href="<?= e(defined('MANGROOVES_CLOUD') ? url('downloads/ManGROOVES-Supabase.apk') : 'https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk') ?>" download="ManGROOVES-Supabase.apk">
             <i class="bi bi-download" aria-hidden="true"></i><span>Android APK</span>
         </a>

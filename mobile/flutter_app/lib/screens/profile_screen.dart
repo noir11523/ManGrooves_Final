@@ -1,3 +1,5 @@
+import '../shared/barangay_picker.dart';
+
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -28,6 +30,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _lastName = TextEditingController();
   final _email = TextEditingController();
   final _phone = TextEditingController();
+  final _address = TextEditingController();
   Map<String, dynamic>? _user;
   List<Map<String, dynamic>> _barangays = [];
   int? _barangayId;
@@ -49,6 +52,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _lastName.text = user['last_name']?.toString() ?? '';
     _email.text = user['email']?.toString() ?? '';
     _phone.text = user['phone']?.toString() ?? '';
+    _address.text = user['address_line']?.toString() ?? '';
     _barangayId = user['barangay_id'] as int?;
   }
 
@@ -79,6 +83,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'first_name': _firstName.text.trim(),
         'last_name': _lastName.text.trim(),
         'phone': _phone.text,
+        'address_line': _address.text,
         'barangay_id': _barangayId,
       });
       final updated = Map<String, dynamic>.from(response['user'] as Map);
@@ -101,6 +106,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _lastName.dispose();
     _email.dispose();
     _phone.dispose();
+    _address.dispose();
     super.dispose();
   }
 
@@ -205,50 +211,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _phone,
+                      validator: validateMobile,
                       keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
-                        labelText: 'Phone (optional)',
+                        labelText: 'Mobile number',
+                        hintText: '09171234567',
                       ),
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      initialValue: _barangayId,
-                      isExpanded: true,
-                      itemHeight: null,
-                      decoration: InputDecoration(
-                        labelText: 'Barangay',
-                        helperText: _barangays
-                            .where((b) => b['id'] == _barangayId)
-                            .firstOrNull?['city_municipality']
-                            ?.toString(),
-                        helperMaxLines: 2,
-                      ),
-                      selectedItemBuilder: (context) => _barangays
-                          .map(
-                            (barangay) => Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                '${barangay['name']}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      items: _barangays
-                          .map(
-                            (barangay) => DropdownMenuItem<int>(
-                              value: barangay['id'] as int,
-                              child: Text(
-                                '${barangay['name']}, ${barangay['city_municipality']}',
-                              ),
-                            ),
-                          )
-                          .toList(),
+                    BarangayPicker(
+                      items: _barangays,
+                      value: _barangayId,
+                      enabled: !_saving,
                       onChanged: (value) => setState(() => _barangayId = value),
-                      validator: ['guardian', 'expert'].contains(user['role'])
-                          ? (value) =>
-                                value == null ? 'Select your barangay.' : null
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _address,
+                      maxLength: 200,
+                      decoration: const InputDecoration(
+                        labelText: 'House no., street or sitio',
+                        counterText: '',
+                      ),
+                      validator: (value) => (value ?? '').trim().isEmpty
+                          ? 'Enter your street, sitio, or address.'
                           : null,
                     ),
                     const SizedBox(height: 16),

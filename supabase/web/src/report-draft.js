@@ -61,7 +61,7 @@ export class ReportDraftStore {
       });
     }
     window.localStorage.setItem(this.key, JSON.stringify({version: 1, fields: draft.fields,
-      observations: draft.observations, step: draft.step, followup: draft.followup,
+      observations: draft.observations, step: draft.step, category: draft.category ?? 0, followup: draft.followup,
       checklistVersions: draft.checklistVersions, photoKey: this.photoKey,
       photoName: draft.photo?.name, savedAt: Date.now()}));
     return this.pending;

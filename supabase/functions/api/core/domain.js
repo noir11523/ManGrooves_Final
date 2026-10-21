@@ -41,7 +41,7 @@ export function password(value) {
   return value;
 }
 export function publicUser(user) {
-  return Object.fromEntries(['id', 'full_name', 'first_name', 'last_name', 'email', 'phone', 'role', 'barangay_id', 'barangay_name'].map(k => [k, user[k] ?? null]));
+  return Object.fromEntries(['id', 'full_name', 'first_name', 'last_name', 'email', 'phone', 'role', 'barangay_id', 'barangay_name','address_line','city_municipality','province','barangay_psgc'].map(k => [k, user[k] ?? null]));
 }
 export function classify(criteria, selections) {
   if (!selections || typeof selections !== 'object' || Array.isArray(selections)) throw new AppError('Choose your checklist answers.');
@@ -99,7 +99,7 @@ export function validateLocation(input, barangay, cluster = null) {
     return Number(value);
   };
   const latitude = coordinate(input.latitude, 90, 'latitude'), longitude = coordinate(input.longitude, 180, 'longitude');
-  if (!barangay || distanceMeters(latitude, longitude, barangay.center_lat, barangay.center_lng) > 5000) throw new AppError('This pin is too far from your barangay. Check the location.');
+  if (!barangay || distanceMeters(latitude, longitude, barangay.center_lat, barangay.center_lng) > (barangay.monitoring_radius_meters??5000)) throw new AppError('This pin is too far from your barangay. Check the location.');
   if (!['gps', 'manual'].includes(input.location_source)) throw new AppError('Use GPS or place the pin on the map.');
   let accuracy = null;
   if (input.location_source === 'gps') {

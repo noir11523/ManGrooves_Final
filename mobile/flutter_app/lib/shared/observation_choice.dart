@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'photo_credit.dart';
-
 /// A picture can be inspected without changing the report's saved answer.
 class ObservationChoice extends StatelessWidget {
   const ObservationChoice({
@@ -64,7 +62,6 @@ class ObservationChoice extends StatelessWidget {
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
-                          PhotoCredit(credit: photoCredit),
                           const Text(
                             'Pinch to zoom. Drag to move.',
                             textAlign: TextAlign.center,
@@ -173,7 +170,6 @@ class ObservationChoice extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            if (hasPhoto) PhotoCredit(credit: photoCredit),
             Center(
               child: IconButton(
                 key: ValueKey('choice-circle-$label'),

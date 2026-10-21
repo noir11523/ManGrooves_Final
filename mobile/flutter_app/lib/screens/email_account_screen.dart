@@ -1,3 +1,9 @@
+import 'dart:io';
+
+import 'package:image_picker/image_picker.dart';
+
+import '../shared/barangay_picker.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -28,12 +34,13 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
       'password',
       'password_confirmation',
       'code',
-      'expert_id_code',
+      'address_line',
     ])
       name: TextEditingController(),
   };
   List<Map<String, dynamic>> _barangays = [];
   String _role = 'guardian';
+  XFile? _idPhoto;
   int? _barangay;
   bool _consent = false, _busy = false, _sent = false, _loading = true;
   final _visiblePasswords = <String>{};
@@ -242,11 +249,9 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
 
   Map<String, dynamic> get _values => {
     for (final entry in _fields.entries)
-      if (entry.key != 'expert_id_code' ||
-          (!widget.recovery && _role == 'expert'))
-        entry.key: entry.key.startsWith('password')
-            ? entry.value.text
-            : entry.value.text.trim(),
+      entry.key: entry.key.startsWith('password')
+          ? entry.value.text
+          : entry.value.text.trim(),
     'role': _role,
     'barangay_id': _barangay,
     'privacy_consent': _consent,
@@ -278,6 +283,12 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
       await _verifyCode();
       return;
     }
+    if (!widget.recovery && _role == 'expert' && _idPhoto == null) {
+      setState(
+        () => _error = 'Upload a clear photo of your work or professional ID.',
+      );
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -296,7 +307,7 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
         final result = await widget.api.cloudUpload(
           'complete-registration.php',
           _values,
-          {},
+          _role == 'expert' ? {'id_photo': _idPhoto!.path} : {},
           token: _proof,
         );
         if (!mounted) return;
@@ -471,20 +482,18 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
           ? 25
           : name == 'code'
           ? 6
-          : name == 'expert_id_code'
-          ? 80
+          : name == 'address_line'
+          ? 200
           : name == 'first_name' || name == 'last_name'
           ? 80
           : name == 'phone'
           ? 30
           : null,
-      autocorrect: !secret && name != 'expert_id_code',
-      enableSuggestions: !secret && name != 'expert_id_code',
+      autocorrect: !secret,
+      enableSuggestions: !secret,
       decoration: InputDecoration(
         labelText: label,
-        helperText: name == 'expert_id_code'
-            ? 'Use your work or professional ID number.'
-            : null,
+        helperText: name == 'phone' ? 'For example: 09171234567' : null,
         helperMaxLines: 2,
         counterText: '',
         suffixIcon: secret
@@ -508,7 +517,6 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
       ),
       validator: (value) {
         if (!optional && (value == null || value.trim().isEmpty)) {
-          if (name == 'expert_id_code') return 'Enter your expert ID code.';
           return 'Enter ${label.toLowerCase()}.';
         }
         if (name == 'email' &&
@@ -525,11 +533,7 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
         if (name == 'code' && !RegExp(r'^\d{6}$').hasMatch(value ?? '')) {
           return 'Enter the code from your email.';
         }
-        if (name == 'phone' &&
-            (value ?? '').trim().isNotEmpty &&
-            !RegExp(r'^[0-9+() .-]{7,30}$').hasMatch(value!.trim())) {
-          return 'Enter a valid phone number or leave it blank.';
-        }
+        if (name == 'phone') return validateMobile(value);
         return null;
       },
     ),
@@ -608,7 +612,7 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
       title: const Text('Privacy notice'),
       content: const SingleChildScrollView(
         child: Text(
-          'ManGROOVES saves your name, email, barangay, optional phone number, and field reports. Reports include photos, location, checklist answers, and visit notes.\n\nYour account and reports are stored using Supabase. Guardians see their own private reports. Authorized experts and administrators can review reports. Only administrators can see an expert applicant’s ID code.\n\nGPS is optional. You can place a map pin yourself. Address searches are sent to Photon. New field photos have personal image metadata removed before storage.\n\nYour email cannot be changed in Settings. Ask your program administrator about access, corrections, or account removal.',
+          'ManGROOVES saves your name, email, barangay, mobile number and address, and field reports. Reports include photos, location, checklist answers, and visit notes.\n\nYour account and reports are stored using Supabase. Guardians see their own private reports. Authorized experts and administrators can review reports. Only administrators can see an expert applicant’s ID photo.\n\nGPS is optional. You can place a map pin yourself. Address searches are sent to Photon. New field photos have personal image metadata removed before storage.\n\nYour email cannot be changed in Settings. Ask your program administrator about access, corrections, or account removal.',
         ),
       ),
       actions: [
@@ -702,6 +706,34 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
     ),
   );
 
+  Future<void> _pickId() async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1800,
+        imageQuality: 88,
+      );
+      if (file == null) return;
+      if (await file.length() > 5 * 1024 * 1024) {
+        throw const ApiException('Choose an ID photo under 5 MB.');
+      }
+      if (mounted) {
+        setState(() {
+          _idPhoto = file;
+          _error = null;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = error is ApiException
+              ? error.message
+              : 'Could not open the photo. Try again.',
+        );
+      }
+    }
+  }
+
   List<Widget> _profileFields() => [
     Container(
       padding: const EdgeInsets.all(12),
@@ -725,28 +757,37 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
     const SizedBox(height: 16),
     if (_role == 'expert') ...[
       const Text(
-        'Experts need admin approval. Only administrators can view your ID code.',
+        'Experts need admin approval. Only administrators can view your ID photo.',
       ),
       const SizedBox(height: 16),
-      _field('expert_id_code', 'Expert ID code'),
+      OutlinedButton.icon(
+        onPressed: _busy ? null : _pickId,
+        icon: const Icon(Icons.badge_outlined),
+        label: Text(_idPhoto == null ? 'Upload ID photo' : 'Change ID photo'),
+      ),
+      if (_idPhoto != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Image.file(
+            File(_idPhoto!.path),
+            height: 180,
+            fit: BoxFit.contain,
+          ),
+        ),
+      const Text(
+        'JPG, PNG or WebP, up to 5 MB. Your name and credentials must be readable.',
+      ),
+      const SizedBox(height: 16),
     ],
-    DropdownButtonFormField<int>(
-      initialValue: _barangay,
-      isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Barangay'),
-      items: _barangays
-          .map(
-            (b) => DropdownMenuItem(
-              value: b['id'] as int,
-              child: Text('${b['name']}'),
-            ),
-          )
-          .toList(),
-      onChanged: _busy ? null : (v) => setState(() => _barangay = v),
-      validator: (v) => v == null ? 'Choose your barangay.' : null,
+    BarangayPicker(
+      items: _barangays,
+      value: _barangay,
+      enabled: !_busy,
+      onChanged: (v) => setState(() => _barangay = v),
     ),
     const SizedBox(height: 16),
-    _field('phone', 'Phone (optional)', optional: true),
+    _field('address_line', 'House no., street or sitio'),
+    _field('phone', 'Mobile number'),
   ];
 
   @override

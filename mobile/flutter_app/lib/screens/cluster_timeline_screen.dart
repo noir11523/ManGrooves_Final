@@ -50,8 +50,7 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final growth = widget.initialTab == 1,
-        cluster = _data?['cluster'] as Map? ?? {};
+    final cluster = _data?['cluster'] as Map? ?? {};
     final entries =
         (_data?['timeline'] as List? ?? [])
             .map((e) => Map<String, dynamic>.from(e as Map))
@@ -62,17 +61,17 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
     final counts = entries
         .where((e) => e['observed_alive_count'] != null)
         .toList();
-    final shown = growth ? counts : entries.reversed.toList();
-    final maximum = counts.fold<double>(
-      1,
-      (v, e) => (e['observed_alive_count'] as num).toDouble() > v
-          ? (e['observed_alive_count'] as num).toDouble()
-          : v,
-    );
+    String countChange(Map e) {
+      final index = counts.indexWhere((c) => c['id'] == e['id']);
+      if (index <= 0) return 'First recorded count';
+      final delta =
+          (e['observed_alive_count'] as num) -
+          (counts[index - 1]['observed_alive_count'] as num);
+      return '${delta > 0 ? '+' : ''}$delta since previous count';
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(growth ? 'Growth timeline' : 'Health history'),
-      ),
+      appBar: AppBar(title: const Text('Mangrove timeline')),
       body: _data == null
           ? Center(
               child: _error == null
@@ -88,77 +87,100 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
                     '${cluster['name'] ?? 'Mangrove site'}',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    growth
-                        ? 'Living mangroves counted each visit. Changes may reflect a different area, not tree height.'
-                        : 'Verified health results at this site, newest first.',
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Health and living mangroves recorded during verified visits. Counts may change when a different area is surveyed; they do not measure tree height.',
                   ),
-                  const SizedBox(height: 20),
-                  if (shown.isEmpty)
-                    const Text('No verified visits yet.')
-                  else
-                    VisitChart(
-                      entries: growth ? counts : entries,
-                      growth: growth,
+                  if (entries.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Text(
+                      'Health by visit',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                  const SizedBox(height: 20),
-                  for (int i = 0; i < shown.length; i++)
-                    if (growth)
-                      _GrowthVisit(
-                        entry: shown[i],
-                        previous: i == 0 ? null : shown[i - 1],
-                        maximum: maximum,
-                      )
+                    const SizedBox(height: 12),
+                    VisitChart(entries: entries, growth: false),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Living mangroves',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    if (counts.isNotEmpty)
+                      VisitChart(entries: counts, growth: true)
                     else
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${shown[i]['submitted_at']}'.split(' ').first,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '${shown[i]['health']}',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: ClusterHealthMap.healthColor(
-                                    '${shown[i]['health']}',
-                                  ),
+                      const Text('No mangrove counts recorded yet.'),
+                  ],
+                  const SizedBox(height: 24),
+                  Text(
+                    'Verified visits',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  if (entries.isEmpty) const Text('No verified visits yet.'),
+                  for (final entry in entries.reversed)
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${entry['submitted_at']}'.split(' ').first),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${entry['health']}',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: ClusterHealthMap.healthColor(
+                                  '${entry['health']}',
                                 ),
                               ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${entry['species_name'] ?? 'Species not confirmed'}',
+                            ),
+                            const SizedBox(height: 12),
+                            if (entry['observed_alive_count'] != null) ...[
                               Text(
-                                '${shown[i]['species_name'] ?? 'Species not confirmed'}',
+                                '${entry['observed_alive_count']} living mangroves',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                              if (shown[i]['expert_feedback'] != null)
-                                Text('${shown[i]['expert_feedback']}'),
-                              if (shown[i]['can_view_details'] == true)
-                                TextButton(
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => ReportDetailScreen(
-                                        api: widget.api,
-                                        reportId: int.parse(
-                                          '${shown[i]['id']}',
-                                        ),
-                                      ),
+                              Text(countChange(entry)),
+                            ] else
+                              const Text('Count not recorded'),
+                            if (entry['expert_feedback'] != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text('${entry['expert_feedback']}'),
+                              ),
+                            if (entry['can_view_details'] == true)
+                              TextButton(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => ReportDetailScreen(
+                                      api: widget.api,
+                                      reportId: int.parse('${entry['id']}'),
                                     ),
                                   ),
-                                  child: Text(
-                                    'View ${shown[i]['report_code'] ?? 'report'}',
-                                  ),
-                                )
-                              else
-                                const Text('Community observation'),
-                            ],
-                          ),
+                                ),
+                                child: Text(
+                                  'View ${entry['report_code'] ?? 'report'}',
+                                ),
+                              )
+                            else
+                              const Padding(
+                                padding: EdgeInsets.only(top: 12),
+                                child: Text('Community observation'),
+                              ),
+                          ],
                         ),
                       ),
+                    ),
                 ],
               ),
             ),
@@ -277,53 +299,6 @@ class VisitChart extends StatelessWidget {
   }
 }
 
-class _GrowthVisit extends StatelessWidget {
-  const _GrowthVisit({
-    required this.entry,
-    required this.previous,
-    required this.maximum,
-  });
-  final Map<String, dynamic> entry;
-  final Map<String, dynamic>? previous;
-  final double maximum;
-  @override
-  Widget build(BuildContext context) {
-    final count = int.parse('${entry['observed_alive_count']}');
-    final delta = previous == null
-        ? null
-        : count - int.parse('${previous!['observed_alive_count']}');
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${entry['submitted_at']}'.split(' ').first),
-            Text(
-              '$count living mangroves',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: LinearProgressIndicator(
-                value: count / maximum,
-                minHeight: 10,
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            Text(
-              delta == null
-                  ? 'First count'
-                  : '${delta > 0 ? '+' : ''}$delta since last visit',
-            ),
-            Text('${entry['health']}'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class ClustersScreen extends StatefulWidget {
   const ClustersScreen({super.key, required this.api, this.initialTab = 0});
   final ApiClient api;
@@ -368,11 +343,7 @@ class _ClustersScreenState extends State<ClustersScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(
-        widget.initialTab == 1 ? 'Growth timeline' : 'Health history',
-      ),
-    ),
+    appBar: AppBar(title: Text('Mangrove timeline')),
     body: RefreshIndicator(
       onRefresh: _load,
       child: ListView(

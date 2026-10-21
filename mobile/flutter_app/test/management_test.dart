@@ -148,7 +148,7 @@ void main() {
       await tester.tap(find.text('Create staff account'));
       await tester.pumpAndSettle();
       expect(find.text('First name'), findsOneWidget);
-      expect(find.text('Expert credential ID'), findsOneWidget);
+      expect(find.text('Upload work or professional ID photo'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

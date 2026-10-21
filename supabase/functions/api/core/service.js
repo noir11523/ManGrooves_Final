@@ -8,9 +8,20 @@ import { AppError, HEALTH_VALUES, classify, integer, matchSpecies, now, password
 import { analyticsForUser, badgeMetrics, reportLabel, verifiedNeedsAttention, dashboardStats, displayHealth, newest, reportList } from './analytics.js';
 import { saveImage } from './uploads.js';
 import {startRegistration} from './registration.js';
+import {profileDetails} from './profile-fields.js';
+import {cebuBarangays} from './barangays.js';
 
 export class Service extends Store {
   constructor(db, auth, bucket, mailer = null) { super(db); this.auth = auth; this.bucket = bucket; this.mailer = mailer; }
+  async rows(collection,filters=[]) {
+    if(collection!=='barangays')return super.rows(collection,filters);
+    const rows=cebuBarangays(await super.rows('barangays'));
+    return rows.filter(row=>filters.every(([key,op,value])=>op==='=='&&row[key]===value));
+  }
+  async get(collection,id) {
+    if(collection==='barangays')return (await this.rows('barangays')).find(b=>String(b.id)===String(id))??null;
+    return super.get(collection,id);
+  }
   async user(uid) {
     const user = await this.get('users', uid);
     if(user?.status==='pending_approval') throw new AppError('Your expert application is waiting for admin approval.',403);
@@ -62,7 +73,7 @@ export class Service extends Store {
   async form(user) {
     requireRole(user, 'guardian', 'expert');
     const [criteria, clusters, species, barangay] = await Promise.all([this.criteria(), this.clusters(user), this.species(), this.get('barangays', user.barangay_id)]);
-    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)), species, location: {barangay, max_distance_meters: 5000, max_gps_accuracy_meters: 100},
+    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)), species, location: {barangay, max_distance_meters: barangay?.monitoring_radius_meters??5000, max_gps_accuracy_meters: 100},
       traits: Object.fromEntries(['root_type', 'leaf_shape', 'bark_texture'].map(k => [k, [...new Set(species.map(s => s[k]).filter(Boolean))].sort()]))};
   }
   async preview(user, input) {
@@ -107,12 +118,7 @@ export class Service extends Store {
     if (input) {
       if (input.email !== undefined && input.email !== user.email) throw new AppError('Your email address cannot be changed.');
       const first_name = text(input.first_name, 'your first name', 80), last_name = text(input.last_name, 'your last name', 80);
-      const barangay_id = input.barangay_id ? integer(input.barangay_id, 'barangay') : null;
-      const barangay = barangay_id ? await this.get('barangays', barangay_id) : null;
-      if ((barangay_id && !barangay) || (!barangay && ['guardian','expert'].includes(user.role))) throw new AppError('Choose an available barangay.');
-      const phone = text(input.phone ?? '', 'your phone number', 30, false);
-      if (phone && !/^[0-9+() .-]{7,30}$/.test(phone)) throw new AppError('Enter a valid phone number or leave it blank.');
-      const update = {first_name, last_name, full_name: `${first_name} ${last_name}`, phone: phone || null, barangay_id, barangay_name: barangay?.name ?? null};
+      const update = {first_name, last_name, full_name: `${first_name} ${last_name}`, ...await profileDetails(this,input)};
       await this.db.runTransaction(async tx => {
         const ref = this.ref('users', user.uid), snap = await tx.get(ref);
         if (snap.data()?.status !== 'active') throw new AppError('Please sign in again.', 401);
@@ -311,12 +317,12 @@ export class Service extends Store {
       const clusters = await this.transactionRows(tx, 'clusters', [['barangay_id', '==', previous.barangay_id]]);
       const parentRef = previous.parent_report_id ? this.ref('reports', previous.parent_report_id) : null;
       if (parentRef) await tx.get(parentRef);
-      const health = action === 'correct' ? input.final_health : previous.suggested_health;
-      if (action !== 'reject' && !HEALTH_VALUES.includes(health)) throw new AppError('Choose a final health result for this report.');
+      const health = action === 'correct' ? input.final_health : previous.suggested_health ?? 'Unknown';
+      if (action !== 'reject' && ![...HEALTH_VALUES,'Unknown'].includes(health)) throw new AppError('Choose a health result for this correction.');
       const speciesId = action === 'correct' ? (input.final_species_id ? integer(input.final_species_id, 'species') : null) : previous.suggested_species_id;
       const species = catalog.find(s => s.id === speciesId);
       if (action !== 'reject' && speciesId && !species) throw new AppError('Choose an available species.');
-      const rarity = action === 'correct' ? input.rarity_level || previous.rarity_level : previous.rarity_level;
+      const rarity = (action === 'correct' ? input.rarity_level || previous.rarity_level : previous.rarity_level) || 'Unassigned';
       if (!['Common', 'Vulnerable', 'Rare', 'Unassigned'].includes(rarity)) throw new AppError('Choose a valid rarity level.');
       let cluster = clusters.find(c => c.id === previous.cluster_id);
       if (action !== 'reject' && !cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: previous.sitio_name, visibility:'personal',created_by:previous.user_id,created_by_name:previous.guardian_name,active:1,

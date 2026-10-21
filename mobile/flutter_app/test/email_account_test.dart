@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:mangrooves_mobile/shared/barangay_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -55,7 +59,7 @@ class _EmailApi extends ApiClient {
     calls.add(path);
     expect(token, 'email-proof');
     expect(input['first_name'], 'Test');
-    expect(files, isEmpty);
+    expect(files.keys, input['role'] == 'expert' ? ['id_photo'] : isEmpty);
     completed = Map.of(input);
     if (expireProof) {
       throw const ApiException('Verification expired.', statusCode: 401);
@@ -145,8 +149,13 @@ void main() {
       await tap(tester, find.text('Continue'));
       await tester.enterText(field('Verification code'), '123456');
       await tap(tester, find.text('Verify code'));
-      await tap(tester, find.byType(DropdownButtonFormField<int>));
+      await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
+      await tester.enterText(field('Mobile number'), '09171234567');
+      await tester.enterText(
+        field('House no., street or sitio'),
+        'Test Street',
+      );
       await tap(tester, find.text('Finish registration'));
       expect(api.logins, 1);
       expect(find.byType(HomeShell), findsOneWidget);
@@ -191,7 +200,7 @@ void main() {
     (tester) async {
       final api = _EmailApi();
       await _open(tester, api);
-      expect(find.byType(DropdownButtonFormField<int>), findsNothing);
+      expect(find.byType(BarangayPicker), findsNothing);
       await fillDetails(tester);
       await tester.enterText(field('Confirm password'), 'different');
       await tap(tester, find.text('Continue'));
@@ -211,8 +220,13 @@ void main() {
       expect(api.logins, 0);
       await tap(tester, find.text('Finish registration'));
       expect(api.completed, isNull);
-      await tap(tester, find.byType(DropdownButtonFormField<int>));
+      await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
+      await tester.enterText(field('Mobile number'), '09171234567');
+      await tester.enterText(
+        field('House no., street or sitio'),
+        'Test Street',
+      );
       await tap(tester, find.text('Finish registration'));
       expect(api.calls.last, 'complete-registration.php');
       expect(api.logins, 1);
@@ -231,12 +245,31 @@ void main() {
       await tap(tester, find.text('Verify code'));
       await tap(tester, find.byType(DropdownButtonFormField<String>));
       await tap(tester, find.text('Expert').last);
-      await tap(tester, find.byType(DropdownButtonFormField<int>));
+      await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
+      await tester.enterText(field('Mobile number'), '09171234567');
+      await tester.enterText(
+        field('House no., street or sitio'),
+        'Test Street',
+      );
       await tap(tester, find.text('Submit expert application'));
-      expect(find.text('Enter your expert ID code.'), findsOneWidget);
+      expect(find.textContaining('Upload a clear photo'), findsOneWidget);
       expect(api.completed, isNull);
-      await tester.enterText(field('Expert ID code'), ' WORK-2026/001 ');
+      const picker = MethodChannel('plugins.flutter.io/image_picker');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        picker,
+        (_) async =>
+            File('../../public/assets/img/guides/leaf-color.png').absolute.path,
+      );
+      addTearDown(() => messenger.setMockMethodCallHandler(picker, null));
+      await tester.ensureVisible(find.text('Upload ID photo'));
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Upload ID photo'));
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      });
+      await tester.pumpAndSettle();
       await tap(tester, find.text('Back to account'));
       expect(
         tester.widget<TextField>(field('First name')).controller!.text,
@@ -244,12 +277,9 @@ void main() {
       );
       await tap(tester, find.text('Continue'));
       expect(api.calls.where((c) => c == 'register.php').length, 1);
-      expect(
-        tester.widget<TextField>(field('Expert ID code')).controller!.text,
-        ' WORK-2026/001 ',
-      );
+      expect(find.text('Change ID photo'), findsOneWidget);
       await tap(tester, find.text('Submit expert application'));
-      expect(api.completed?['expert_id_code'], 'WORK-2026/001');
+      expect(api.completed?['expert_id_code'], isNull);
       expect(find.text('Application submitted'), findsOneWidget);
       expect(
         find.textContaining(
@@ -308,8 +338,13 @@ void main() {
       await tap(tester, find.text('Continue'));
       await tester.enterText(field('Verification code'), '123456');
       await tap(tester, find.text('Verify code'));
-      await tap(tester, find.byType(DropdownButtonFormField<int>));
+      await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
+      await tester.enterText(field('Mobile number'), '09171234567');
+      await tester.enterText(
+        field('House no., street or sitio'),
+        'Test Street',
+      );
       await tap(tester, find.text('Finish registration'));
       expect(field('Verification code'), findsOneWidget);
       expect(api.logins, 0);
@@ -326,8 +361,13 @@ void main() {
       await tap(tester, find.text('Continue'));
       await tester.enterText(field('Verification code'), '123456');
       await tap(tester, find.text('Verify code'));
-      await tap(tester, find.byType(DropdownButtonFormField<int>));
+      await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
+      await tester.enterText(field('Mobile number'), '09171234567');
+      await tester.enterText(
+        field('House no., street or sitio'),
+        'Test Street',
+      );
       await tap(tester, find.text('Finish registration'));
       expect(find.text('Account created'), findsOneWidget);
       expect(field('Password'), findsNothing);

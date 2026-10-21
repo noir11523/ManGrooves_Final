@@ -160,15 +160,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   'Clusters',
                   stats['map_clusters'] ?? clusters.length,
                   Icons.hub_outlined,
-                  () {
-                    final target = _mapKey.currentContext;
-                    if (target != null) {
-                      Scrollable.ensureVisible(
-                        target,
-                        duration: const Duration(milliseconds: 300),
-                      );
-                    }
-                  },
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => ClustersScreen(api: widget.api),
+                    ),
+                  ),
                 ),
               ],
             ),

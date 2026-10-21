@@ -1,5 +1,5 @@
             <h2 class="h4">Information collected</h2>
-            <p>Guardian accounts contain a name, email address, optional phone number, assigned barangay, consent time, and security activity. Reports contain precise coordinates, location accuracy when GPS is used, photos, checklist answers, species traits, counts, remarks, and follow-up links. Expert decisions, feedback, badges, notifications, and audit events are also retained.</p>
+            <p>Guardian accounts contain a name, email address, mobile number, address, barangay and city/municipality, consent time, and security activity. Reports contain precise coordinates, location accuracy when GPS is used, photos, checklist answers, species traits, counts, remarks, and follow-up links. Expert decisions, feedback, badges, notifications, and audit events are also retained.</p>
 
             <h2 class="h4 mt-4">Why it is used</h2>
             <p>The information is used to authenticate users, validate and review reports, group verified observations into monitoring sites, track health and survival over time, contact or coach guardians, recognize verified contributions, produce conservation analytics, secure the service, and maintain an accountable record of official actions.</p>

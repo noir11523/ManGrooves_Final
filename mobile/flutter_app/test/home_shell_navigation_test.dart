@@ -150,9 +150,9 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Analytics and timelines'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Growth timeline'));
+        await tester.tap(find.text('Mangrove timeline'));
         await tester.pumpAndSettle();
-        expect(find.text('Growth timeline'), findsOneWidget);
+        expect(find.text('Mangrove timeline'), findsOneWidget);
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Notifications'));
@@ -162,7 +162,7 @@ void main() {
         for (final label
             in role == 'guardian'
                 ? ['Reports', 'Submit Report', 'Badges', 'Account']
-                : ['Reports', 'Review', 'Analytics', 'Account']) {
+                : ['Review', 'History', 'Analytics', 'Account']) {
           await tester.tap(
             find.descendant(
               of: find.byType(NavigationBar),
@@ -199,7 +199,7 @@ void main() {
         await tester.tap(
           find.descendant(
             of: find.byType(NavigationBar),
-            matching: find.text('Reports'),
+            matching: find.text(role == 'guardian' ? 'Reports' : 'History'),
           ),
         );
         await tester.pumpAndSettle();

@@ -7,6 +7,10 @@ import '../shared/list_filters.dart';
 import '../shared/catalog_widgets.dart';
 import '../shared/content_width.dart';
 import 'sites_screen.dart';
+import 'cloud_admin_screen.dart';
+import '../shared/barangay_picker.dart';
+
+import 'package:image_picker/image_picker.dart';
 
 class ManagementScreen extends StatefulWidget {
   const ManagementScreen({super.key, required this.api, required this.page});
@@ -30,7 +34,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
     'steward_days': 'Monitoring days',
   };
   List<Map<String, dynamic>> _items = [], _barangays = [];
-  String _query = '', _status = '', _role = '', _barangay = '', _error = '';
+  String _query = '',
+      _status = '',
+      _role = '',
+      _barangay = '',
+      _error = '',
+      _badge = '';
+  Map<String, dynamic> _summary = {};
   int _page = 1, _pages = 1, _total = 0;
   int _loadRequest = 0;
   bool _loading = true;
@@ -59,6 +69,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 'status': _status,
                 'role': _role,
                 'barangay_id': _barangay,
+                'badge_tier': _badge,
                 'page': '$_page',
               }
             : {},
@@ -78,6 +89,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
         _barangays = (data['barangays'] as List? ?? [])
             .map((x) => Map<String, dynamic>.from(x as Map))
             .toList();
+        _summary = Map<String, dynamic>.from(data['summary'] as Map? ?? {});
         _pages = (data['pages'] as num?)?.toInt() ?? 1;
         _total = (data['total'] as num?)?.toInt() ?? _items.length;
         _error = '';
@@ -113,6 +125,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
     if (_users &&
         item != null &&
         !['active', 'inactive'].contains(item['status'])) {
+      await _application(item);
       return;
     }
     final values = <String, dynamic>{
@@ -126,6 +139,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
     bool busy = false;
     String successMessage = 'Saved.';
     String? error;
+    XFile? idPhoto;
     final saved = await showModalBottomSheet<bool>(
       context: context,
       constraints: const BoxConstraints(maxWidth: 680),
@@ -155,7 +169,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
               maxLength: max,
               decoration: InputDecoration(labelText: label, counterText: ''),
               enabled: !busy,
-              validator: (v) => required && (v?.trim().isEmpty ?? true)
+              validator: (v) => key == 'phone'
+                  ? validateMobile(v)
+                  : required && (v?.trim().isEmpty ?? true)
                   ? 'Enter $label.'
                   : null,
               onChanged: (v) => values[key] = v,
@@ -238,12 +254,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                           input('first_name', 'First name', max: 80),
                           input('last_name', 'Last name', max: 80),
                           input('email', 'Email', max: 190),
-                          input(
-                            'phone',
-                            'Phone (optional)',
-                            required: false,
-                            max: 30,
-                          ),
+                          input('phone', 'Mobile number', max: 30),
                         ] else
                           Padding(
                             padding: const EdgeInsets.only(bottom: 16),
@@ -262,11 +273,19 @@ class _ManagementScreenState extends State<ManagementScreen> {
                               : roles,
                         ),
                         if (item == null) ...[
-                          choice('barangay_id', 'Barangay', {
-                            '': 'Choose barangay',
-                            for (final b in _barangays)
-                              '${b['id']}': '${b['name']}',
-                          }),
+                          BarangayPicker(
+                            items: _barangays,
+                            value: int.tryParse('${values['barangay_id']}'),
+                            enabled: !busy,
+                            onChanged: (v) =>
+                                update(() => values['barangay_id'] = v),
+                          ),
+                          const SizedBox(height: 16),
+                          input(
+                            'address_line',
+                            'House / building, street or sitio',
+                            max: 200,
+                          ),
                           input(
                             'password',
                             'Initial password',
@@ -280,15 +299,48 @@ class _ManagementScreenState extends State<ManagementScreen> {
                             max: 25,
                           ),
                           if (values['role'] == 'expert')
-                            input(
-                              'expert_id_code',
-                              'Expert credential ID',
-                              max: 80,
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.badge_outlined),
+                              label: Text(
+                                idPhoto == null
+                                    ? 'Upload work or professional ID photo'
+                                    : 'Change ID photo',
+                              ),
+                              onPressed: busy
+                                  ? null
+                                  : () async {
+                                      try {
+                                        final photo = await ImagePicker()
+                                            .pickImage(
+                                              source: ImageSource.gallery,
+                                              maxWidth: 1800,
+                                              imageQuality: 88,
+                                            );
+                                        if (photo != null &&
+                                            await photo.length() >
+                                                5 * 1024 * 1024) {
+                                          throw const ApiException(
+                                            'Choose an ID photo under 5 MB.',
+                                          );
+                                        }
+                                        if (photo != null && context.mounted) {
+                                          update(() => idPhoto = photo);
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          update(
+                                            () => error = e is ApiException
+                                                ? e.message
+                                                : 'Could not open the photo. Try again.',
+                                          );
+                                        }
+                                      }
+                                    },
                             ),
                         ] else
                           choice('status', 'Status', {
                             'active': 'Active',
-                            'inactive': 'Inactive',
+                            'inactive': 'Suspended',
                           }),
                       ] else ...[
                         if (_species)
@@ -342,6 +394,13 @@ class _ManagementScreenState extends State<ManagementScreen> {
                                     );
                                     return;
                                   }
+                                  if (values['role'] == 'expert' &&
+                                      idPhoto == null) {
+                                    update(
+                                      () => error = 'Upload a work or professional ID photo.',
+                                    );
+                                    return;
+                                  }
                                   if ('${values['barangay_id'] ?? ''}'
                                       .isEmpty) {
                                     update(() => error = 'Choose a barangay.');
@@ -353,20 +412,30 @@ class _ManagementScreenState extends State<ManagementScreen> {
                                   error = null;
                                 });
                                 try {
-                                  await widget.api.cloudRequest(
-                                    '${widget.page}.php',
-                                    body: {
-                                      ...values,
-                                      if (_users && item == null)
-                                        'action': 'create_staff',
-                                      if (!_users)
-                                        'active':
-                                            int.tryParse(
-                                              '${values['active']}',
-                                            ) ??
-                                            1,
-                                    },
-                                  );
+                                  final payload = <String, dynamic>{
+                                    ...values,
+                                    if (_users && item == null)
+                                      'action': 'create_staff',
+                                    if (!_users)
+                                      'active':
+                                          int.tryParse('${values['active']}') ??
+                                          1,
+                                  };
+                                  if (_users && item == null) {
+                                    await widget.api.cloudUpload(
+                                      'users.php',
+                                      payload,
+                                      values['role'] == 'expert' &&
+                                              idPhoto != null
+                                          ? {'id_photo': idPhoto!.path}
+                                          : {},
+                                    );
+                                  } else {
+                                    await widget.api.cloudRequest(
+                                      '${widget.page}.php',
+                                      body: payload,
+                                    );
+                                  }
                                   if (context.mounted) {
                                     Navigator.pop(context, true);
                                   }
@@ -527,7 +596,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                   ? const {
                       '': 'All statuses',
                       'active': 'Active',
-                      'inactive': 'Inactive',
+                      'inactive': 'Suspended',
                       'pending_approval': 'Awaiting approval',
                       'rejected': 'Declined',
                     }
@@ -543,23 +612,58 @@ class _ManagementScreenState extends State<ManagementScreen> {
             ),
             if (_users)
               ExpansionTile(
-                title: const Text('Role and barangay'),
+                title: const Text('Role, barangay and badges'),
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: _role,
                     isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Role'),
-                    items: {'': 'All roles', ...roles}.entries
-                        .map(
-                          (e) => DropdownMenuItem(
-                            value: e.key,
-                            child: Text(e.value),
-                          ),
-                        )
-                        .toList(),
+                    items:
+                        {
+                              '': 'All roles',
+                              ...roles,
+                              'applicant': 'Expert applicant',
+                            }.entries
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e.key,
+                                child: Text(e.value),
+                              ),
+                            )
+                            .toList(),
                     onChanged: (v) {
                       setState(() {
                         _role = v ?? '';
+                        _page = 1;
+                      });
+                      _load();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _badge,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Badges'),
+                    items:
+                        const {
+                              '': 'All badges',
+                              'gold': 'Gold',
+                              'silver': 'Silver',
+                              'bronze': 'Bronze',
+                              'other': 'Other badges',
+                              'none': 'No badges',
+                              'earned': 'Any earned badge',
+                            }.entries
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e.key,
+                                child: Text(e.value),
+                              ),
+                            )
+                            .toList(),
+                    onChanged: (v) {
+                      setState(() {
+                        _badge = v ?? '';
                         _page = 1;
                       });
                       _load();
@@ -574,7 +678,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
                         {
                               '': 'All barangays',
                               for (final b in _barangays)
-                                '${b['id']}': '${b['name']}',
+                                '${b['id']}': barangayLabel(b),
                             }.entries
                             .map(
                               (e) => DropdownMenuItem(
@@ -610,7 +714,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
               TextButton(onPressed: _load, child: Text('$_error Retry')),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text('${_users ? _total : _visible.length} results'),
+              child: Text(
+                _users
+                    ? '${_summary['active_experts'] ?? 0} active experts · ${_summary['active_guardians'] ?? 0} active coastal guardians\n$_total results'
+                    : '${_visible.length} results',
+              ),
             ),
             if (!_loading && _visible.isEmpty)
               const Text(
@@ -619,6 +727,8 @@ class _ManagementScreenState extends State<ManagementScreen> {
             for (final item in _visible)
               _species
                   ? _speciesCard(context, item)
+                  : _users
+                  ? _userCard(item)
                   : Card(
                       margin: const EdgeInsets.only(bottom: 16),
                       child: ListTile(
@@ -677,6 +787,78 @@ class _ManagementScreenState extends State<ManagementScreen> {
               ),
           ],
         ),
+      ),
+    ),
+  );
+
+  Future<void> _application(Map<String, dynamic> item) async {
+    final uid = item['application_uid'];
+    if (uid == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            CloudAdminScreen(api: widget.api, applicationUid: '$uid'),
+      ),
+    );
+    if (mounted) await _load();
+  }
+
+  Widget _userCard(Map<String, dynamic> item) => Card(
+    margin: const EdgeInsets.only(bottom: 16),
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${item['full_name']}',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text('${item['email']}'),
+          Text('${item['phone'] ?? 'No mobile number'}'),
+          if ('${item['address_line'] ?? ''}'.isNotEmpty)
+            Text('${item['address_line']}'),
+          Text(
+            '${item['barangay_name'] ?? ''} · ${item['city_municipality'] ?? 'Cebu City'}',
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${item['role_label'] ?? roles[item['role']]} · ${const {'active': 'Active', 'inactive': 'Suspended', 'pending_approval': 'Awaiting approval', 'rejected': 'Declined'}[item['status']] ?? item['status']}',
+          ),
+          const SizedBox(height: 12),
+          const Text('Badges', style: TextStyle(fontWeight: FontWeight.w600)),
+          if ((item['badges'] as List? ?? []).isEmpty)
+            const Text('No badges yet')
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final badge in item['badges'] as List)
+                  Chip(label: Text('${badge['name']}')),
+              ],
+            ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              if (['active', 'inactive'].contains(item['status']))
+                OutlinedButton.icon(
+                  onPressed: () => _edit(item),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Edit access'),
+                ),
+              if (item['application_uid'] != null)
+                TextButton(
+                  onPressed: () => _application(item),
+                  child: const Text('View application'),
+                ),
+            ],
+          ),
+        ],
       ),
     ),
   );

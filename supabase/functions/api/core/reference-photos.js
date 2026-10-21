@@ -18,15 +18,16 @@ export function withPhotoCredits(criterion) {
   }))};
 }
 
-// Fill only missing photos. Admin uploads and edits always take precedence.
+// Replace only packaged defaults or missing photos; preserve admin uploads.
 export function planReferencePhotos(criteria, traitImages, species) {
+  const defaults=new Set(catalog.replaceable_paths??[]);
   const updates=[];
   for(const criterion of criteria) {
     let changed=false;
     const options=criterion.options.map(option=>{
       const path=catalog.choices[criterion.code]?.[option.code];
       const expected=catalog.labels?.[criterion.code]?.[option.code];
-      if(!path || option.image_path || (expected && option.label!==expected)) return option;
+      if(!path || option.image_path===path || (option.image_path&&!defaults.has(option.image_path)) || (expected && option.label!==expected)) return option;
       changed=true;return {...option,image_path:path};
     });
     if(changed)updates.push({...criterion,options,version:Number(criterion.version||1)+1});
@@ -34,7 +35,7 @@ export function planReferencePhotos(criteria, traitImages, species) {
   const images=structuredClone(traitImages??{});
   for(const [key,values] of Object.entries(catalog.traits)) {
     const active=new Set(species.map(s=>s[key]));
-    for(const [value,path] of Object.entries(values))if(active.has(value) && !images[key]?.[value]){
+    for(const [value,path] of Object.entries(values))if(active.has(value) && (!images[key]?.[value] || defaults.has(images[key]?.[value]))){
       images[key]??={};images[key][value]=path;
     }
   }

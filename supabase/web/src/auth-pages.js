@@ -1,3 +1,4 @@
+import {barangayPicker,bindBarangayPicker,contactFields} from './address-fields.js';
 import {api,login,friendly} from './client.js';
 import {$,esc,field,select,errorBox,formValues,showError,toast} from './ui.js';
 
@@ -70,9 +71,8 @@ export async function registrationPage(layout) {
       <fieldset data-step="2" hidden disabled>
         <p class="verified-email" id="verified-email"></p>
         ${select('role','Join as',[['guardian','Coastal Guardian'],['expert','Expert']])}
-        <div id="expert-proof" hidden><p class="notice">Experts need admin approval. Only administrators can view your ID code.</p><label class="field"><span>Expert ID code</span><input type="text" name="expert_id_code" maxlength="80" autocomplete="off" spellcheck="false" aria-describedby="expert-id-help"><small id="expert-id-help">Use your work or professional ID number.</small></label></div>
-        ${select('barangay_id','Barangay',[['','Choose your barangay'],...config.barangays.map(b=>[b.id,b.name])],'','required')}
-        ${field('phone','Phone (optional)','','tel','maxlength="30" autocomplete="tel"')}
+        <div id="expert-proof" hidden><p class="notice">Experts need admin approval. Your ID photo is private and visible only to administrators.</p><label class="field"><span>Work or professional ID photo</span><input type="file" name="id_photo" accept="image/jpeg,image/png,image/webp" aria-describedby="expert-id-help"><small id="expert-id-help">Upload one clear JPG, PNG or WebP photo, up to 5 MB. Make sure your name and credentials are readable.</small></label><img id="id-photo-preview" class="preview-photo" alt="Your selected ID photo" hidden></div>
+        ${barangayPicker(config.barangays)}${contactFields()}
       </fieldset>
       <button type="submit" class="registration-submit" id="registration-submit">Continue</button>
       <div class="registration-secondary"><button type="button" class="outline" id="resend-code" hidden>Resend code</button><button type="button" class="outline" id="registration-back" hidden>Change email</button></div>
@@ -83,14 +83,22 @@ export async function registrationPage(layout) {
   const sets=[...form.querySelectorAll('fieldset')],steps=[...area.querySelectorAll('.account-steps li')];
   let step=0,busy=false,proof=null,account=null,sentEmail='',resendAfter=0,expiresAt=0,timer;
   bindRegistrationPasswords(form);
+  bindBarangayPicker(form,config.barangays);
+  let proofPhotoUrl;
+  form.elements.id_photo.onchange=()=>{
+    const file=form.elements.id_photo.files[0];
+    if(proofPhotoUrl)URL.revokeObjectURL(proofPhotoUrl);
+    const preview=$('#id-photo-preview');preview.hidden=!file;
+    if(file){proofPhotoUrl=URL.createObjectURL(file);preview.src=proofPhotoUrl;}
+  };
   const normalizedEmail=()=>email.value.trim().toLowerCase();
   const refresh=()=>{
     if(!form.isConnected){clearTimeout(timer);return;}
     sets.forEach((set,index)=>{set.hidden=index!==step;set.disabled=busy||index!==step;});
     steps.forEach((item,index)=>{item.classList.toggle('complete',index<step);if(index===step)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');});
     const expert=form.elements.role.value==='expert';
-    $('#expert-proof').hidden=!expert;form.elements.expert_id_code.required=expert;
-    form.elements.expert_id_code.disabled=busy||step!==2||!expert;
+    $('#expert-proof').hidden=!expert;form.elements.id_photo.required=expert;
+    form.elements.id_photo.disabled=busy||step!==2||!expert;
     button.disabled=busy;
     button.textContent=busy?(step===0?'Sending code...':step===1?'Verifying...':'Finishing...'):(step===0?'Continue':step===1?'Verify code':expert?'Submit expert application':'Finish registration');
     $('#registration-back').hidden=step===0;$('#registration-back').disabled=busy;
@@ -149,9 +157,11 @@ export async function registrationPage(layout) {
       }
       if(!proof||Date.now()>=expiresAt){proof=null;move(1);throw new Error('Verification expired. Request a new code to continue.');}
       const details={...account,...values,email:sentEmail};delete details.code;
-      if(details.role==='expert'){details.expert_id_code=details.expert_id_code.trim();if(!details.expert_id_code)throw new Error('Enter your expert ID code.');}
-      else delete details.expert_id_code;
-      const result=await api('complete-registration.php',{body:details,token:proof,anonymous:true});
+      const photo=form.elements.id_photo.files[0];delete details.id_photo;
+      if(details.role==='expert'&&(!photo||!['image/jpeg','image/png','image/webp'].includes(photo.type)||photo.size>5*1024*1024))throw new Error('Upload a clear JPG, PNG or WebP ID photo under 5 MB.');
+      const body=new FormData();body.set('payload',JSON.stringify(details));if(details.role==='expert')body.set('id_photo',photo);
+      const result=await api('complete-registration.php',{body,token:proof,anonymous:true});
+      if(proofPhotoUrl)URL.revokeObjectURL(proofPhotoUrl);
       clearTimeout(timer);proof=null;
       if(result.pending_approval){
         area.innerHTML=`<h1 tabindex="-1">Application submitted</h1><p>Your expert application is under review.</p><p>We'll email the decision and any admin note to <strong style="overflow-wrap:anywhere">${esc(details.email)}</strong>.</p><p>Check your <strong>Inbox and Spam folder</strong> for updates.</p><p>You can also sign in to check your application status.</p><a class="button registration-submit" href="#login">Back to sign in</a>`;

@@ -52,6 +52,8 @@ class SubmitReportScreen extends StatefulWidget {
 class SubmitReportScreenState extends State<SubmitReportScreen>
     with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
+  final _stepScroll = ScrollController();
+  final Map<int, GlobalKey> _categoryKeys = {};
   final _sitio = TextEditingController();
   final _aliveCount = TextEditingController();
   final _remarks = TextEditingController();
@@ -134,6 +136,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     'parent_report_id': _parentReportId,
     'followup': _followup,
     'step': _step,
+    'category': _category,
     'photo_path': _photo?.path,
     'closeup_photo_path': _closeupPhoto?.path,
     'picking_closeup': _pickingCloseup,
@@ -243,6 +246,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _previousReports = (draft['previous_reports'] as List? ?? [])
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
+      _category = max(0, int.tryParse('${draft['category']}') ?? 0);
       _step = draft['flow_version'] == 2
           ? (draft['step'] as int? ?? 0).clamp(0, 3)
           : 0;
@@ -337,6 +341,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     WidgetsBinding.instance.removeObserver(this);
     _previewTimer?.cancel();
     _cancelGps();
+    _stepScroll.dispose();
     _sitio.dispose();
     _aliveCount.dispose();
     _remarks.dispose();
@@ -353,6 +358,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     try {
       _form = await widget.api.reportForm();
       if (!mounted) return;
+      _category = _category.clamp(0, _criteria.length + 2);
       for (final c in _criteria) {
         final options = (c['options'] as List).map((o) => o['id']).toSet();
         _observations['${c['code']}']?.removeWhere(
@@ -1099,15 +1105,70 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _step = 2;
     });
     _draftEdited();
+    _scrollToQuestion();
   }
 
   void goBack() {
     if (_busy) return;
+    if (_step == 2 && _category > 0) {
+      _showCategory(_category - 1);
+      return;
+    }
+    if (_step == 3) _category = _criteria.length + 2;
     if (_step > 0) {
       _editStep(_step - 1);
     } else {
       widget.onExit?.call();
     }
+  }
+
+  void _scrollToQuestion() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_stepScroll.hasClients) _stepScroll.jumpTo(0);
+      final tab = _categoryKeys[_category]?.currentContext;
+      if (_step == 2 && tab != null) {
+        Scrollable.ensureVisible(tab, alignment: .5);
+      }
+    });
+  }
+
+  void _showCategory(int index, {String? error}) {
+    setState(() {
+      _category = index.clamp(0, _criteria.length + 2);
+      _error = error;
+    });
+    _draftEdited();
+    _scrollToQuestion();
+  }
+
+  String? _categoryError(int index) {
+    if (index < _criteria.length) {
+      final c = _criteria[index];
+      final count = (_observations[c['code']] ?? []).length;
+      if (count == 0 || (c['selection_mode'] == 'single' && count != 1)) {
+        return 'Choose an answer for ${c['name']}. Pick Not Sure if you cannot tell.';
+      }
+    } else {
+      final values = [_rootType, _leafShape, _barkTexture];
+      final names = ['Root Type', 'Leaf Shape', 'Bark Texture'];
+      final i = index - _criteria.length;
+      if (values[i] == null || values[i]!.isEmpty) return 'Choose ${names[i]}.';
+    }
+    return null;
+  }
+
+  void _nextCategory() {
+    final error = _categoryError(_category);
+    if (error != null) {
+      _showCategory(_category, error: error);
+      return;
+    }
+    if (_category < _criteria.length + 2) {
+      _showCategory(_category + 1);
+      return;
+    }
+    _review();
   }
 
   void _editStep(int step) {
@@ -1117,9 +1178,17 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _error = null;
     });
     _draftEdited();
+    _scrollToQuestion();
   }
 
   void _review() async {
+    for (var i = 0; i < _criteria.length + 3; i++) {
+      final error = _categoryError(i);
+      if (error != null) {
+        _showCategory(i, error: error);
+        return;
+      }
+    }
     for (final criterion in _criteria.where(
       (c) => c['selection_mode'] == 'single',
     )) {
@@ -1143,6 +1212,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _error = null;
     });
     _draftEdited();
+    _scrollToQuestion();
   }
 
   Future<void> _submit() async {
@@ -1462,6 +1532,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               ),
               Expanded(
                 child: Stepper(
+                  controller: _stepScroll,
                   type: StepperType.horizontal,
                   currentStep: _step,
                   onStepTapped: _busy
@@ -1501,6 +1572,42 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                   ],
                 ),
               ),
+              if (_step == 2)
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _busy ? null : goBack,
+                            child: Text(
+                              _category == 0
+                                  ? 'Back to location'
+                                  : 'Previous category',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: _busy || _previewBusy
+                                ? null
+                                : _nextCategory,
+                            child: Text(
+                              _category == _criteria.length + 2
+                                  ? 'Review report'
+                                  : 'Next category',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1976,12 +2083,18 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
+                  key: _categoryKeys.putIfAbsent(i, () => GlobalKey()),
                   selected: _category == i,
-                  onSelected: (_) => setState(() => _category = i),
+                  onSelected: (_) => _showCategory(i),
                 ),
               ),
           ],
         ),
+      ),
+      const SizedBox(height: 12),
+      Text(
+        'Category ${_category + 1} of ${_criteria.length + 3}',
+        style: const TextStyle(fontWeight: FontWeight.w700),
       ),
       const SizedBox(height: 12),
       if (_category < _criteria.length) _criterionCard(_criteria[_category]),
@@ -2025,45 +2138,23 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             ],
           ),
         ),
-      _Section(
-        title: 'Notes',
-        child: Column(
-          children: [
-            TextFormField(
-              controller: _remarks,
-              maxLines: 4,
-              maxLength: 5000,
-              decoration: const InputDecoration(
-                labelText: 'Notes (optional)',
-                hintText: 'Anything else you noticed?',
+      if (_category == _criteria.length + 2)
+        _Section(
+          title: 'Notes',
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _remarks,
+                maxLines: 4,
+                maxLength: 5000,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (optional)',
+                  hintText: 'Anything else you noticed?',
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-      Row(
-        children: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: _busy ? null : goBack,
-              child: const Text('Back'),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: _busy || _previewBusy ? null : _review,
-              icon: _busy
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.cloud_upload_outlined),
-              label: const Text('Review report'),
-            ),
-          ),
-        ],
-      ),
       const SizedBox(height: 24),
     ],
   );

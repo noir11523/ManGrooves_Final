@@ -11,9 +11,11 @@ class CloudAdminScreen extends StatefulWidget {
     super.key,
     required this.api,
     this.certificates = false,
+    this.applicationUid,
   });
   final ApiClient api;
   final bool certificates;
+  final String? applicationUid;
   @override
   State<CloudAdminScreen> createState() => _CloudAdminScreenState();
 }
@@ -52,6 +54,9 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
         widget.certificates
             ? 'certificate-settings.php'
             : 'expert-applications.php',
+        query: widget.applicationUid == null
+            ? {}
+            : {'uid': widget.applicationUid!},
       );
       if (!mounted) return;
       setState(() {
@@ -387,7 +392,7 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
                 child: TextButton.icon(
                   onPressed: _busy ? null : () => _viewId(item),
                   icon: const Icon(Icons.badge_outlined),
-                  label: const Text('View previous ID photo'),
+                  label: const Text('View ID photo'),
                 ),
               ),
             if (pending) ...[
@@ -492,7 +497,11 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(
-        widget.certificates ? 'Certificate signer' : 'Expert applications',
+        widget.certificates
+            ? 'Certificate signer'
+            : (widget.applicationUid == null
+                  ? 'Expert applications'
+                  : 'Expert application'),
       ),
     ),
     body: RefreshIndicator(
@@ -613,21 +622,22 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
               'Review credentials and send your decision to the applicant.',
             ),
             const SizedBox(height: 12),
-            ListFilters(
-              hint: 'Applicant name or email',
-              filterLabel: 'Status',
-              options: const {
-                '': 'All applications',
-                'pending': 'Pending',
-                'approved': 'Approved',
-                'rejected': 'Declined',
-              },
-              busy: _busy,
-              onApply: (query, status) => setState(() {
-                _query = query;
-                _status = status;
-              }),
-            ),
+            if (widget.applicationUid == null)
+              ListFilters(
+                hint: 'Applicant name or email',
+                filterLabel: 'Status',
+                options: const {
+                  '': 'All applications',
+                  'pending': 'Pending',
+                  'approved': 'Approved',
+                  'rejected': 'Declined',
+                },
+                busy: _busy,
+                onApply: (query, status) => setState(() {
+                  _query = query;
+                  _status = status;
+                }),
+              ),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(

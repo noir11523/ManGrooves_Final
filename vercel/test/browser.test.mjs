@@ -46,16 +46,16 @@ test('successful web sign-in opens the dashboard automatically',async()=>{
  try{await client.login('guardian@example.test','password123');assert.equal(destination,'/dashboard.php');}
  finally{Object.defineProperty(globalThis,'location',original);}
 });
-test('PHP registration uses the shared email code and typed expert ID form without a second shell',async()=>{
+test('PHP registration uses the shared email code and expert ID photo form without a second shell',async()=>{
  globalThis.testApi=async path=>{assert.equal(path,'configuration.php');return {barangays:[{id:1,name:'Coast'}]};};
- await renderEmbedded('register',node,{},null);assert.ok($('#registration'));assert.ok($('[name=first_name]'));assert.ok($('[name=expert_id_code]'));assert.equal($('[type=file]'),null);assert.equal($('#app'),null);assert.equal($('.shell'),null);
+ await renderEmbedded('register',node,{},null);assert.ok($('#registration'));assert.ok($('[name=first_name]'));assert.ok($('[name=id_photo]'));assert.equal($('[name=id_photo]').type,'file');assert.equal($('#app'),null);assert.equal($('.shell'),null);
  $('[name=role]').value='expert';$('[name=role]').dispatchEvent(new Event('change'));assert.equal($('#expert-proof').hidden,false);
 });
 test('embedded reports preserve attention filters and report details links',async()=>{
  globalThis.testApi=async(path,options)=>{assert.equal(path,'reports.php');assert.equal(options.query.needs_attention,'1');return {items:[{id:9,report_code:'Report #9',status:'pending',needs_attention:1}],pages:1};};
  await renderEmbedded('reports',node,{needs_attention:'1'},{role:'expert'});assert.equal($('[name=status_filter]').value,'attention');assert.equal($('.report-table a').getAttribute('href'),'#report/9');assert.equal($('.report-table [data-label=Status] .pill').textContent,'Pending');
 });
-test('PHP routes preserve IDs, filters, and separate health and growth pages',()=>{
+test('PHP routes preserve IDs, filters and legacy timeline URLs',()=>{
  assert.equal(phpRoute('#report/9'),'/report-detail.php?id=9');assert.equal(phpRoute('#growth'),'/clusters.php?view=growth');assert.equal(phpRoute('#cluster/2?tab=growth'),'/cluster.php?tab=growth&id=2');assert.equal(phpRoute('#reports?needs_attention=1&page=2'),'/reports.php?needs_attention=1&page=2');assert.equal(phpRoute('#about'),null);assert.equal(phpRoute('#https://evil.test'),null);
 });
 test('PHP report map mounts immediately with location search and automatic filters',async()=>{
@@ -80,4 +80,14 @@ test('photo uploads over Vercel body limit and private downloads go directly to 
  const body=new FormData();body.append('photo',new File([new Uint8Array(5*1024*1024)],'field.jpg',{type:'image/jpeg'}));
  await client.api('submit-report.php',{body});assert.equal(calls[0].url,'/cloud-session.php');assert.equal(calls[1].url,'https://project.supabase.co/functions/v1/api/submit-report.php');assert.equal(calls[1].options.body,body);assert.equal(calls[1].options.credentials,'omit');assert.equal(calls[1].options.headers.Authorization,'Bearer user-token');assert.equal(calls[1].options.headers['Content-Type'],undefined);
  calls.length=0;await client.api('photo.php?id=9',{blob:true});assert.equal(calls[1].url,'https://project.supabase.co/functions/v1/api/photo.php?id=9');
+});
+
+test('verified registration sends the ID photo with email proof before a sign-in session exists',async()=>{
+ const calls=[];globalThis.fetch=async(url,options)=>{calls.push({url:String(url),options});return new Response(JSON.stringify({ok:true,pending_approval:true}));};
+ const body=new FormData();body.set('payload',JSON.stringify({role:'expert'}));body.set('id_photo',new File(['id-photo'],'id.jpg',{type:'image/jpeg'}));
+ await client.api('complete-registration.php',{body,anonymous:true,token:'email-proof'});
+ assert.equal(calls.length,1);assert.match(calls[0].url,/supabase\.co\/functions\/v1\/api\/complete-registration\.php$/);
+ assert.equal(calls[0].options.headers.Authorization,'Bearer email-proof');assert.equal(calls[0].options.credentials,'omit');assert.equal(calls[0].options.body,body);
+ await assert.rejects(client.api('users.php',{body,anonymous:true,token:'email-proof'}),/Verify your email/);
+ assert.equal(calls.length,1);
 });

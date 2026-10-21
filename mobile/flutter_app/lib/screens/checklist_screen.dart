@@ -3,8 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../shared/photo_credit.dart';
-
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_client.dart';
@@ -215,12 +213,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                         Icons.broken_image_outlined,
                                       ),
                                     ),
-                              PhotoCredit(
-                                credit:
-                                    (_traitData?['photo_credits']
-                                            as Map?)?[path]
-                                        as Map?,
-                              ),
                               const SizedBox(height: 8),
                               Text(
                                 item,
@@ -783,11 +775,6 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                                     _dirty = true;
                                   }),
                           ),
-                        if (!_images.containsKey(
-                              'option_image_${option['id']}',
-                            ) &&
-                            option['remove_image'] != true)
-                          PhotoCredit(credit: option['image_credit'] as Map?),
                         _photo(
                           'option_image_${option['id']}',
                           option['image_path'] as String?,

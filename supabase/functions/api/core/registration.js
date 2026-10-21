@@ -1,5 +1,6 @@
 import {AppError,integer,text,password,publicUser,now,requireRole} from './domain.js';
-import {sendImage} from './uploads.js';
+import {sendImage,saveImage} from './uploads.js';
+import {profileDetails} from './profile-fields.js';
 import {sendApplicationEmail,emailNotice} from './application-email.js';
 
 export const emailAddress=value=>{
@@ -22,12 +23,7 @@ export async function registrationDetails(service,input) {
   const {first_name,last_name,email}=accountDetails(input);
   const role=input.role??'guardian';
   if(!['guardian','expert'].includes(role)) throw new AppError('Choose Guardian or Expert.');
-  const barangay_id=integer(input.barangay_id,'barangay'),barangay=await service.get('barangays',barangay_id);
-  if(!barangay) throw new AppError('Choose an available barangay.');
-  const phone=text(input.phone??'','your phone number',30,false);
-  if(phone&&!/^[0-9+() .-]{7,30}$/.test(phone)) throw new AppError('Enter a valid phone number or leave it blank.');
-  const expert_id_code=role==='expert'?text(input.expert_id_code,'your expert ID code',80):null;
-  return {first_name,last_name,full_name:`${first_name} ${last_name}`,email,phone:phone||null,role,barangay_id,barangay_name:barangay.name,expert_id_code};
+  return {first_name,last_name,full_name:`${first_name} ${last_name}`,email,role,...await profileDetails(service,input)};
 }
 export async function startRegistration(service,input,ip) {
   await service.limited(`register:${ip}`,10);
@@ -38,20 +34,25 @@ export async function startRegistration(service,input,ip) {
   await service.auth.startSignup(details.email,input.password);
   return {message:'Check your email for the code.',verification_required:true};
 }
-export async function completeRegistration(service,input,_files,claims) {
+export async function completeRegistration(service,input,files,claims) {
   if(!claims.email_verified) throw new AppError('Verify your email before continuing.',403);
-  const {expert_id_code,...details}=await registrationDetails(service,input);
+  const details=await registrationDetails(service,input);
   if(details.email!==claims.email?.toLowerCase()) throw new AppError('Use the email you verified.',403);
   const ref=service.ref('users',claims.uid),existing=await service.get('users',claims.uid);
   if(existing) throw new AppError('Your account already exists. Sign in or use Forgot password.',409);
   const [id]=await service.ids(),user={...details,id,uid:claims.uid,status:details.role==='expert'?'pending_approval':'active',created_at:now(),privacy_consent_at:now(),email_verified_at:now()};
+  if(details.role==='expert'&&!files.id_photo)throw new AppError('Upload a clear photo of your work or professional ID.');
+  let proof;
+  try {
+  if(details.role==='expert')proof=await saveImage(service.bucket,files.id_photo,'expert_ids');
   await service.auth.updateUser(claims.uid,{password:password(input.password)});
   await service.db.runTransaction(async tx=>{
     if((await tx.get(ref)).exists) throw new AppError('Your account was already created. Sign in to continue.',409);
     tx.create(ref,user);
-    if(details.role==='expert') tx.create(service.ref('expert_applications',claims.uid),{id,user_id:id,uid:claims.uid,full_name:user.full_name,email:user.email,id_code:expert_id_code,status:'pending',created_at:now()});
+    if(details.role==='expert') tx.create(service.ref('expert_applications',claims.uid),{id,user_id:id,uid:claims.uid,full_name:user.full_name,email:user.email,id_path:proof.path,status:'pending',created_at:now()});
     service.audit(tx,user,'account.registered','user',id,{role:details.role,status:user.status});
   });
+  } catch(error) {if(proof)await service.bucket.file(proof.path).delete({ignoreNotFound:true}).catch(()=>{});throw error;}
   await service.auth.revokeRefreshTokens(claims.uid);
   return {user:publicUser(user),pending_approval:user.status==='pending_approval',message:user.status==='active'?'Email verified. Your account is ready.':`Application submitted. Your expert application is under review. We'll email the decision and any admin note to ${user.email}. Check your Inbox and Spam folder for updates. You can also sign in to check your application status.`};
 }
@@ -61,9 +62,13 @@ export function compareApplications(a,b) {
   const dateA=String((pending?a.created_at:a.reviewed_at||a.created_at)||''),dateB=String((pending?b.created_at:b.reviewed_at||b.created_at)||'');
   return (pending?dateA.localeCompare(dateB):dateB.localeCompare(dateA))||String(a.uid).localeCompare(String(b.uid));
 }
-export async function expertApplications(service,user,input,res) {
+export async function expertApplications(service,user,input,res,query={}) {
   requireRole(user,'system_admin');
-  if(!input) return {items:(await service.rows('expert_applications')).map(({id_path,...row})=>({...row,has_id_photo:!!id_path})).sort(compareApplications)};
+  if(!input) {
+    const records=query.uid?[await service.get('expert_applications',text(query.uid,'the application',80))] : await service.rows('expert_applications');
+    if(query.uid&&!records[0])throw new AppError('Application not found.',404);
+    return {items:records.map(({id_path,...row})=>({...row,has_id_photo:!!id_path})).sort(compareApplications)};
+  }
   const uid=text(input.uid,'the application',80),ref=service.ref('expert_applications',uid);
   const application=await service.get('expert_applications',uid);
   if(!application) throw new AppError('Application not found.',404);

@@ -10,6 +10,6 @@ test('staff creation rechecks administrator access and removes the auth account 
     auth:{createUser:async()=>({uid:'new-staff'}),deleteUser:async uid=>deleted.push(uid)},
     db:{runTransaction:async callback=>callback({get:async()=>({data:()=>({...actor,status:'inactive'})})})},
   };
-  await assert.rejects(createStaff(service,actor,{first_name:'Sample',last_name:'Staff',email:'staff@example.test',password:'initialpass12',password_confirmation:'initialpass12',barangay_id:1,role:'expert',expert_id_code:'ORG-1'}),e=>e.status===403);
+  await assert.rejects(createStaff(service,actor,{first_name:'Sample',last_name:'Staff',email:'staff@example.test',password:'initialpass12',password_confirmation:'initialpass12',barangay_id:1,role:'system_admin',phone:'09171234567',address_line:'Test Street'}),e=>e.status===403);
   assert.deepEqual(deleted,['new-staff']);
 });

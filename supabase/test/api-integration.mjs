@@ -65,7 +65,7 @@ async function submission(user, changes = {}, photo) {
 }
 try {
   const guardian = await account(1, 'guardian'), other = await account(2, 'guardian'), expert = await account(3, 'expert'), admin = await account(4, 'system_admin');
-  const config = await request('configuration.php'); assert.equal(config.backend, 'supabase'); assert.equal(config.barangays.length, 1); pass('public cloud configuration');
+  const config = await request('configuration.php'); assert.equal(config.backend, 'supabase'); assert.equal(config.barangays.length, 1203); pass('public cloud configuration');
   const publicSites=await request('explore.php');assert.equal(publicSites.summary.guardians,2);assert.equal(publicSites.summary.verified_reports,0);assert.ok(publicSites.species.length>0);
   assert.ok(publicSites.species.every(s=>Object.keys(s).every(k=>['id','scientific_name','common_name','local_name','family','iucn_code'].includes(k))));assert.equal(publicSites.users,undefined);pass('public homepage totals and species catalog do not expose private account or report records');
   const read=db.read.bind(db),collections=[];db.read=(ref,...args)=>{collections.push(ref.collection);return read(ref,...args);};
@@ -76,7 +76,7 @@ try {
   assert.deepEqual(grants.rows[0],{anon:false,authenticated:false,trusted:true});pass('summary-only API returns real database aggregates with service-role-only access');
   await request('register.php', null, [], 422); pass('malformed form data is rejected');
   await request('me.php', null, null, 401); pass('missing authentication rejected');
-  const registration={email:'new@example.test',password:'testpassword1',password_confirmation:'testpassword1',first_name:'New',last_name:'Guardian',barangay_id:1,privacy_consent:true,role:'guardian'};
+  const registration={email:'new@example.test',password:'testpassword1',password_confirmation:'testpassword1',first_name:'New',last_name:'Guardian',phone:'09171234567',address_line:'Test Street',barangay_id:1,privacy_consent:true,role:'guardian'};
   const basic={stage:'account',email:'steps@example.test',first_name:'Step',last_name:'Guardian',password:'testpassword1',password_confirmation:'testpassword1',privacy_consent:true};
   await request('register.php',null,{...basic,first_name:'   '},422);
   await request('register.php',null,{...basic,password_confirmation:'different'},422);
@@ -100,21 +100,21 @@ try {
   await request('complete-registration.php',{token:proof.verification_token},registration,201);
   const registered=await signIn(registration.email),me=await request('me.php',{token:registered.idToken});assert.equal(me.user.role,'guardian');pass('verified guardian can sign in immediately');
   const candidate={...registration,email:'expert-applicant@example.test',role:'expert',expert_id_code:' WORK-2026/001 '};
-  for(const expert_id_code of ['', '   ', 'x'.repeat(81), {code:'invalid'}]) await request('register.php',null,{...candidate,expert_id_code},422);
-  assert.equal(codes.has(`email:${candidate.email}`),false);pass('expert ID code is required and validated before sending email');
   await request('register.php',null,candidate,201);
   const expertProof=await request('verify-email.php',null,{email:candidate.email,code:'123456'});
   await request('complete-registration.php',{token:expertProof.verification_token},{...candidate,expert_id_code:''},422);
-  const candidateBody=new FormData();candidateBody.set('payload',JSON.stringify(candidate));
+  const candidateBody=new FormData();candidateBody.set('payload',JSON.stringify(candidate));candidateBody.set('id_photo',new Blob([fixture],{type:'image/jpeg'}),'id.jpg');
   const application=await request('complete-registration.php',{token:expertProof.verification_token},candidateBody,201);assert.equal(application.pending_approval,true);
   assert.match(application.message,/email the decision and any admin note to expert-applicant@example\.test/);
   assert.match(application.message,/Check your Inbox and Spam folder for updates/);
-  assert.equal(application.user.expert_id_code,undefined);assert.equal(images.size,0);
-  assert.equal((await db.collection('users').where('email','==',candidate.email).get()).docs[0].data().expert_id_code,undefined);pass('expert registration accepts a code with no photo and keeps it out of the user profile');
+  assert.equal(application.user.expert_id_code,undefined);assert.equal(images.size,1);
+  assert.equal((await db.collection('users').where('email','==',candidate.email).get()).docs[0].data().expert_id_code,undefined);pass('expert registration stores a private ID photo separately from the user profile');
   const candidateSession=await signIn(candidate.email);await request('me.php',{token:candidateSession.idToken},null,403);pass('expert applicants stay locked until admin approval');
-  const applications=await request('expert-applications.php',admin),applicant=applications.items[0];assert.equal(applicant.id_path,undefined);assert.equal(applicant.id_code,'WORK-2026/001');assert.equal(applicant.has_id_photo,false);
+  const applications=await request('expert-applications.php',admin),applicant=applications.items[0];assert.equal(applicant.id_path,undefined);assert.equal(applicant.id_code,undefined);assert.equal(applicant.has_id_photo,true);
   await request('expert-applications.php',expert,null,403);await request('expert-applications.php',guardian,null,403);await request(`expert-id.php?uid=${applicant.uid}`,guardian,null,403);
-  await request(`expert-id.php?uid=${applicant.uid}`,admin,null,404);pass('ID codes are private and admin-only');
+  await request(`expert-id.php?uid=${applicant.uid}`,admin,null,200,true);pass('ID photos are private and admin-only');
+  assert.equal((await request(`expert-applications.php?uid=${applicant.uid}`,admin)).items.length,1);
+  await request('expert-applications.php?uid=missing',admin,null,404);
   images.set('expert_ids/legacy/id.jpg',fixture);
   await db.collection('expert_applications').doc('legacy').set({uid:'legacy',status:'approved',id_path:'expert_ids/legacy/id.jpg',created_at:'2020-01-01'});
   const legacy=(await request('expert-applications.php',admin)).items.find(a=>a.uid==='legacy');assert.equal(legacy.has_id_photo,true);assert.equal(legacy.id_path,undefined);
@@ -228,7 +228,7 @@ try {
   const uncertain = await submission(guardian, {observations: {...healthy, leaf_color: [select('leaf_color', 'unknown')]}});
   const pending = await request('submit-report.php', guardian, uncertain.body, 201); assert.equal(pending.report.status, 'pending'); pass('Not Sure requires expert review');
   const notifications = await request('notifications.php', expert); assert.ok(notifications.notifications.some(n => n.report_id === pending.report.report_id)); pass('expert receives pending report notifications');
-  await request('review.php', expert, {report_id: pending.report.report_id, action: 'confirm'}, 422); pass('unknown health cannot be confirmed without correction');
+  await request('review.php', expert, {report_id: pending.report.report_id, action: 'correct', final_health: ''}, 422); pass('corrections require an explicit health result');
   const beforeCorrection=(await request('dashboard.php',guardian)).stats;
   await request('review.php', expert, {report_id: pending.report.report_id, action: 'correct', final_health: 'Stressed', final_species_id: 1, rarity_level: 'Common', expert_feedback: 'Check leaves at the next visit.'}); pass('expert corrects and verifies health/species');
   const afterCorrection=(await request('dashboard.php',guardian)).stats;
@@ -329,23 +329,24 @@ try {
   await request('verification.php?status=all',expert,null,422);await request('verification.php?date_from=2026-02-30',expert,null,422);
   await request('verification.php?status=verified',guardianSession,null,403);
   pass('verification card groups return real totals, oldest pending first, reviewed records and correct role limits');
-  const staffInput={action:'create_staff',first_name:'Staff',last_name:'Reviewer',email:'staff-reviewer@example.test',phone:'09123456789',barangay_id:1,role:'expert',password:'staffpassword12',password_confirmation:'staffpassword12',expert_id_code:'ORG-REVIEWER-2026'};
+  const staffInput={action:'create_staff',first_name:'Staff',last_name:'Reviewer',email:'staff-reviewer@example.test',address_line:'Test Street',phone:'09123456789',barangay_id:1,role:'expert',password:'staffpassword12',password_confirmation:'staffpassword12',expert_id_code:'ORG-REVIEWER-2026'};
   await request('users.php',guardianSession,staffInput,403);await request('users.php',expert,staffInput,403);
   await request('users.php',admin,{...staffInput,role:'guardian'},422);
   await request('users.php',admin,{...staffInput,password_confirmation:'different'},422);
   await request('users.php',admin,{...staffInput,expert_id_code:''},422);
-  const staff=await request('users.php',admin,staffInput,201);
+  const staffBody=new FormData();staffBody.set('payload',JSON.stringify(staffInput));staffBody.set('id_photo',new Blob([fixture],{type:'image/jpeg'}),'id.jpg');
+  const staff=await request('users.php',admin,staffBody,201);
   const staffSession={token:(await signIn(staffInput.email,staffInput.password)).idToken};
   assert.equal((await request('me.php',staffSession)).user.role,'expert');
   const staffProfile=(await db.collection('users').where('email','==',staffInput.email).get()).docs[0].data();
   const staffApproval=(await db.collection('expert_applications').doc(staffProfile.uid).get()).data();
-  assert.equal(staffApproval.status,'approved');assert.equal(staffApproval.reviewer_id,admin.id);assert.equal(staffApproval.id_code,staffInput.expert_id_code);
+  assert.equal(staffApproval.status,'approved');assert.equal(staffApproval.reviewer_id,admin.id);assert.ok(staffApproval.id_path.startsWith('expert_ids/'));
   assert.equal(staff.user.password,undefined);assert.equal(staff.user.expert_id_code,undefined);
   await request('users.php',admin,staffInput,409);
   pass('staff creation is admin-only, validates credentials, creates approved expert access and prevents duplicate accounts');
   const staffSearch=await request('users.php?q=09123456789&barangay_id=1&role=expert&status=active',admin);
   assert.equal(staffSearch.total,1);assert.equal(staffSearch.items[0].id,staff.user.id);assert.equal(staffSearch.items[0].expert_id_code,undefined);assert.ok(staffSearch.barangays.length);
-  assert.equal((await request('users.php?q=09123456789&barangay_id=999',admin)).total,0);
+  assert.equal((await request('users.php?q=9123456789&barangay_id=999',admin)).total,0);
   pass('user search combines phone, barangay, role and account status without exposing credentials');
   const savedPreview=await request('certificate-settings.php?preview=1',admin,null,200,true);assert.equal(savedPreview.subarray(0,4).toString(),'%PDF');
   await request('certificate-settings.php?preview=1',guardianSession,null,403);
@@ -500,6 +501,13 @@ try {
     assert.equal(result.total,25);assert.equal(result.pages,2);assert.equal(result.items.length,page===1?20:5);
   }
   pass('review totals count all matching pages, including pending reports of every health');
+  const uncertainFinal=await submission(guardianSession,{checklist_versions:versions,observations:{...healthy,leaf_color:[select('leaf_color','unknown')]}});
+  const uncertainRecord=await request('submit-report.php',guardianSession,uncertainFinal.body,201);
+  await request('review.php',expert,{report_id:uncertainRecord.report.report_id,action:'confirm',final_health:'Healthy',final_species_id:999});
+  const confirmedUnknown=(await request(`report.php?id=${uncertainRecord.report.report_id}`,guardianSession)).report;
+  assert.equal(confirmedUnknown.final_health,'Unknown');assert.equal(Number(confirmedUnknown.needs_attention),1);
+  assert.equal(confirmedUnknown.final_species_id,confirmedUnknown.suggested_species_id);
+  pass('confirm retains the system suggestion without manual health/species, including Unknown needing attention');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

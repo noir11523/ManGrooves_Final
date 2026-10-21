@@ -90,6 +90,9 @@ test('the PHP dashboard renders explicit follow-up requests and image restoratio
   const {b}=await login();const dashboard=await b.request('/dashboard.php');
   assert.equal(dashboard.res.status,200);assert.match(dashboard.text,/Check the roots on your next visit/);
   assert.match(dashboard.text,/submit-report\.php\?parent=10&amp;cluster=1/);assert.doesNotMatch(dashboard.text,/Overdue|days until/i);
+  const dashboardDom=new JSDOM(dashboard.text);
+  const clusterCard=[...dashboardDom.window.document.querySelectorAll('[aria-label="Report summary"] a')].find(a=>a.textContent.includes('Clusters'));
+  assert.equal(clusterCard.getAttribute('href'),'/clusters.php');dashboardDom.window.close();
   const staff=(await login('admin')).b;
   const restored=await staff.request('/cloud-api.php?route=trait-images.php',{trait:'root_type',value:'Prop roots',remove:true});
   assert.equal(restored.res.status,200);assert.equal(calls.at(-1).endpoint,'trait-images.php');
@@ -125,6 +128,7 @@ test('all roles keep account actions in the top bar and reachable mobile navigat
     const {text}=await b.request('/dashboard.php');
     const dom=new JSDOM(text),doc=dom.window.document;
     const sidebar=doc.querySelector('.app-sidebar'),topbar=doc.querySelector('.app-topbar');
+    if(role!=='guardian')assert.deepEqual([...sidebar.querySelectorAll('nav > a span')].slice(0,3).map(s=>s.textContent),['Dashboard','Review reports','Report history']);
     assert.equal(sidebar.querySelectorAll('a[href="/notifications.php"],a[href="/settings.php"],form[action="/logout.php"]').length,0,role);
     assert.equal(sidebar.querySelectorAll('a[download]').length,1,role);
     assert.equal(doc.querySelectorAll('form[action="/logout.php"]').length,1,role);
@@ -139,7 +143,7 @@ test('all roles keep account actions in the top bar and reachable mobile navigat
     assert.equal(new Set(bottom).size,bottom.length,role);
     assert.equal(more.some(href=>bottom.includes(href)||href==='/analytics.php'),false,role);
     const insights=topbar.querySelector('[aria-label="Analytics and timelines"]').parentElement;
-    assert.deepEqual([...insights.querySelectorAll('a')].map(a=>a.textContent),['Analytics','Health history','Growth timeline']);
+    assert.deepEqual([...insights.querySelectorAll('a')].map(a=>a.textContent),['Analytics','Mangrove timeline','Photo credits']);
     // Follow every workspace entry to catch removed access and incorrect role routes.
     const routes=new Set([...sidebar.querySelectorAll('nav a'),...topbar.querySelectorAll('a'),...doc.querySelectorAll('.mobile-bottom-nav a')].map(a=>a.getAttribute('href')));
     for(const route of routes)assert.equal((await b.request(route)).res.status,200,role+' '+route);

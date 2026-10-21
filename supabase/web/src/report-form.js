@@ -1,6 +1,5 @@
 import {resolveAnimalChoices} from './observation-selection.js';
 import {traitLabels,traitHeadings} from './trait-labels.js';
-import {photoCredit} from './photo-credit.js';
 import {validateReportPhotos} from './report-photos.js';
 import {capturePhoto} from './camera.js';
 import L from 'leaflet';
@@ -10,9 +9,9 @@ import locationTools from '../../../public/assets/js/live-location.js';
 import { $, $$, esc, pill, speciesNames, field, select, formValues, errorBox, showError, toast, confirm, map, asset } from './ui.js';
 
 export const reportDraft = {
-  dirty: false, fields: {}, observations: {}, photo: null, closeupPhoto: null, extraPhotos: [], step: 0, preview: null, followup: false,
+  dirty: false, fields: {}, observations: {}, photo: null, closeupPhoto: null, extraPhotos: [], step: 0, category: 0, preview: null, followup: false,
   flush: async () => {},
-  reset() { this.dirty = false; this.fields = {}; this.observations = {}; this.photo = null; this.closeupPhoto = null; this.extraPhotos = []; this.step = 0; this.preview = null; this.followup = false; this.checklistVersions = null; }
+  reset() { this.dirty = false; this.fields = {}; this.observations = {}; this.photo = null; this.closeupPhoto = null; this.extraPhotos = []; this.step = 0; this.category = 0; this.preview = null; this.followup = false; this.checklistVersions = null; }
 };
 export async function reportWizard(node, query, user = null) {
   const data = await api('report-form.php');
@@ -47,7 +46,7 @@ export async function reportWizard(node, query, user = null) {
         draft.extraPhotos=(await Promise.all(extraStorage.map(s=>s.load()))).map(s=>s?.photo).filter(Boolean);
         draft.closeupPhoto=(await closeupStorage.load())?.photo??null;
         Object.assign(draft, {fields: saved.fields, observations: saved.observations, photo: saved.photo,
-          step: Math.max(0, Math.min(3, Number(saved.step) || 0)), followup: Boolean(saved.followup), dirty: true});
+          step: Math.max(0, Math.min(3, Number(saved.step) || 0)), category: Math.max(0,Math.min(data.criteria.length+2,Number(saved.category)||0)), followup: Boolean(saved.followup), dirty: true});
         const changedChecklist = data.criteria.some(c => saved.checklistVersions?.[c.id] !== c.version);
         for (const c of data.criteria) draft.observations[c.code] = (saved.observations[c.code] ?? []).filter(id => c.options.some(o => o.id === id));
         if (changedChecklist && draft.step > 1) { draft.step = 2; draftMessage = 'Draft restored. The checklist changed; check your answers again.'; }
@@ -57,6 +56,42 @@ export async function reportWizard(node, query, user = null) {
   }
   draft.fields.submission_token ||= crypto.randomUUID();
   draft.owner = scope;
+  let showObservationCategory = () => {};
+  const categoryCount=data.criteria.length+Object.keys(traitHeadings).length;
+  const categoryError=index=>{
+    const criterion=data.criteria[index];
+    if(criterion){
+      const answers=draft.observations[criterion.code]??[];
+      if(!answers.length || (criterion.selection_mode==='single'&&answers.length!==1))return `Choose an answer for ${criterion.name}. Pick Not Sure if you cannot tell.`;
+    }else{
+      const key=Object.keys(traitHeadings)[index-data.criteria.length];
+      if(key&&!draft.fields[key])return `Choose ${traitHeadings[key]}.`;
+    }
+    return '';
+  };
+  const scrollToQuestion=()=>(window.requestAnimationFrame??(fn=>setTimeout(fn,0)))(()=>{
+    const target=node.querySelector('.observation-categories')??node.querySelector('.steps');
+    target?.scrollIntoView({block:'start',behavior:'smooth'});
+    node.querySelector('.choice-group:not([hidden]) legend')?.focus({preventScroll:true});
+  });
+  const goBack=async()=>{
+    save(node.querySelector('#report-form'));
+    if(draft.step===2&&draft.category>0){showObservationCategory(draft.category-1,true);return;}
+    if(draft.step>0){if(draft.step===3)draft.category=categoryCount-1;draft.step--;await render();scrollToQuestion();}
+  };
+  // One same-page guard lets a phone/browser Back move through the wizard,
+  // without creating an entry for every answer or discarding the draft.
+  const historyKey=crypto.randomUUID(),wizardUrl=location.href;
+  const previousHistoryState=window.history.state??{};
+  window.history.replaceState({...previousHistoryState,reportBase:historyKey},'',wizardUrl);
+  window.history.pushState({...previousHistoryState,reportGuard:historyKey},'',wizardUrl);
+  const browserBack=event=>{
+    if(stopped||!node.isConnected||location.href!==wizardUrl||event.state?.reportBase!==historyKey)return;
+    if(draft.step===0){void flush();window.history.back();return;}
+    window.history.pushState({...previousHistoryState,reportGuard:historyKey},'',wizardUrl);
+    void goBack().catch(e=>toast(friendly(e)));
+  };
+  window.addEventListener('popstate',browserBack);
   draft.checklistVersions = Object.fromEntries(data.criteria.map(c => [c.id, c.version]));
   let searchTimer, searchGeneration=0, locationGeneration=0;
   let canvas, marker, accuracyCircle, tracker = null, photoUrl = null, stopped = false, saving = 0;
@@ -100,7 +135,7 @@ export async function reportWizard(node, query, user = null) {
   };
   const leaving = () => { void flush(); };
   document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', leaving);
-  const dispose = () => { void flush(); stopped = true; clearTimeout(searchTimer);searchGeneration++;stopGps(); canvas?.remove(); canvas = null; if (photoUrl) URL.revokeObjectURL(photoUrl); if(closeupUrl) URL.revokeObjectURL(closeupUrl); extraUrls.forEach(URL.revokeObjectURL); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', leaving); draft.flush = async () => {}; };
+  const dispose = () => { void flush(); stopped = true; clearTimeout(searchTimer);searchGeneration++;stopGps(); canvas?.remove(); canvas = null; if (photoUrl) URL.revokeObjectURL(photoUrl); if(closeupUrl) URL.revokeObjectURL(closeupUrl); extraUrls.forEach(URL.revokeObjectURL); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', leaving); window.removeEventListener('popstate',browserBack); draft.flush = async () => {}; };
   async function render() {
     clearTimeout(searchTimer); searchGeneration++;
     stopGps(); canvas?.remove(); canvas = null; marker = null; accuracyCircle = null;
@@ -125,7 +160,7 @@ export async function reportWizard(node, query, user = null) {
       catch(error){toast(friendly(error));}
       finally{cancelling=false;}
     };
-    $('#previous').onclick = () => { save($('#report-form')); if (draft.step) { draft.step--; render().catch(e => toast(friendly(e))); } else location.hash = 'reports'; };
+    $('#previous').onclick = () => { void goBack().catch(e=>toast(friendly(e))); };
     if (draft.step === 0) await details();
     if (draft.step === 1) locationStep();
     if (draft.step === 2) checklist();
@@ -145,14 +180,14 @@ export async function reportWizard(node, query, user = null) {
         if (draft.step === 0 && $('#followup').checked && !draft.fields.parent_report_id) throw new Error('Choose the previous report for this follow-up.');
         if (draft.step === 1 && !['gps', 'manual'].includes(draft.fields.location_source)) throw new Error('Search for a place or tap the map to set your pin.');
         if (draft.step === 2) {
-          for(const key of Object.keys(traitHeadings))if(!draft.fields[key])throw new Error(`Choose ${traitHeadings[key]}.`);
-          for (const c of data.criteria) {
-            if (c.selection_mode === 'single' && draft.observations[c.code]?.length !== 1) throw new Error(`Choose an answer for ${c.name}.`);
-          }
+          const missing=categoryError(draft.category);
+          if(missing){showObservationCategory(draft.category,true);throw new Error(missing);}
+          if(draft.category<categoryCount-1){showObservationCategory(draft.category+1,true);return;}
+          for(let i=0;i<categoryCount;i++)if(categoryError(i)){showObservationCategory(i,true);throw new Error(categoryError(i));}
           draft.preview = await api('report-preview.php', {body: {...draft.fields, observations: draft.observations,
             checklist_versions: Object.fromEntries(data.criteria.map(c => [c.id, c.version]))}});
         }
-        if (draft.step < 3) { draft.step++; await render(); return; }
+        if (draft.step < 3) { draft.step++; await render(); scrollToQuestion(); return; }
         if (!(await confirm('Submit this report?', 'Check your summary first. This sends your photo, location, and answers.'))) return;
         const body = new FormData();
         body.set('payload', JSON.stringify({...draft.fields, observations: draft.observations, checklist_versions: draft.preview?.checklist_versions, field_confirmation: '1', photo_views:'2'}));
@@ -455,21 +490,30 @@ export async function reportWizard(node, query, user = null) {
     if (!draft.fields.location_source) startLocation();
   }
 
-  let selectedCategory=0;
   function checklist() {
     // Older drafts may contain both animal sightings and "No Animals".
     // Preserve the specific sightings and other negative signs.
     const sighting=data.criteria.find(c=>c.code==='bio_indicators')?.options.find(o=>
       (draft.observations.bio_indicators??[]).includes(o.id)&&!['unknown','none_of_the_above'].includes(o.code));
     if(sighting)resolveAnimalChoices(data.criteria,draft.observations,'bio_indicators',sighting.code);
-    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Tap a photo to enlarge it, then select your answer. Pick Not Sure if you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Health score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span>${photoCredit(o.image_credit)}</label>`).join('')}</div></fieldset>`).join('')}`;
-    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. Photos show examples; compare them with what you see at the site.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${label}</legend><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}>${data.trait_images?.[key]?.[value]?`<img src="${esc(asset(data.trait_images[key][value]))}" alt="">`:''}<span>${esc(traitLabels[value]||value)}</span>${photoCredit(data.photo_credits?.[data.trait_images?.[key]?.[value]])}</label>`).join('')}</div></fieldset>`).join('')}`);
+    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Tap a photo to enlarge it, then select your answer. Pick Not Sure if you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Health score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
+    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. Photos show examples; compare them with what you see at the site.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${label}</legend><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}>${data.trait_images?.[key]?.[value]?`<img src="${esc(asset(data.trait_images[key][value]))}" alt="">`:''}<span>${esc(traitLabels[value]||value)}</span></label>`).join('')}</div></fieldset>`).join('')}`);
     const body=$('#step-body'), groups=[...body.querySelectorAll('fieldset.choice-group')];
     const tabs=document.createElement('div');tabs.className='observation-categories';tabs.setAttribute('aria-label','Observation categories');
     tabs.innerHTML=groups.map((group,i)=>`<button type="button" class="outline" data-category="${i}">${esc(group.querySelector('legend').childNodes[0].textContent)}</button>`).join('');
     body.prepend(tabs);body.classList.add('observation-catalog');
-    const showCategory=index=>{selectedCategory=index;groups.forEach((g,i)=>g.hidden=i!==index);tabs.querySelectorAll('button').forEach((b,i)=>{b.classList.toggle('selected',i===index);b.setAttribute('aria-pressed',String(i===index));if(i===index)b.scrollIntoView({block:'nearest',inline:'nearest'});});};
-    tabs.querySelectorAll('button').forEach((button,i)=>button.onclick=()=>showCategory(i));showCategory(Math.min(selectedCategory,groups.length-1));
+    const progress=document.createElement('p');progress.className='category-progress';progress.setAttribute('role','status');tabs.after(progress);
+    const showCategory=(index,scroll=false)=>{
+      draft.category=Math.max(0,Math.min(index,groups.length-1));draft.dirty=true;
+      groups.forEach((g,i)=>{g.hidden=i!==draft.category;g.querySelector('legend').tabIndex=-1;});
+      tabs.querySelectorAll('button').forEach((b,i)=>{b.classList.toggle('selected',i===draft.category);b.setAttribute('aria-pressed',String(i===draft.category));if(i===draft.category)b.scrollIntoView({block:'nearest',inline:'center'});});
+      progress.textContent=`Category ${draft.category+1} of ${groups.length}`;
+      $('#next').textContent=draft.category===groups.length-1?'Review report':'Next category';
+      $('#previous').textContent=draft.category?'Previous category':'Back to location';
+      $('#report-form .error').textContent='';void persist();if(scroll)scrollToQuestion();
+    };
+    showObservationCategory=showCategory;
+    tabs.querySelectorAll('button').forEach((button,i)=>button.onclick=()=>{save($('#report-form'));showCategory(i,true);});showCategory(draft.category);
     for(const choice of body.querySelectorAll('.choice')) {
       const control=choice.querySelector('input');control.id='choice-'+control.name+'-'+[...body.querySelectorAll('.choice')].indexOf(choice);choice.htmlFor=control.id;
       control.setAttribute('aria-label',choice.querySelector('span').textContent);
@@ -496,7 +540,7 @@ export async function reportWizard(node, query, user = null) {
         const use=document.createElement('button');use.type='button';use.textContent=control.checked?'Deselect':'Select';
         use.onclick=()=>{const input=choice.querySelector('input');input.checked=!input.checked;input.dispatchEvent(new Event('change',{bubbles:true}));dialog.close();};
         const actions=document.createElement('div');actions.className='actions';actions.append(close,use);
-        title.id='observation-preview-label';dialog.setAttribute('aria-labelledby',title.id);dialog.append(image,title);const credit=choice.querySelector('.photo-credit');if(credit)dialog.append(credit.cloneNode(true));dialog.append(actions);body.append(dialog);dialog.addEventListener('close',()=>{dialog.remove();preview.focus();},{once:true});dialog.showModal();
+        title.id='observation-preview-label';dialog.setAttribute('aria-labelledby',title.id);dialog.append(image,title);dialog.append(actions);body.append(dialog);dialog.addEventListener('close',()=>{dialog.remove();preview.focus();},{once:true});dialog.showModal();
       };
     }
     for (const c of data.criteria) {

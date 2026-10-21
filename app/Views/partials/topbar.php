@@ -17,8 +17,8 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
             <button class="icon-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Analytics and timelines"><i class="bi bi-bar-chart" aria-hidden="true"></i></button>
             <ul class="dropdown-menu dropdown-menu-end shadow border-0">
                 <li><a class="dropdown-item" href="<?= e(url('analytics.php')) ?>">Analytics</a></li>
-                <li><a class="dropdown-item" href="<?= e(url('clusters.php?view=health')) ?>">Health history</a></li>
-                <li><a class="dropdown-item" href="<?= e(url('clusters.php?view=growth')) ?>">Growth timeline</a></li>
+                <li><a class="dropdown-item" href="<?= e(url('clusters.php')) ?>">Mangrove timeline</a></li>
+                <li><a class="dropdown-item" href="<?= e(url('assets/observation-photo-credits.html')) ?>">Photo credits</a></li>
             </ul>
         </div>
         <a class="icon-button position-relative" href="<?= e(url('notifications.php')) ?>" aria-label="Notifications<?= $unreadNotificationCount ? ', ' . $unreadNotificationCount . ' unread' : '' ?>">

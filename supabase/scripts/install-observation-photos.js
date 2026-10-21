@@ -19,7 +19,7 @@ export async function installPhotos({client,db,projectId,apply}) {
   // Verify packaged bytes before touching Storage or reference settings.
   const files=[];
   for(const photo of catalog.photos){
-    if(!/^img\/observations\/v1-[a-z-]+\.jpg$/.test(photo.path))throw new Error('Invalid reference photo path.');
+    if(!/^img\/observations\/v[12]-[a-z0-9_-]+\.jpg$/.test(photo.path))throw new Error('Invalid reference photo path.');
     const bytes=await readFile(new URL('../../public/assets/'+photo.path,import.meta.url));
     if(createHash('sha256').update(bytes).digest('hex')!==photo.sha256)throw new Error('Photo checksum mismatch: '+photo.path);
     files.push({path:photo.path,bytes});

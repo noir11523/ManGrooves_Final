@@ -280,6 +280,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
   String? _health;
   int? _speciesId;
   String _rarity = 'Unassigned';
+  String _decision = 'confirm';
 
   bool _busy = false;
   String? _error;
@@ -294,9 +295,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
     try {
       final response = await widget.api.report(widget.reportId);
       _report = Map<String, dynamic>.from(response['report'] as Map);
-      _health = _report!['suggested_health'] == 'Unknown'
-          ? null
-          : _report!['suggested_health']?.toString();
+      _health = _report!['suggested_health']?.toString() ?? 'Unknown';
       _speciesId = _report!['suggested_species_id'] as int?;
       _rarity = _report!['rarity_level']?.toString() ?? 'Unassigned';
     } catch (error) {
@@ -305,19 +304,10 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
     if (mounted) setState(() {});
   }
 
-  bool get _changed =>
-      _health != _report?['suggested_health'] ||
-      _speciesId != _report?['suggested_species_id'] ||
-      _rarity != (_report?['rarity_level'] ?? 'Unassigned');
-
   Future<void> _review(String action) async {
     if (_busy) return;
-    if (action != 'reject' && _health == null) {
+    if (action == 'correct' && _health == null) {
       setState(() => _error = 'Choose the final health before saving.');
-      return;
-    }
-    if (action == 'confirm' && _changed) {
-      setState(() => _error = 'Use Save correction for your changes.');
       return;
     }
     if (action == 'reject' && _feedback.text.trim().isEmpty) {
@@ -329,12 +319,15 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
       'correct' => 'save the correction for',
       _ => 'reject',
     };
+    final displayedSpecies = action == 'confirm'
+        ? _report!['suggested_species_id']
+        : _speciesId;
     final approved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Complete review?'),
         content: Text(
-          'Are you sure you want to $verb ${_report!['report_code']}?${action == 'reject' ? '' : '\nHealth: ${action == 'confirm' ? _report!['suggested_health'] : _health}\nSpecies: ${_speciesId == null ? 'Unassigned' : widget.species.where((item) => item['id'] == _speciesId).map((item) => item['scientific_name']).join()}'}',
+          'Are you sure you want to $verb ${_report!['report_code']}?${action == 'reject' ? '' : '\nHealth: ${action == 'confirm' ? _report!['suggested_health'] ?? 'Unknown' : _health}\nSpecies: ${displayedSpecies == null ? 'Unassigned' : widget.species.where((item) => item['id'] == displayedSpecies).map((item) => item['scientific_name']).join()}'}',
         ),
         actions: [
           TextButton(
@@ -478,7 +471,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                 Text('Suggested health: ${_report!['suggested_health']}'),
                 Text(
                   _report!['health_score'] == null
-                      ? 'Not scored. Choose the final health.'
+                      ? 'Unknown: uncertain observations still need attention.'
                       : 'Score: ${_report!['health_score']} / ${_report!['health_max_score']}',
                 ),
                 const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
@@ -520,72 +513,116 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
             child: Column(
               children: [
                 DropdownButtonFormField<String>(
-                  initialValue: _health,
-                  decoration: const InputDecoration(labelText: 'Final health'),
-                  items: ['Healthy', 'Stressed', 'At Risk']
-                      .map(
-                        (value) =>
-                            DropdownMenuItem(value: value, child: Text(value)),
-                      )
-                      .toList(),
-                  onChanged: _busy
-                      ? null
-                      : (value) => setState(() => _health = value),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int?>(
-                  initialValue: _speciesId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Final species'),
-                  items: <DropdownMenuItem<int?>>[
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('Needs manual identification'),
+                  initialValue: _decision,
+                  decoration: const InputDecoration(labelText: 'Decision'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'confirm',
+                      child: Text('Confirm system suggestion'),
                     ),
-                    ...widget.species.map(
-                      (item) => DropdownMenuItem<int?>(
-                        value: item['id'] as int,
-                        child: Text(
-                          speciesNames(item),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                    DropdownMenuItem(
+                      value: 'correct',
+                      child: Text('Correction'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'reject',
+                      child: Text('Reject with feedback'),
                     ),
                   ],
+                  isExpanded: true,
                   onChanged: _busy
                       ? null
-                      : (value) => setState(() => _speciesId = value),
+                      : (value) => setState(() {
+                          _decision = value!;
+                          _error = null;
+                        }),
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _rarity,
-                  decoration: const InputDecoration(labelText: 'Rarity'),
-                  items: ['Common', 'Vulnerable', 'Rare', 'Unassigned']
-                      .map(
-                        (value) =>
-                            DropdownMenuItem(value: value, child: Text(value)),
-                      )
-                      .toList(),
-                  onChanged: _busy
-                      ? null
-                      : (value) =>
-                            setState(() => _rarity = value ?? 'Unassigned'),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'Verified results determine whether this site needs attention.',
+                const SizedBox(height: 16),
+                if (_decision == 'confirm')
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: Text(
+                      'Uses the system health and species suggestion shown above. Unknown health remains marked for attention.',
+                    ),
                   ),
-                ),
-                CheckboxListTile(
-                  value: _needsFollowUp,
-                  onChanged: _busy
-                      ? null
-                      : (v) => setState(() => _needsFollowUp = v ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: const Text('Needs follow-up'),
-                ),
-                if (_needsFollowUp)
+                if (_decision == 'correct') ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: _health,
+                    decoration: const InputDecoration(
+                      labelText: 'Corrected health',
+                    ),
+                    items: ['Healthy', 'Stressed', 'At Risk', 'Unknown']
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() => _health = value),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int?>(
+                    initialValue: _speciesId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Corrected species',
+                    ),
+                    items: <DropdownMenuItem<int?>>[
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('Needs manual identification'),
+                      ),
+                      ...widget.species.map(
+                        (item) => DropdownMenuItem<int?>(
+                          value: item['id'] as int,
+                          child: Text(
+                            speciesNames(item),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() => _speciesId = value),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _rarity,
+                    decoration: const InputDecoration(labelText: 'Rarity'),
+                    items: ['Common', 'Vulnerable', 'Rare', 'Unassigned']
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _busy
+                        ? null
+                        : (value) =>
+                              setState(() => _rarity = value ?? 'Unassigned'),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      'Verified results determine whether this site needs attention.',
+                    ),
+                  ),
+                ],
+                if (_decision != 'reject')
+                  CheckboxListTile(
+                    value: _needsFollowUp,
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() => _needsFollowUp = v ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('Needs follow-up'),
+                  ),
+                if (_needsFollowUp && _decision != 'reject')
                   TextField(
                     controller: _followUpNote,
                     enabled: !_busy,
@@ -615,26 +652,22 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
           Text(_error!, style: const TextStyle(color: Colors.red)),
         ],
         const SizedBox(height: 14),
-        if (_changed)
-          const Text(
-            'You changed the result. Use Save correction to verify it.',
-          ),
         FilledButton.icon(
-          onPressed: _busy || _changed ? null : () => _review('confirm'),
-          icon: const Icon(Icons.verified_outlined),
-          label: const Text('Confirm suggestion'),
-        ),
-        const SizedBox(height: 10),
-        FilledButton.tonalIcon(
-          onPressed: _busy ? null : () => _review('correct'),
-          icon: const Icon(Icons.edit_outlined),
-          label: const Text('Save correction and verify'),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: _busy ? null : () => _review('reject'),
-          icon: const Icon(Icons.cancel_outlined),
-          label: const Text('Reject with feedback'),
+          onPressed: _busy ? null : () => _review(_decision),
+          icon: Icon(
+            _decision == 'reject'
+                ? Icons.cancel_outlined
+                : _decision == 'correct'
+                ? Icons.edit_outlined
+                : Icons.verified_outlined,
+          ),
+          label: Text(
+            _decision == 'confirm'
+                ? 'Confirm system suggestion'
+                : _decision == 'correct'
+                ? 'Save correction'
+                : 'Reject report',
+          ),
         ),
       ],
     );

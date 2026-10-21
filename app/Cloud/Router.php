@@ -43,14 +43,14 @@ final class CloudRouter
             self::page($page, $title, !Auth::check()); return;
         }
         $pages = [
-            '/dashboard.php' => ['dashboard', 'Dashboard'], '/reports.php' => ['reports', 'Reports'],
+            '/dashboard.php' => ['dashboard', 'Dashboard'], '/reports.php' => ['reports', 'Report history'],
             '/report-detail.php' => ['report', 'Report details'], '/submit-report.php' => ['submit', 'Submit Report'],
-            '/analytics.php' => ['analytics', 'Analytics'], '/clusters.php' => ['clusters', 'Health history'],
-            '/cluster.php' => ['cluster', 'Site visits'], '/report-map.php' => ['report-map', 'Report map'],
+            '/analytics.php' => ['analytics', 'Analytics'], '/clusters.php' => ['clusters', 'Mangrove timeline'],
+            '/cluster.php' => ['cluster', 'Mangrove timeline'], '/report-map.php' => ['report-map', 'Report map'],
             '/settings.php' => ['profile', 'Profile settings'], '/notifications.php' => ['notifications', 'Notifications'],
             '/badges.php' => ['badges', 'My badges'], '/admin/verification.php' => ['verification', 'Review reports'],
             '/admin/report.php' => ['report', 'Report details'], '/admin/analytics.php' => ['analytics', 'Analytics'],
-            '/admin/cluster.php' => ['cluster', 'Site visits'], '/admin/validation-history.php' => ['history', 'Review history'],
+            '/admin/cluster.php' => ['cluster', 'Mangrove timeline'], '/admin/validation-history.php' => ['history', 'Report history'],
             '/admin/checklist.php' => ['checklist', 'Health checklist'], '/admin/users.php' => ['users', 'Users'],
             '/admin/species.php' => ['species', 'Species and Sites'], '/admin/badges.php' => ['badge-settings', 'Badge settings'],
             '/admin/audit.php' => ['audit', 'Audit log'], '/admin/expert-applications.php' => ['expert-applications', 'Expert applications'],
@@ -68,7 +68,8 @@ final class CloudRouter
             render('dashboard', ['pageTitle' => $title, 'user' => $user, 'stats' => $data['stats'], 'latestReports' => $data['latest_reports'], 'reminders' => $data['reminders']]);
             return;
         }
-        if ($page === 'clusters' && ($_GET['view'] ?? '') === 'growth') { $page = 'growth'; $title = 'Growth timeline'; }
+        if ($page === 'clusters' && ($_GET['view'] ?? '') === 'growth') { $page = 'growth'; }
+        if ($page === 'reports' && $user['role'] === 'guardian') { $title = 'My reports'; }
         self::page($page, $title);
     }
     private static function page(string $page, string $title, bool $public = false): void

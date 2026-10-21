@@ -12,6 +12,7 @@ import { readInput, sendImage } from './uploads.js';
 import {searchPlaces} from './places.js';
 import {certificateSettings,getCertificate,certificatePdf,shareCertificate,sharedCertificate,verifyCertificate} from './certificates.js';
 import {emailAddress,emailCode,completeRegistration,expertApplications} from './registration.js';
+import {userDirectory} from './user-directory.js';
 import {createStaff} from './staff.js';
 import {manageSites} from './sites.js';
 import {manageSpecies} from './species.js';
@@ -133,7 +134,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
           return send(res,await certificateSettings(service,user,input,files));
         }
         case 'certificate-link.php': only('POST');return send(res,await shareCertificate(service,user,req.body??{},`https://${projectId}.supabase.co/functions/v1/api`));
-        case 'expert-applications.php': return send(res,await expertApplications(service,user,post?req.body:null,res));
+        case 'expert-applications.php': return send(res,await expertApplications(service,user,post?req.body:null,res,req.query));
         case 'expert-id.php': only('GET');await expertApplications(service,user,{action:'photo',uid:req.query.uid},res);return;
         case 'me.php': only('GET'); return send(res, {user: publicUser(user)});
         case 'logout.php': only('POST'); await auth.revokeRefreshTokens(user.uid); return send(res, {message: 'Signed out.'});
@@ -257,12 +258,13 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
         case 'users.php': {
           requireRole(user, 'system_admin');
           if (get) {
-            const [users,barangays]=await Promise.all([service.rows('users'),service.rows('barangays')]);
-            return send(res,{...paginate(filterRows(users.map(u=>({...publicUser(u),status:u.status,created_at:u.created_at??null})),req.query,
-              ['full_name','email','phone','barangay_name'],['role','status','barangay_id']).sort((a,b)=>a.full_name.localeCompare(b.full_name)||a.id-b.id),req.query.page),barangays});
+            const [users,barangays,badges,awards,applications]=await Promise.all(['users','barangays','badges','user_badges','expert_applications'].map(name=>service.rows(name)));
+            const {rows,summary}=userDirectory(users,barangays,badges,awards,applications,req.query);
+            return send(res,{...paginate(rows,req.query.page),barangays,summary});
           }
-          if(req.body?.action==='create_staff')return send(res,await createStaff(service,user,req.body),201);
-          const input = req.body ?? {}, id = integer(input.id, 'user');
+          const {input,files}=await readInput(req);
+          if(input.action==='create_staff')return send(res,await createStaff(service,user,input,files),201);
+          const id = integer(input.id, 'user');
           if (id === user.id) throw new AppError('Ask another administrator to change your access.');
           if (!ROLES.includes(input.role) || !['active', 'inactive'].includes(input.status)) throw new AppError('Choose a valid role and account status.');
           const target = (await service.rows('users', [['id', '==', id]]))[0];

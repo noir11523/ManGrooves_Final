@@ -1,0 +1,9 @@
+# Cebu barangay directory
+
+`supabase/functions/api/data/cebu-barangays.json` contains 1,203 barangays in 53 cities and municipalities, including Cebu City, Mandaue City and Lapu-Lapu City. Registration, profile editing and staff creation search these entries. Typing filters the choices; it does not create a new barangay.
+
+Each entry includes its city/municipality and PSGC codes so repeated names such as Poblacion are distinguishable. Inayawan, Cebu City retains the existing application ID `1`. Other entries use their numeric nine-digit PSGC code as the application ID. The API merges stored reference entries without replacing existing IDs. User addresses are one street/sitio line; city and province come from the selected entry. A Philippine mobile number is required and normalized to `+639…`.
+
+Names and codes were retrieved from the [PSGC API Cebu directory](https://psgc.gitlab.io/api/provinces/072200000/barangays/) and [city/municipality directory](https://psgc.gitlab.io/api/cities-municipalities/). Map centers and monitoring radii use the [2023 PSGC boundary collection](https://github.com/faeldon/philippines-json-maps). These are reference boundaries, not a claim that every boundary was newly surveyed in 2026. Centers are bounding-box midpoints; radii cover the boundary vertices with a 500 m allowance and a minimum of 5 km. Existing site pins are retained. This circle is a reporting aid, not a legal boundary check.
+
+The directory ships with the API. No mass database insert or SQL reset is needed. Existing accounts can sign in; their next profile save asks for any missing mobile number or address. Expert applicants upload one private work/professional ID photo. Only administrators can retrieve it, and approval is still required before expert access becomes active. Existing ID-code applications remain readable.

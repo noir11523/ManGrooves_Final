@@ -1,4 +1,7 @@
-import 'validation_history_screen.dart';
+import 'report_history_screen.dart';
+
+import 'package:url_launcher/url_launcher.dart';
+
 import 'management_screen.dart';
 import 'checklist_screen.dart';
 import 'cloud_admin_screen.dart';
@@ -73,7 +76,13 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final titles = _guardian
         ? ['Dashboard', 'My reports', 'Submit Report', 'My badges', 'Account']
-        : ['Dashboard', 'Reports', 'Review reports', 'Analytics', 'Account'];
+        : [
+            'Dashboard',
+            'Review reports',
+            'Report history',
+            'Analytics',
+            'Account',
+          ];
     final pages = _guardian
         ? <Widget>[
             DashboardScreen(
@@ -113,13 +122,12 @@ class _HomeShellState extends State<HomeShell> {
           ]
         : <Widget>[
             DashboardScreen(api: widget.api, active: _index == 0),
-            ReportsScreen(
+            VerificationScreen(api: widget.api, active: _index == 1),
+            ReportHistoryScreen(
               key: ValueKey(_reportsVersion),
               api: widget.api,
-              showSubmitter: true,
-              active: _index == 1,
+              active: _index == 2,
             ),
-            VerificationScreen(api: widget.api, active: _index == 2),
             AnalyticsScreen(api: widget.api, active: _index == 3),
             ProfileScreen(
               initialUser: _user,
@@ -151,11 +159,6 @@ class _HomeShellState extends State<HomeShell> {
                 tooltip: 'Menu',
                 icon: const Icon(Icons.menu),
                 itemBuilder: (_) => [
-                  if (!_guardian)
-                    const PopupMenuItem(
-                      value: 'history',
-                      child: Text('Review history'),
-                    ),
                   if (widget.api.supportsCloudAccounts && !_guardian)
                     const PopupMenuItem(
                       value: 'species',
@@ -189,7 +192,6 @@ class _HomeShellState extends State<HomeShell> {
                 ],
                 onSelected: (choice) {
                   final Widget page = switch (choice) {
-                    'history' => ValidationHistoryScreen(api: widget.api),
                     'checklist' => ChecklistScreen(api: widget.api),
                     'applications' => CloudAdminScreen(api: widget.api),
                     'signer' => CloudAdminScreen(
@@ -211,7 +213,16 @@ class _HomeShellState extends State<HomeShell> {
             PopupMenuButton<String>(
               tooltip: 'Analytics and timelines',
               icon: const Icon(Icons.insights_outlined),
-              onSelected: (choice) {
+              onSelected: (choice) async {
+                if (choice == 'credits') {
+                  await launchUrl(
+                    Uri.parse(
+                      'https://mangrooves-php.vercel.app/assets/observation-photo-credits.html',
+                    ),
+                    mode: LaunchMode.externalApplication,
+                  );
+                  return;
+                }
                 if (choice == 'analytics' && !_guardian) {
                   setState(() => _index = 3);
                   return;
@@ -233,8 +244,11 @@ class _HomeShellState extends State<HomeShell> {
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'analytics', child: Text('Analytics')),
-                PopupMenuItem(value: 'health', child: Text('Health history')),
-                PopupMenuItem(value: 'growth', child: Text('Growth timeline')),
+                PopupMenuItem(
+                  value: 'timeline',
+                  child: Text('Mangrove timeline'),
+                ),
+                PopupMenuItem(value: 'credits', child: Text('Photo credits')),
               ],
             ),
             IconButton(
@@ -249,7 +263,12 @@ class _HomeShellState extends State<HomeShell> {
           ],
           title: Row(
             children: [
-              Icon(Icons.park, color: Theme.of(context).colorScheme.primary),
+              Image.asset(
+                'assets/brand/mangrooves.png',
+                width: 32,
+                height: 32,
+                semanticLabel: 'ManGROOVES',
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -262,7 +281,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
         body: IndexedStack(index: _index, children: pages),
-        floatingActionButton: _user['role'] == 'expert' && _index == 1
+        floatingActionButton: _user['role'] == 'expert' && _index == 2
             ? FloatingActionButton.extended(
                 icon: const Icon(Icons.add_a_photo_outlined),
                 label: const Text('Submit Report'),
@@ -295,10 +314,16 @@ class _HomeShellState extends State<HomeShell> {
               selectedIcon: Icon(Icons.dashboard),
               label: 'Home',
             ),
-            const NavigationDestination(
-              icon: Icon(Icons.assignment_outlined),
-              selectedIcon: Icon(Icons.assignment),
-              label: 'Reports',
+            NavigationDestination(
+              icon: Icon(
+                _guardian
+                    ? Icons.assignment_outlined
+                    : Icons.fact_check_outlined,
+              ),
+              selectedIcon: Icon(
+                _guardian ? Icons.assignment : Icons.fact_check,
+              ),
+              label: _guardian ? 'Reports' : 'Review',
             ),
             if (_guardian)
               const NavigationDestination(
@@ -321,9 +346,9 @@ class _HomeShellState extends State<HomeShell> {
               ),
             if (!_guardian)
               const NavigationDestination(
-                icon: Icon(Icons.fact_check_outlined),
-                selectedIcon: Icon(Icons.fact_check),
-                label: 'Review',
+                icon: Icon(Icons.assignment_outlined),
+                selectedIcon: Icon(Icons.assignment),
+                label: 'History',
               ),
             if (!_guardian)
               const NavigationDestination(

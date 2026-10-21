@@ -137,7 +137,7 @@
           "label": "Green",
           "points": 2,
           "display_order": 1,
-          "image_path": "img/observations/v1-green-leaf.jpg"
+          "image_path": "img/observations/v2-drive-avicennia_marina-leaf_01.jpg"
         },
         {
           "id": 2,
@@ -194,7 +194,7 @@
           "label": "Smooth & Healthy",
           "points": 2,
           "display_order": 1,
-          "image_path": "img/observations/v1-green-leaf.jpg"
+          "image_path": "img/observations/v2-drive-avicennia_marina-leaf_01.jpg"
         },
         {
           "id": 5,
@@ -203,7 +203,7 @@
           "label": "Waxy / Curled / Pointing Up",
           "points": 1,
           "display_order": 2,
-          "image_path": "img/observations/v1-waxy-upward-leaves.jpg"
+          "image_path": "img/observations/v2-drive-rhizophora_stylosa-leaf_01.jpg"
         },
         {
           "id": 6,
@@ -212,7 +212,7 @@
           "label": "Damaged / Holes / Dark Spots",
           "points": 0,
           "display_order": 3,
-          "image_path": "img/observations/v1-leaf-dark-spots.jpg"
+          "image_path": "img/observations/v2-drive-rhizophora_apiculata-leaf_01.jpg"
         },
         {
           "id": 7,
@@ -260,7 +260,7 @@
           "label": "None Visible",
           "points": 2,
           "display_order": 1,
-          "image_path": "img/observations/v1-green-leaf.jpg"
+          "image_path": "img/observations/v2-drive-avicennia_marina-leaf_01.jpg"
         },
         {
           "id": 9,
@@ -317,7 +317,7 @@
           "label": "Firm & Intact",
           "points": 2,
           "display_order": 1,
-          "image_path": "img/observations/v1-intact-prop-roots.jpg"
+          "image_path": "img/observations/v2-drive-shared_characteristics-prop_roots_01.jpg"
         },
         {
           "id": 12,
@@ -383,7 +383,7 @@
           "label": "Intact / Smooth",
           "points": 2,
           "display_order": 1,
-          "image_path": "img/observations/v1-smooth-bark.jpg"
+          "image_path": "img/observations/v2-drive-avicennia_marina-bark_01.jpg"
         },
         {
           "id": 16,
@@ -392,7 +392,7 @@
           "label": "Slightly Peeling / Cracks",
           "points": 1,
           "display_order": 2,
-          "image_path": "img/observations/v1-flaking-bark.jpg"
+          "image_path": "img/observations/v2-drive-avicennia_marina-bark_01.jpg"
         },
         {
           "id": 17,
@@ -401,7 +401,7 @@
           "label": "Deep Cracks / Fissures",
           "points": 0,
           "display_order": 3,
-          "image_path": "img/observations/v1-fissured-bark.jpg"
+          "image_path": "img/observations/v2-drive-rhizophora_apiculata-bark_01.jpg"
         },
         {
           "id": 18,

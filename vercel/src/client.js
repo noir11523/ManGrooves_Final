@@ -37,7 +37,13 @@ async function performApi(path,{body,query,anonymous=false,blob=false,token}={})
   for(const [key,value] of Object.entries(query??{})) if(value!==''&&value!=null)params.set(key,value);
   const direct=blob || body instanceof FormData;
   let url,headers={Accept:blob?'*/*':'application/json'};
-  if(direct) {
+  if(direct && anonymous) {
+    // Email verification supplies the short-lived proof before an account can
+    // sign in. ID uploads must not request an authenticated PHP session.
+    if(parsed.pathname!=='/complete-registration.php'||!token||blob)throw new Error('Verify your email before uploading your profile.');
+    url=new URL(apiUrl('complete-registration.php'));url.search=params.toString();
+    headers.Authorization=`Bearer ${token}`;
+  } else if(direct) {
     const auth=await uploadSession();
     url=new URL(parsed.pathname.slice(1),auth.base);url.search=params.toString();
     headers.Authorization=`Bearer ${auth.access_token}`;

@@ -196,6 +196,7 @@ class _Api extends ApiClient {
         'selection_mode': 'multiple',
         'options': [
           {'id': 5, 'code': 'no_animals', 'label': 'No animals'},
+          {'id': 7, 'code': 'none_of_the_above', 'label': 'None of the above'},
         ],
       },
     ],
@@ -860,8 +861,11 @@ void main() {
       final greenCircle = find.byKey(const ValueKey('choice-circle-Green'));
       await tap(tester, greenCircle);
       expect(observationSelected(tester, 'leaf_color', 1), false);
-      await tap(tester, find.text('Review report'));
-      expect(find.text('Choose one answer for Leaf color.'), findsOneWidget);
+      await tap(tester, find.text('Next category'));
+      expect(
+        find.textContaining('Choose an answer for Leaf color'),
+        findsOneWidget,
+      );
       await tap(tester, greenCircle);
       expect(observationSelected(tester, 'leaf_color', 1), true);
       await tap(tester, preview);
@@ -905,6 +909,7 @@ void main() {
       await chooseObservation(tester, 'Crabs');
       await chooseCategory(tester, 'Warning signs');
       expect(observationSelected(tester, 'negative_signs', 5), false);
+      await chooseObservation(tester, 'None of the above');
       for (final choice in {
         'Klase sa Gamot (Root Type)': 'Prop',
         'Porma sa Dahon (Leaf Shape)': 'Oval',
@@ -923,8 +928,20 @@ void main() {
         expect(tester.widget<IconButton>(circle).isSelected, true);
         await tap(tester, circle);
         expect(tester.widget<IconButton>(circle).isSelected, false);
-        await tap(tester, find.text('Review report'));
-        expect(find.text('Choose the roots, leaves and bark.'), findsOneWidget);
+        await tap(
+          tester,
+          find.text(
+            choice.key.contains('Bark Texture')
+                ? 'Review report'
+                : 'Next category',
+          ),
+        );
+        expect(
+          find.text(
+            'Choose ${choice.key.split('(').last.replaceAll(')', '')}.',
+          ),
+          findsOneWidget,
+        );
         await tap(tester, circle);
         await tap(tester, find.bySemanticsLabel('Preview ${choice.value}'));
         await tap(
