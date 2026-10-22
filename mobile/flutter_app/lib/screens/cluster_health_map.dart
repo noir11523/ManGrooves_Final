@@ -13,7 +13,7 @@ class ClusterHealthMap extends StatelessWidget {
     this.tileProvider,
     this.onOpenTimeline,
     this.canOpenSite,
-    this.title = 'Cluster health map',
+    this.title = 'Mangrove site map',
   });
   final List<Map<String, dynamic>> clusters;
   final ValueChanged<int> onOpenReports;
@@ -48,6 +48,7 @@ class ClusterHealthMap extends StatelessWidget {
     final location = [
       cluster['cluster_code'],
       cluster['barangay_name'],
+      cluster['city_municipality'],
     ].where((value) => value != null && '$value'.trim().isNotEmpty).join(' · ');
     final hasSpecies = [
       'local_name',
@@ -155,7 +156,7 @@ class ClusterHealthMap extends StatelessWidget {
           const Card(
             child: Padding(
               padding: EdgeInsets.all(20),
-              child: Text('No clusters to show yet.'),
+              child: Text('No mangrove sites to show yet.'),
             ),
           )
         else ...[
@@ -256,7 +257,9 @@ class ClusterHealthMap extends StatelessWidget {
           ),
           // A list keeps clusters accessible when map tiles are unavailable.
           ExpansionTile(
-            title: Text('View ${clusters.length} clusters'),
+            title: Text(
+              'View ${clusters.length} ${clusters.length == 1 ? 'site' : 'sites'}',
+            ),
             children: clusters
                 .map(
                   (item) => ListTile(

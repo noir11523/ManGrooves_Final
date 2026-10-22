@@ -3,10 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 
 import '../core/api_client.dart';
 import '../shared/content_width.dart';
-import '../shared/species_names.dart';
 import 'cluster_health_map.dart';
 import 'cluster_timeline_screen.dart';
-import 'management_screen.dart';
 import 'reports_screen.dart';
 
 class ExploreSitesScreen extends StatefulWidget {
@@ -141,20 +139,6 @@ class _ExploreSitesScreenState extends State<ExploreSitesScreen> {
                 'Shared sites with verified reports. Find a species, place or health result.',
               ),
               const SizedBox(height: 16),
-              if (widget.user['role'] == 'system_admin')
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) =>
-                            ManagementScreen(api: widget.api, page: 'species'),
-                      ),
-                    ),
-                    child: const Text('Manage species and sites'),
-                  ),
-                ),
               if (_error != null)
                 TextButton(onPressed: _load, child: Text('$_error Retry')),
               if (_data == null && _error == null)
@@ -197,7 +181,9 @@ class _ExploreSitesScreenState extends State<ExploreSitesScreen> {
                 child: const Text('Reset filters'),
               ),
               const SizedBox(height: 16),
-              Text('${sites.length} shared sites · Verified reports only'),
+              Text(
+                '${sites.length} shared ${sites.length == 1 ? 'site' : 'sites'} · Verified reports only',
+              ),
               const SizedBox(height: 12),
               if (sites.isEmpty && _data != null)
                 const Card(
@@ -239,35 +225,6 @@ class _ExploreSitesScreenState extends State<ExploreSitesScreen> {
                     ),
                   ),
                 ),
-              const SizedBox(height: 20),
-              ExpansionTile(
-                title: Text('Species reference (${catalog.length})'),
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text(
-                      'Locations belong in Sites. Species contains identification names and traits.',
-                    ),
-                  ),
-                  for (final s in catalog)
-                    ListTile(
-                      title: SpeciesNames(s),
-                      subtitle: Text(
-                        '${all.where((c) => c['species_id'] == s['id']).length} verified sites',
-                      ),
-                      onTap: !all.any((c) => c['species_id'] == s['id'])
-                          ? null
-                          : () {
-                              setState(() => _species = '${s['id']}');
-                              _scroll.animateTo(
-                                0,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeOut,
-                              );
-                            },
-                    ),
-                ],
-              ),
             ],
           ),
         ),

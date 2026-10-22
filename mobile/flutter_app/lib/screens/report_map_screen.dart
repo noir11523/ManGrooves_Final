@@ -267,6 +267,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
       showDragHandle: true,
       isScrollControlled: true,
       constraints: BoxConstraints(
+        maxWidth: 560,
         maxHeight: MediaQuery.sizeOf(context).height * .85,
       ),
       builder: (sheet) => SafeArea(
@@ -276,18 +277,36 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                '${item['report_code'] ?? 'Report'}',
-                style: Theme.of(context).textTheme.titleLarge,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${item['report_code'] ?? 'Report'}',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.pop(sheet),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
               ),
               Text(
-                '${statusLabel(item['status'])} · ${item['display_health']}',
+                item['status'] == 'pending'
+                    ? 'Pending review'
+                    : statusLabel(item['status']),
               ),
+              const SizedBox(height: 8),
               Text(
-                '${item['cluster_name'] ?? item['sitio_name'] ?? 'New site'}',
+                '${item['cluster_name'] ?? item['sitio_name'] ?? 'Location not named'}',
               ),
-              if (item['status'] != 'verified')
-                const Text('Health is a system suggestion.'),
+              const SizedBox(height: 12),
+              Text(
+                '${item['status'] == 'verified' ? 'Health' : 'Suggested health'}: ${item['display_health'] ?? item['final_health'] ?? item['suggested_health'] ?? 'Not recorded'}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () {
@@ -451,24 +470,6 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
                   _load();
                 },
                 child: const Text('Reset filters'),
-              ),
-              OutlinedButton.icon(
-                onPressed: located.isEmpty
-                    ? null
-                    : () {
-                        _searchVersion++;
-                        _searchTimer?.cancel();
-                        setState(() {
-                          _selectedPlace = null;
-                          _query.clear();
-                          _searchMessage = null;
-                          _places = [];
-                          _followReports = true;
-                        });
-                        _fitReports();
-                      },
-                icon: const Icon(Icons.center_focus_strong),
-                label: const Text('Show matching pins'),
               ),
             ],
           ),

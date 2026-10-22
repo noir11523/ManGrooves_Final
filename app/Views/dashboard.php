@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 $role = (string) $user['role'];
 $isGuardian = $role === 'guardian';
+$mapScriptPath = APP_ROOT . (defined('MANGROOVES_CLOUD') ? '/assets/' : '/public/assets/') . 'js/maps.js';
+$mapScriptVersion = substr(hash_file('sha256', $mapScriptPath), 0, 12);
 $extraHead = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">';
 $pageScripts = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>'
-    . '<script src="' . e(asset('js/maps.js')) . '"></script>';
+    . '<script src="' . e(asset('js/maps.js') . '?v=' . $mapScriptVersion) . '"></script>';
 $statCards = [
     ['label' => 'Total Reports Verified', 'value' => $stats['total_reports'] ?? 0, 'icon' => 'bi-files', 'tone' => 'success', 'href' => url('reports.php?status=verified')],
     ['label' => 'Pending', 'value' => ($isGuardian ? ($stats['pending_reports'] ?? 0) : ($stats['pending_review_reports'] ?? $stats['pending_reports'] ?? 0)), 'icon' => 'bi-hourglass-split', 'tone' => 'warning', 'href' => url($isGuardian ? 'reports.php?status=pending' : 'admin/verification.php?status=pending')],
@@ -96,7 +98,7 @@ $statCards = [
     <section class="col-12" id="cluster-map" aria-labelledby="map-heading">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h2 class="h5 mb-0" id="map-heading">Cluster health map</h2>
+                <h2 class="h5 mb-0" id="map-heading">Mangrove site map</h2>
                 <a class="small" href="<?= e(url('explore.php')) ?>">Explore all</a>
             </div>
             <div class="card-body p-0">

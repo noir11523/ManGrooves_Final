@@ -27,7 +27,7 @@ test('Explore intersects species, health and disambiguated location; empty speci
   assert.match($('[name=barangay_id]').textContent,/Poblacion, Cebu City/);assert.match($('[name=barangay_id]').textContent,/Poblacion, Danao City/);
   assert.equal(root.querySelector('[data-species="3"]'),null);
   $('[name=species_id]').value='1';$('[name=health]').value='At Risk';$('#explore-filters').dispatchEvent(new Event('submit',{cancelable:true}));
-  assert.match($('#explore-sites').textContent,/No matching verified sites/);assert.equal($('#explore-fit').disabled,true);
+  assert.match($('#explore-sites').textContent,/No matching verified sites/);assert.equal($('#explore-fit'),null);assert.equal($('.species-guide'),null);assert.equal(root.textContent.includes('Manage sites'),false);
   $('#explore-reset').click();assert.equal($('#explore-sites').querySelectorAll('[data-site]').length,2);
   $('[data-site="2"]').click();assert.match($('.leaflet-popup').textContent,/South coast/);
  }finally{dispose();}
@@ -43,6 +43,6 @@ test('timeline exposes both histories, honours count deep link and keeps unknown
  assert.equal(document.activeElement.id,'mangrove-counts');assert.ok($('#health-history'));assert.ok($('#mangrove-counts'));assert.equal(charts.length,2);
  assert.deepEqual(charts[1].config.data.datasets[0].data,[0]);assert.deepEqual(charts[0].config.data.datasets[0].data,[2,null]);
  assert.equal(root.querySelector('a[href="#report/1"]'),null);assert.ok(root.querySelector('a[href="#report/2"]'));
- $('[data-section="health-history"]').click();assert.equal(document.activeElement.id,'health-history');dispose();assert.ok(charts.every(c=>c.destroyed));
+ assert.equal($('.timeline-shortcuts'),null);dispose();assert.ok(charts.every(c=>c.destroyed));
  globalThis.testApi=async()=>({cluster:{name:'New site'},timeline:[]});const close=await mangroveTimeline(root,1,{},name=>`<h1>${name}</h1>`,()=>{});assert.match($('#mangrove-counts').textContent,/No counts recorded/);assert.match($('#health-history').textContent,/after staff review/);close();
 });

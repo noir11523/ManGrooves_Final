@@ -167,6 +167,6 @@ test('report search, list pin controls and reset preserve map functionality',asy
   await tick();$('[name=q]').value='Avicennia';$('#map-filters').dispatchEvent(new Event('submit',{cancelable:true}));await tick();
   assert.equal(queries.at(-1).q,'Avicennia');$('#map-report-list [data-pin="2"]').click();assert.match($('.leaflet-popup').textContent,/Report #2/);
   $('#reset-map-filters').click();await tick();assert.equal(queries.at(-1).q,'');assert.equal(queries.at(-1).status,'');
-  $('#fit-reports').click();assert.equal(markers().length,2);assert.match($('#map-results-label').textContent,/2/);
+  assert.equal($('#fit-reports'),null);assert.equal(markers().length,2);assert.match($('#map-results-label').textContent,/2/);
  }finally{dispose();}
 });

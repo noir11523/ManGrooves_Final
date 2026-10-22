@@ -83,12 +83,12 @@ void main() {
       await tester.enterText(find.byType(TextField).first, 'Danao');
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('1 shared sites · Verified reports only'),
+        find.text('1 shared site · Verified reports only'),
         200,
         scrollable: find.byType(Scrollable).first,
       );
       expect(
-        find.text('1 shared sites · Verified reports only'),
+        find.text('1 shared site · Verified reports only'),
         findsOneWidget,
       );
       await tester.ensureVisible(find.byType(FlutterMap));
@@ -125,7 +125,7 @@ void main() {
       await tester.tap(find.text('Avicennia marina').last);
       await tester.pumpAndSettle();
       expect(
-        find.text('1 shared sites · Verified reports only'),
+        find.text('1 shared site · Verified reports only'),
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);

@@ -53,6 +53,22 @@ export function mapPoint(item) {
   const [lat, lng] = values.map(Number);
   return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 85.05112878 && Math.abs(lng) <= 180 ? [lat, lng] : null;
 }
+function positionPinSummary(canvas, tooltip) {
+  const element=tooltip.getElement(), size=canvas.getSize();
+  if(!element)return;
+  element.style.maxWidth=`${Math.max(120,Math.min(280,size.x-24))}px`;
+  const point=canvas.latLngToContainerPoint(tooltip.getLatLng()), width=element.offsetWidth, height=element.offsetHeight;
+  const left=Math.max(12,Math.min(size.x-width-12,point.x-width/2));
+  // Keep the text inside the map and below the zoom controls when they overlap.
+  const minTop=left<52?84:12;
+  let top=point.y-height-12;
+  if(top<minTop)top=point.y+12;
+  top=Math.max(minTop,Math.min(size.y-height-12,top));
+  tooltip.options.direction=top+height<=point.y?'top':'bottom';
+  tooltip.options.offset=L.point(left+width/2-point.x,top-point.y+(tooltip.options.direction==='top'?height:0));
+  element.style.setProperty('--pin-arrow-x',`${Math.max(12,Math.min(width-12,point.x-left))}px`);
+  tooltip.update();
+}
 export function mapMarkers(canvas, items, {timelineMode = 'health', fit = true, canOpenTimeline = true} = {}) {
   const bounds = [], markers = [];
   for (const item of items) {
@@ -62,19 +78,22 @@ export function mapMarkers(canvas, items, {timelineMode = 'health', fit = true, 
     const health = item.latest_health ?? item.display_health ?? item.final_health ?? item.suggested_health;
     const marker = L.circleMarker(point, {radius: 9, color: '#fff', weight: 2, fillOpacity: 1, fillColor: healthColor(health)}).addTo(canvas);
     markers.push(marker);
-    const content = document.createElement('div');
-    const title = document.createElement('strong'); title.textContent = item.name ?? item.report_code;
+    const content = document.createElement('div'); content.className='map-pin-details';
+    const title = document.createElement('strong'); title.textContent = item.name ?? item.report_code ?? 'Mangrove site';
     const location = document.createElement('div'); location.textContent = [item.name?item.cluster_code:item.cluster_name||item.sitio_name,item.barangay_name,item.city_municipality].filter(Boolean).join(' · ');
-    const label = document.createElement('p'); label.textContent = health ?? 'Unknown'; label.style.color = healthColor(health);
+    const suggested = item.status && item.status !== 'verified';
+    const label = document.createElement('p'); label.className='map-pin-health'; label.textContent = `${suggested?'Suggested health':'Health'}: ${health ?? 'Not recorded'}`; label.style.color = healthColor(health);
     const species = document.createElement('div');
     if ([item.local_name,item.species_local_name,item.common_name,item.species_common_name,item.scientific_name,item.species_name].some(Boolean)) species.innerHTML = speciesNames(item);
     const link = document.createElement('a'); link.textContent = item.name ? (canOpenTimeline?'View mangrove timeline':'Sign in to view timeline') : 'View report'; link.href = item.name ? (canOpenTimeline?`#cluster/${item.id}?tab=${timelineMode}`:'#login') : `#report/${item.id}`;
     const status=document.createElement('p');status.className='map-status';
-    status.textContent=item.status?`${displayLabel(item.status)}${item.status!=='verified'?' · Health is a suggestion':''}`:`${item.verified_count??0} verified visits`;
+    status.textContent=item.status?(item.status==='pending'?'Pending review':displayLabel(item.status)):item.verified_count!=null?`${item.verified_count} verified ${Number(item.verified_count)===1?'visit':'visits'}`:'';
     content.append(title, location, label, species, status, link);
     marker.bindPopup(content, {minWidth:120, maxWidth:Math.max(120,Math.min(280,canvas.getSize().x-60)), autoPanPadding:[12,12], autoPanPaddingTopLeft:[12,canvas.getSize().x<420?84:12]});
     const summary=document.createElement('span');summary.textContent=[item.name??item.report_code,health??'Unknown',item.status?displayLabel(item.status):item.barangay_name].filter(Boolean).join(' · ');
-    marker.bindTooltip(summary,{direction:'top',offset:[0,-8],opacity:1});
+    marker.bindTooltip(summary,{className:'map-pin-summary',direction:'top',offset:[0,-8],opacity:1});
+    marker.on('tooltipopen',event=>positionPinSummary(canvas,event.tooltip));
+    marker.on('popupopen',()=>marker.closeTooltip());
     const element=marker.getElement();
     if(element){element.setAttribute('tabindex','0');element.setAttribute('role','button');element.setAttribute('aria-label',`${summary.textContent}. Open details`);element.addEventListener('focus',()=>marker.openTooltip());element.addEventListener('blur',()=>marker.closeTooltip());element.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();marker.closeTooltip();marker.openPopup();}});}
   }

@@ -266,8 +266,11 @@ void main() {
       addTearDown(() => messenger.setMockMethodCallHandler(picker, null));
       await tester.ensureVisible(find.text('Upload ID photo'));
       await tester.runAsync(() async {
-        await tester.tap(find.text('Upload ID photo'));
-        await Future<void>.delayed(const Duration(milliseconds: 150));
+        final button = tester.widget<OutlinedButton>(
+          find.widgetWithText(OutlinedButton, 'Upload ID photo'),
+        );
+        // Await the real file picker/read; a fixed delay races under full-suite load.
+        await (button.onPressed as dynamic)();
       });
       await tester.pumpAndSettle();
       await tap(tester, find.text('Back to account'));

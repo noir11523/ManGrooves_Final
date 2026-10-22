@@ -44,6 +44,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
   int _page = 1, _pages = 1, _total = 0;
   int _loadRequest = 0;
   bool _loading = true;
+  final _deletingUsers = <int>{};
   bool get _users => widget.page == 'users';
   bool get _species => widget.page == 'species';
   String get _title => _users
@@ -804,6 +805,64 @@ class _ManagementScreenState extends State<ManagementScreen> {
     if (mounted) await _load();
   }
 
+  Future<void> _deleteUser(Map<String, dynamic> item) async {
+    final id = (item['id'] as num).toInt();
+    if (_deletingUsers.contains(id)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Delete user?'),
+        content: Text(
+          'Permanently delete ${item['full_name']} (${item['email']}) and their sign-in access? Existing reports and review history are kept. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Delete user'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _deletingUsers.add(id));
+    try {
+      await widget.api.cloudRequest(
+        'users.php',
+        body: {'action': 'delete', 'id': id, 'confirm_email': item['email']},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'User deleted. Existing reports and review history are kept.',
+          ),
+        ),
+      );
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is ApiException
+                  ? error.message
+                  : 'Could not delete user. Try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deletingUsers.remove(id));
+    }
+  }
+
   Widget _userCard(Map<String, dynamic> item) => Card(
     margin: const EdgeInsets.only(bottom: 16),
     child: Padding(
@@ -864,6 +923,21 @@ class _ManagementScreenState extends State<ManagementScreen> {
                 TextButton(
                   onPressed: () => _application(item),
                   child: const Text('View application'),
+                ),
+              if (item['can_delete'] == true)
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  onPressed: _deletingUsers.contains(item['id'])
+                      ? null
+                      : () => _deleteUser(item),
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(
+                    _deletingUsers.contains(item['id'])
+                        ? 'Deleting…'
+                        : 'Delete user',
+                  ),
                 ),
             ],
           ),

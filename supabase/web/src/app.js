@@ -65,7 +65,7 @@ async function dashboardPage(node) {
     ['Rejected', s.rejected_reports, 'reports?status=rejected'], ['Needs attention', s.needs_attention, 'reports?needs_attention=1'], ['Clusters', s.map_clusters, 'clusters']
   ].map(([label, value, path]) => `<a class="stat" href="#${path}"><strong>${value ?? 0}</strong><span>${label} →</span></a>`).join('')}</div>
     ${data.reminders.length ? `<section class="card"><h2>Follow-up requests</h2>${data.reminders.map(r => `<p><a href="#submit?parent=${r.id}&cluster=${r.cluster_id}">${esc(r.cluster_name ?? r.report_code)}</a> · ${esc(r.follow_up_note||'Awaiting follow-up')}</p>`).join('')}</section>` : ''}
-    <h2>Latest reports</h2>${reportRows(data.latest_reports)}<h2>Cluster health map</h2>${legend}<div id="map" class="map"></div><p class="muted">Select a cluster to see its visits.</p>`);
+    <h2>Latest reports</h2>${reportRows(data.latest_reports)}<h2>Mangrove site map</h2>${legend}<div id="map" class="map"></div><p class="muted">Tap or click a pin to view site details and its timeline.</p>`);
   const canvas = map($('#map'), data.clusters); cleanup = () => canvas.remove();
 }
 async function reportsPage(node, query, verification = false) {

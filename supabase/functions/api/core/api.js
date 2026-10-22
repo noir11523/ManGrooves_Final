@@ -13,6 +13,7 @@ import {searchPlaces} from './places.js';
 import {certificateSettings,getCertificate,certificatePdf,shareCertificate,sharedCertificate,verifyCertificate} from './certificates.js';
 import {emailAddress,emailCode,completeRegistration,expertApplications} from './registration.js';
 import {userDirectory} from './user-directory.js';
+import {deleteUser} from './delete-user.js';
 import {createStaff} from './staff.js';
 import {manageSites} from './sites.js';
 import {manageSpecies} from './species.js';
@@ -260,11 +261,13 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
           requireRole(user, 'system_admin');
           if (get) {
             const [users,barangays,badges,awards,applications,reports]=await Promise.all(['users','barangays','badges','user_badges','expert_applications','reports'].map(name=>service.rows(name)));
-            const {rows,summary}=userDirectory(users,barangays,badges,awards,applications,req.query,reports);
-            return send(res,{...paginate(rows,req.query.page),barangays,summary});
+            const existing=auth.existingUserIds?new Set(await auth.existingUserIds(users.map(u=>u.uid))):null;
+            const {rows,summary}=userDirectory(users.filter(u=>(!existing||existing.has(u.uid))&&u.status!=='deleting'),barangays,badges,awards,applications,req.query,reports);
+            return send(res,{...paginate(rows.map(u=>({...u,can_delete:u.id!==user.id})),req.query.page),barangays,summary});
           }
           const {input,files}=await readInput(req);
           if(input.action==='create_staff')return send(res,await createStaff(service,user,input,files),201);
+          if(input.action==='delete')return send(res,await deleteUser(service,user,input));
           const id = integer(input.id, 'user');
           if (id === user.id) throw new AppError('Ask another administrator to change your access.');
           if (!ROLES.includes(input.role) || !['active', 'inactive'].includes(input.status)) throw new AppError('Choose a valid role and account status.');
@@ -273,7 +276,8 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
           if(target.status==='pending_approval'||target.status==='rejected') throw new AppError('Review this expert application in Expert applications first.');
           await db.runTransaction(async tx => {
             const actor = await tx.get(service.ref('users', user.uid)); requireRole(actor.data(), 'system_admin');
-            await tx.get(service.ref('users', target.uid));
+            const current=(await tx.get(service.ref('users', target.uid))).data();
+            if(!current||current.status==='deleting')throw new AppError('This account is no longer available. Refresh the Users list.',409);
             tx.update(service.ref('users', target.uid), {role: input.role, status: input.status});
             service.audit(tx, user, 'admin.access_updated', 'user', id, {role: input.role, status: input.status});
           });

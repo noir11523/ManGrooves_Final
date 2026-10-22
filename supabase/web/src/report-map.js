@@ -15,7 +15,7 @@ export function reportMapPage(node, query = {}) {
       <form id="map-filters" class="map-report-filters"><div class="row">${field('q','Find submitted reports',query.q??'','search','maxlength="200" placeholder="Site, barangay, species or report number"')}${select('status','Review status',[['','All reports'],['verified','Verified'],['pending','Pending'],['rejected','Rejected']],query.status)}${select('health','Health',[['','All health'],...['Healthy','Stressed','At Risk','Unknown'].map(value=>[value,value])],query.health)}</div><div class="actions"><button type="submit">Apply filters</button><button type="button" class="outline" id="reset-map-filters">Reset filters</button></div></form>
     </div>
     <div id="map-report-error" class="notice" role="alert" hidden><span></span> <button type="button" class="outline">Try again</button></div>
-    <div class="map-toolbar"><p id="map-count" class="muted" role="status">Loading reports...</p><button type="button" class="outline" id="fit-reports">Show all matching pins</button></div>
+    <div class="map-toolbar"><p id="map-count" class="muted" role="status">Loading reports...</p></div>
     <div id="report-map" class="map large report-map-canvas" aria-label="Report locations"></div>
     <div id="map-tile-error" class="notice" role="status" hidden>Some map tiles could not load. <button type="button" class="outline">Reload map</button></div>
     <div class="legend"><span style="--c:#3f7f43">Healthy</span><span style="--c:#cf961d">Stressed</span><span style="--c:#c6513c">At Risk</span><span style="--c:#788778">Unknown</span></div>
@@ -41,7 +41,7 @@ export function reportMapPage(node, query = {}) {
     ({markers,bounds}=mapMarkers(canvas,rows,{fit:false}));
     $('#map-count').textContent=loading?`Loading reports... ${rows.length} loaded`:`${bounds.length} ${bounds.length===1?'pin':'pins'} · ${rows.length} ${rows.length===1?'report':'reports'}`;
     const missing=rows.length-bounds.length;
-    $('#fit-reports').disabled=!bounds.length;drawList();
+    drawList();
     $('#map-empty').textContent=loading?'':!rows.length?'No reports match these filters. You can still search for a place.':missing?`${missing} ${missing===1?'report has':'reports have'} no map location.`:'';
   };
   async function load() {
@@ -128,7 +128,6 @@ export function reportMapPage(node, query = {}) {
   $('[name=status]').onchange=changeFilters;$('[name=health]').onchange=changeFilters;
   $('#map-filters').onsubmit=event=>{event.preventDefault();following=true;changeFilters();};
   $('#reset-map-filters').onclick=()=>{for(const key of ['q','status','health'])$(`[name=${key}]`).value='';following=true;changeFilters();};
-  $('#fit-reports').onclick=()=>{searchVersion++;clearTimeout(timer);clearSelection();$('#map-place').value='';$('#map-places').innerHTML='';$('#clear-map-place').hidden=true;$('#map-search-status').textContent='';following=true;fit();};
   $('#more-map-reports').onclick=()=>{listLimit+=20;drawList();};
   $('#map-report-list').onclick=event=>{const button=event.target.closest('[data-pin]');if(!button)return;const index=rows.filter(mapPoint).findIndex(r=>String(r.id)===button.dataset.pin);if(index<0)return;following=false;move(()=>canvas.setView(markers[index].getLatLng(),17));markers[index].openPopup();$('#report-map').scrollIntoView({block:'center',behavior:'smooth'});};
   $('#map-report-error button').onclick=load;

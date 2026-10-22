@@ -24,6 +24,20 @@
 
     const markerLayer = (map) => window.L.layerGroup().addTo(map);
     const popupOptions = (map) => ({minWidth: 120, maxWidth: Math.max(120, Math.min(280, map.getSize().x - 60)), autoPanPadding: [12, 12], autoPanPaddingTopLeft: [12, map.getSize().x < 420 ? 84 : 12]});
+    const positionPinSummary = (map, tooltip) => {
+        const element=tooltip.getElement(), size=map.getSize();
+        if(!element)return;
+        element.style.maxWidth=`${Math.max(120,Math.min(280,size.x-24))}px`;
+        const point=map.latLngToContainerPoint(tooltip.getLatLng()), width=element.offsetWidth, height=element.offsetHeight;
+        const left=Math.max(12,Math.min(size.x-width-12,point.x-width/2)), minTop=left<52?84:12;
+        let top=point.y-height-12;
+        if(top<minTop)top=point.y+12;
+        top=Math.max(minTop,Math.min(size.y-height-12,top));
+        tooltip.options.direction=top+height<=point.y?'top':'bottom';
+        tooltip.options.offset=window.L.point(left+width/2-point.x,top-point.y+(tooltip.options.direction==='top'?height:0));
+        element.style.setProperty('--pin-arrow-x',`${Math.max(12,Math.min(width-12,point.x-left))}px`);
+        tooltip.update();
+    };
     const renderClusters = (map, layer, clusters) => {
         layer.clearLayers();
         const bounds = [];
@@ -36,7 +50,9 @@
             const marker = window.L.circleMarker([lat, lng], {radius: 10, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95}).addTo(layer);
             marker.bindPopup(`<strong>${escapeHtml(cluster.name)}</strong><br>${escapeHtml(cluster.cluster_code)} · ${escapeHtml(cluster.barangay_name)}<br><span style="color:${color}">${escapeHtml(cluster.latest_health)}</span>${cluster.scientific_name ? `<br><em>${escapeHtml(cluster.scientific_name)}</em>` : ''}<br><a href="${escapeHtml(clusterHref(cluster.id))}">View mangrove timeline</a>`, popupOptions(map));
             const summary = document.createElement('span'); summary.textContent = `${cluster.name} · ${cluster.latest_health || 'Unknown'} · ${cluster.barangay_name || ''}`;
-            marker.bindTooltip(summary, {direction:'top', offset:[0,-8], opacity:1});
+            marker.bindTooltip(summary, {className:'map-pin-summary', direction:'top', offset:[0,-8], opacity:1});
+            marker.on('tooltipopen',event=>positionPinSummary(map,event.tooltip));
+            marker.on('popupopen',()=>marker.closeTooltip());
             const pin = marker.getElement();
             if (pin) {
                 pin.setAttribute('tabindex','0'); pin.setAttribute('role','button'); pin.setAttribute('aria-label',`${summary.textContent}. Open details`);

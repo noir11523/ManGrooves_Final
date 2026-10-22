@@ -674,6 +674,9 @@ textarea {
 .leaflet-container { min-height: 24rem; background: #dce7e1; border: 1px solid var(--mg-border); border-radius: var(--mg-radius); font-family: var(--bs-font-sans-serif); }
 .map-card { overflow: hidden; background: #fff; border: 1px solid var(--mg-border); border-radius: var(--mg-radius); box-shadow: var(--mg-shadow-sm); }
 .map-card .leaflet-container { border: 0; border-radius: 0; }
+/* Explicit intrinsic width prevents wrapping labels collapsing in Leaflet panes. */
+.leaflet-container .leaflet-tooltip { box-sizing:border-box; width:max-content; max-width:min(280px,65vw); white-space:normal; overflow-wrap:anywhere; word-break:normal; padding:10px 12px; font-size:14px; line-height:1.45; }
+.leaflet-container .map-pin-summary::before { left:var(--pin-arrow-x,50%); }
 .modal-content { border-color: var(--mg-border); border-radius: var(--mg-radius); }
 .modal-header, .modal-footer { border-color: var(--mg-border); }
 .modal-title { color: var(--mg-brown); font-weight: 800; }

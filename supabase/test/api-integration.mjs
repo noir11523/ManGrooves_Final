@@ -509,6 +509,22 @@ try {
   assert.equal(confirmedUnknown.final_health,'Unknown');assert.equal(Number(confirmedUnknown.needs_attention),1);
   assert.equal(confirmedUnknown.final_species_id,confirmedUnknown.suggested_species_id);
   pass('confirm retains the system suggestion without manual health/species, including Unknown needing attention');
+  const deletionTarget=await account(9101,'guardian');
+  const savedReport={id:9102,user_id:deletionTarget.id,uid:deletionTarget.uid,status:'verified',guardian_name:'Historical author',submitted_at:'2026-10-21'};
+  await db.collection('reports').doc('9102').set(savedReport);
+  auth.existingUserIds=async uids=>uids.filter(uid=>accounts.has(uid));
+  await request('users.php',expert,{action:'delete',id:deletionTarget.id,confirm_email:deletionTarget.email},403);
+  await request('users.php',admin,{action:'delete',id:admin.id,confirm_email:admin.email},422);
+  await request('users.php',admin,{action:'delete',id:deletionTarget.id,confirm_email:'wrong@example.test'},422);
+  assert.equal((await request('users.php?q=guardian9101',admin)).total,1);
+  await request('users.php',admin,{action:'delete',id:deletionTarget.id,confirm_email:deletionTarget.email});
+  assert.equal(accounts.has(deletionTarget.uid),false);assert.equal((await request('users.php?q=guardian9101',admin)).total,0);
+  assert.deepEqual((await db.collection('reports').doc('9102').get()).data(),savedReport);
+  await request('dashboard.php',deletionTarget,null,403);
+  const orphan=await account(9103,'expert');accounts.delete(orphan.uid);
+  assert.equal((await request('users.php?q=expert9103',admin)).total,0);
+  assert.equal((await db.collection('users').doc(orphan.uid).get()).exists,true);
+  pass('admin deletion removes login and Users entry, preserves reports, blocks self/unauthorized deletion and hides Auth orphans');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

@@ -78,13 +78,23 @@ class _Api extends ApiClient {
   }
 }
 
-Future<void> _open(WidgetTester tester, _Api api) async {
+Future<void> _open(
+  WidgetTester tester,
+  _Api api, {
+  double scale = 1,
+  Size size = const Size(360, 800),
+}) async {
   tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = const Size(360, 800);
+  tester.view.physicalSize = size;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(scale)),
+        child: child!,
+      ),
       home: ReportMapScreen(api: api, tileProvider: _Tiles()),
     ),
   );
@@ -114,6 +124,48 @@ Future<void> _scrollPage(WidgetTester tester, {bool bottom = false}) async {
 }
 
 void main() {
+  for (final scale in [1.0, 1.6]) {
+    testWidgets(
+      'long report pin details stay readable and can close at text scale $scale',
+      (tester) async {
+        const name =
+            'MJ Angel Store Pardo, Natalio Bacalso Avenue, Poblacion Pardo, Cebu City, Central Visayas, Philippines';
+        final api = _Api()
+          ..items = [
+            {..._report, 'cluster_name': name, 'status': 'pending'},
+          ];
+        await _open(tester, api, scale: scale, size: const Size(320, 640));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.byType(FlutterMap),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        final pin = find.byTooltip('Report #1: Healthy · Pending');
+        await tester.pumpAndSettle();
+        await Scrollable.ensureVisible(
+          tester.element(find.byType(FlutterMap)),
+          alignment: .5,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(pin);
+        await tester.pumpAndSettle();
+        expect(find.text(name), findsOneWidget);
+        expect(find.text('Pending review'), findsOneWidget);
+        expect(find.text('Suggested health: Healthy'), findsOneWidget);
+        await tester.ensureVisible(find.text('View report'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await tester.ensureVisible(find.byTooltip('Close'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Close'));
+        await tester.pumpAndSettle();
+        expect(find.text('Pending review'), findsNothing);
+        expect(find.byType(FlutterMap), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   testWidgets(
     'map appears while reports load, place selection centers it and survives filters and pages',
     (tester) async {

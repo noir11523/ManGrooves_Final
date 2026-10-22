@@ -155,7 +155,14 @@ button:disabled { cursor: progress; }
 .map-results[open] summary,.species-guide[open] summary { margin-bottom:18px; }
 .map-results .report-row,.explore-results .report-row { align-items:flex-start; gap:16px; }
 .map-results .actions,.explore-results .actions { flex-shrink:0; }
-.leaflet-tooltip { max-width:min(280px,65vw); white-space:normal; overflow-wrap:anywhere; padding:8px 12px; }
+/* Leaflet panes have no intrinsic width. A wrapping tooltip needs its own width
+   or shrink-to-fit reduces long labels to a single character per line. */
+.leaflet-container .leaflet-tooltip { box-sizing:border-box; width:max-content; max-width:min(280px,65vw); white-space:normal; overflow-wrap:anywhere; word-break:normal; padding:10px 12px; font-size:14px; line-height:1.45; }
+.leaflet-container .map-pin-summary::before { left:var(--pin-arrow-x,50%); }
+.map-pin-details { overflow-wrap:anywhere; font-size:14px; line-height:1.5; }
+.map-pin-details strong { display:block; margin-bottom:6px; }
+.map-pin-details .map-pin-health { font-weight:600; }
+.map-pin-details a { display:inline-block; padding:8px 0; }
 .leaflet-interactive:focus-visible { outline:3px solid #183c21; outline-offset:4px; }
 .map-status { font-size:.85rem; margin:10px 0; }
 .explore-page .page-head,.explore-page form { text-align:left; }

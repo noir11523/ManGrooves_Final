@@ -49,7 +49,13 @@ export class Auth {
     return {uid:data.user.id,email:data.user.email,email_verified:!!data.user.email_confirmed_at,
       auth_time:Math.max(0,...(claims.amr??[]).filter(a=>a.method==='password').map(a=>a.timestamp))};
   }
-  async deleteUser(uid) { const {error}=await this.client.auth.admin.deleteUser(uid); if(error) throw error; }
+  async deleteUser(uid) { const {error}=await this.client.auth.admin.deleteUser(uid); if(error&&error.code!=='user_not_found'&&error.status!==404) throw error; }
+  async existingUserIds(uids) {
+    if(!uids.length)return [];
+    const {data,error}=await this.client.rpc('app_existing_auth_users',{p_users:uids});
+    if(error)throw new AppError('Could not refresh the Users list. Try again.',503);
+    return data??[];
+  }
   async createUser(input) {
     const {data,error}=await this.client.auth.admin.createUser({email:input.email,password:input.password,email_confirm:true,user_metadata:{full_name:input.displayName}});
     if(error){

@@ -42,6 +42,19 @@ const submit = () => { const form = $('#report-form'); return form.onsubmit({pre
 const finishCategories = async () => { for(const c of reference.criteria)if(!(ui.reportDraft.observations[c.code]?.length))$(`[name=obs_${c.code}][value="${c.options.find(o=>o.code==='none_of_the_above'||o.code==='no_animals')?.id??c.options[0].id}"]`).click();for(let i=0;i<reference.criteria.length+3&&ui.reportDraft.step===2;i++)await submit(); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };
 
+test('delete user identifies the account, supports cancel/retry and refreshes without exposing self deletion',async()=>{
+ let removed=false,fail=false;const writes=[];
+ globalThis.testApi=async(path,{body}={})=>{
+  assert.equal(path,'users.php');if(body){writes.push(body);if(fail)throw Error('Could not delete user.');removed=true;return {message:'User deleted. Existing reports and review history are kept.'};}
+  const self={id:1,full_name:'Administrator',email:'admin@example.test',role:'system_admin',status:'active',can_delete:false};
+  return {items:[self,...(removed?[]:[{id:2,full_name:'Test Guardian',email:'guardian@example.test',role:'guardian',status:'inactive',can_delete:true}])],page:1,pages:1,total:removed?1:2};
+ };
+ await ui.adminPage($('#page'),'users',{});assert.equal(document.querySelectorAll('.delete-user').length,1);
+ let action=$('.delete-user').onclick();await tick();assert.match($('#confirm-body').textContent,/guardian@example.test/);assert.match($('#confirm-body').textContent,/reports and review history are kept/);closeConfirm('cancel');await action;assert.equal(writes.length,0);
+ fail=true;action=$('.delete-user').onclick();await tick();closeConfirm('confirm');await action;assert.equal($('.delete-user').disabled,false);assert.match($('#toast').textContent,/Could not delete/);
+ fail=false;action=$('.delete-user').onclick();await tick();closeConfirm('confirm');await action;assert.deepEqual(writes.at(-1),{action:'delete',id:2,confirm_email:'guardian@example.test'});assert.equal($('.delete-user'),null);
+});
+
 test('species editor uses local-first names and deletion requires confirmation, preserves errors and refreshes',async()=>{
   let species=[{...reference.species[0]}],fail=false;const writes=[];
   globalThis.testApi=async(path,{body}={})=>{

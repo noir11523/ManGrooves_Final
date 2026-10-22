@@ -194,7 +194,8 @@ void main() {
       await _phone(tester, ReportMapScreen(api: api, tileProvider: _Tiles()));
       expect(find.byType(MarkerLayer), findsOneWidget);
       await _tap(tester, find.byTooltip('MG-1: Stressed · Pending'));
-      expect(find.text('Health is a system suggestion.'), findsOneWidget);
+      expect(find.text('Suggested health: Stressed'), findsOneWidget);
+      expect(find.text('Pending review'), findsOneWidget);
       await _tap(tester, find.text('View report'));
       expect(find.text('Health score: 4 / 6'), findsOneWidget);
       await tester.tap(find.byType(BackButton));
@@ -245,15 +246,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.widgetWithText(ChoiceChip, 'Health history'), findsOneWidget);
-      expect(
-        tester
-            .widget<ChoiceChip>(
-              find.widgetWithText(ChoiceChip, 'Mangrove counts'),
-            )
-            .selected,
-        isTrue,
-      );
+      expect(find.byType(ChoiceChip), findsNothing);
       expect(find.byType(TabBar), findsNothing);
       await tester.scrollUntilVisible(
         find.text('10 living mangroves'),

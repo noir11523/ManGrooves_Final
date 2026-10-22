@@ -22,11 +22,9 @@ class ClusterTimelineScreen extends StatefulWidget {
 class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
   Map<String, dynamic>? _data;
   String? _error;
-  late int _section;
   @override
   void initState() {
     super.initState();
-    _section = widget.initialTab == 1 ? 1 : 0;
     _load();
   }
 
@@ -116,52 +114,38 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('Health history'),
-                        selected: _section == 0,
-                        onSelected: (_) => setState(() => _section = 0),
-                      ),
-                      ChoiceChip(
-                        label: const Text('Mangrove counts'),
-                        selected: _section == 1,
-                        onSelected: (_) => setState(() => _section = 1),
+                  for (final section
+                      in widget.initialTab == 1 ? [1, 0] : [0, 1]) ...[
+                    Text(
+                      section == 0 ? 'Health history' : 'Mangrove counts',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    if (section == 0) ...[
+                      if (entries.isNotEmpty)
+                        VisitChart(entries: entries, growth: false)
+                      else
+                        const Text(
+                          'No verified health results yet. Reports appear after staff review.',
+                        ),
+                      if (entries.length == 1)
+                        const Text(
+                          'First verified visit. More visits will show changes over time.',
+                        ),
+                    ] else ...[
+                      if (counts.isNotEmpty)
+                        VisitChart(entries: counts, growth: true)
+                      else
+                        const Text(
+                          'No counts recorded yet. Add the number of living mangroves when submitting a report. It appears here after staff verification.',
+                        ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Formerly Growth timeline. This shows changes in the number of living mangroves, not tree height. Compare visits covering the same area.',
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    _section == 0 ? 'Health history' : 'Mangrove counts',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 12),
-                  if (_section == 0) ...[
-                    if (entries.isNotEmpty)
-                      VisitChart(entries: entries, growth: false)
-                    else
-                      const Text(
-                        'No verified health results yet. Reports appear after staff review.',
-                      ),
-                    if (entries.length == 1)
-                      const Text(
-                        'First verified visit. More visits will show changes over time.',
-                      ),
-                  ] else ...[
-                    if (counts.isNotEmpty)
-                      VisitChart(entries: counts, growth: true)
-                    else
-                      const Text(
-                        'No counts recorded yet. A verified report needs a living-mangrove count. Unable to count stays blank, never zero.',
-                      ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Previously Growth timeline. These are living-mangrove counts, not tree height. Compare visits covering the same area.',
-                    ),
+                    const SizedBox(height: 24),
                   ],
-                  const SizedBox(height: 24),
                   Text(
                     'Verified visits',
                     style: Theme.of(context).textTheme.titleLarge,
