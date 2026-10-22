@@ -1,77 +1,46 @@
 <?php
 $role = (string) ($authUser['role'] ?? 'guardian');
 $requestPath = strtolower(str_replace('\\', '/', (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH)));
-$roleLabel = match ($role) {
-    'expert' => 'CCENRO Expert',
-    'system_admin' => 'System Administrator',
-    default => 'Mangrove Guardian',
-};
-
-$analyticsNavigation = ['Analytics', 'analytics.php', 'bi-bar-chart-fill', [
-    ['Mangrove timeline', 'clusters.php', 'bi-clock-history'],
+$admin = $role === 'system_admin';
+$guardian = $role === 'guardian';
+$roleLabel = $admin ? 'Administrator' : ($guardian ? 'Coastal Guardian' : 'Expert');
+$navigation = [
+    ['Dashboard', 'dashboard.php', 'bi-grid-1x2-fill'],
+    ['Reports & Monitoring', '', 'bi-journal-text', [
+        [$guardian ? 'My reports' : 'All reports', 'reports.php', 'bi-journal-text'],
+        ...(!$admin ? [['Submit report', 'submit-report.php', 'bi-camera-fill']] : []),
+        ['Report map', 'report-map.php', 'bi-map'],
+        ['Mangrove timeline', 'clusters.php', 'bi-clock-history'],
+        ...($guardian ? [['Explore mangrove sites', 'explore.php', 'bi-tree']] : []),
+    ]],
+    ['Analytics & Decision Support', '', 'bi-bar-chart-fill', [['Monitoring analytics', 'analytics.php', 'bi-graph-up']]],
+];
+if (!$guardian) $navigation[] = ['Mangrove Data', '', 'bi-tree-fill', [
+    ['Species & sites', 'admin/species.php', 'bi-tree'],
+    ...($admin ? [['Health checklist', 'admin/checklist.php', 'bi-list-check']] : []),
 ]];
-
-$navigation = $role === 'guardian'
-    ? [
-        ['Dashboard', 'dashboard.php', 'bi-grid-1x2-fill'],
-        ['Submit Report', 'submit-report.php', 'bi-camera-fill'],
-        ['My reports', 'reports.php', 'bi-journal-text'],
-        ['Explore species', 'explore.php', 'bi-map-fill'],
-        $analyticsNavigation,
-        ['My badges', 'badges.php', 'bi-award-fill'],
-    ]
-    : [
-        ['Dashboard', 'dashboard.php', 'bi-grid-1x2-fill'],
-        ['Review reports', 'admin/verification.php', 'bi-clipboard2-check-fill'],
-        $analyticsNavigation,
-    ];
-
-if ($role === 'system_admin') {
-    $navigation = array_merge($navigation, [
-        ['Users', 'admin/users.php', 'bi-people-fill'],
-        ['Species and Sites', 'admin/species.php', 'bi-tree-fill'],
-        ['Health checklist', 'admin/checklist.php', 'bi-list-check'],
-        ['Manage badges', 'admin/badges.php', 'bi-award-fill'],
-        ['Audit log', 'admin/audit.php', 'bi-shield-lock-fill'],
-    ]);
+if ($admin) $navigation = array_merge($navigation, [
+    ['User Management', '', 'bi-people-fill', [['All users', 'admin/users.php', 'bi-people'], ['Expert applications', 'admin/expert-applications.php', 'bi-person-check']]],
+    ['Recognition', '', 'bi-award-fill', [['Badges', 'admin/badges.php', 'bi-award'], ['Certificates', 'admin/certificate-settings.php', 'bi-file-earmark-check']]],
+    ['System Management', '', 'bi-shield-lock-fill', [['Audit logs', 'admin/audit.php', 'bi-shield-check']]],
+]);
+else $navigation[] = ['My badges', 'badges.php', 'bi-award-fill'];
+$mobileItems = $guardian
+    ? [['Home','dashboard.php','bi-house-door-fill'],['Reports','reports.php','bi-journal-text'],['Submit','submit-report.php','bi-camera-fill'],['Badges','badges.php','bi-award-fill']]
+    : [['Home','dashboard.php','bi-house-door-fill'],['Reports','reports.php','bi-journal-text'],['Map','report-map.php','bi-map'],['Analytics','analytics.php','bi-bar-chart-fill']];
+$mobilePrimaryPaths = array_column($mobileItems, 1);
+$mobileMoreItems = [];
+foreach ($navigation as $item) {
+    if (isset($item[3])) {
+        $item[3] = array_values(array_filter($item[3], static fn (array $child): bool => !in_array($child[1], $mobilePrimaryPaths, true)));
+        if ($item[3]) $mobileMoreItems[] = $item;
+    } elseif (!in_array($item[1], $mobilePrimaryPaths, true)) $mobileMoreItems[] = $item;
 }
-
-if (defined('MANGROOVES_CLOUD')) {
-    $roleLabel = match ($role) { 'expert' => 'Expert', 'system_admin' => 'Administrator', default => 'Coastal Guardian' };
-    if ($role !== 'guardian') {
-        array_splice($navigation, 2, 0, [['Report history', 'reports.php', 'bi-journal-text']]);
-    }
-    if ($role === 'expert') {
-        $navigation[] = ['Species and Sites', 'admin/species.php', 'bi-tree-fill'];
-        array_splice($navigation, 3, 0, [['Submit Report', 'submit-report.php', 'bi-camera-fill']]);
-        $navigation[] = ['My badges', 'badges.php', 'bi-award-fill'];
-    }
-    if ($role === 'system_admin') {
-        $navigation[] = ['Expert applications', 'admin/expert-applications.php', 'bi-person-check'];
-        $navigation[] = ['Certificate signer', 'admin/certificate-settings.php', 'bi-pen'];
-    }
-}
-
-$mobileItems = $role === 'guardian'
-    ? [
-        ['Home', 'dashboard.php', 'bi-house-door-fill'],
-        ['Reports', 'reports.php', 'bi-journal-text'],
-        ['Submit Report', 'submit-report.php', 'bi-camera-fill'],
-        ['Badges', 'badges.php', 'bi-award-fill'],
-    ]
-    : [
-        ['Home', 'dashboard.php', 'bi-house-door-fill'],
-        ['Review', 'admin/verification.php', 'bi-clipboard2-check-fill'],
-        ['History', 'reports.php', 'bi-journal-text'],
-        ['Analytics', 'analytics.php', 'bi-bar-chart-fill'],
-    ];
-// The overflow menu contains only destinations absent from the bottom bar
-// and the existing Analytics and timelines menu.
-$mobilePrimaryPaths = array_merge(array_column($mobileItems, 1), ['analytics.php']);
-$mobileMoreItems = array_values(array_filter($navigation, static fn (array $item): bool => !in_array($item[1], $mobilePrimaryPaths, true)));
 
 parse_str((string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_QUERY), $navigationQuery);
 $isActive = static function (string $href) use ($requestPath, $navigationQuery): bool {
+    if ($href === 'reports.php' && (str_ends_with($requestPath,'/admin/verification.php') || str_ends_with($requestPath,'/admin/validation-history.php') || str_ends_with($requestPath,'/report-detail.php'))) return true;
+    if ($href === 'clusters.php' && str_ends_with($requestPath,'/cluster.php')) return true;
     $needle = '/' . strtolower((string) parse_url($href, PHP_URL_PATH));
     if (!str_ends_with($requestPath, $needle)) {
         return false;
@@ -90,16 +59,15 @@ $isActive = static function (string $href) use ($requestPath, $navigationQuery):
     </a>
 
     <nav class="sidebar-nav" aria-label="Workspace navigation">
-        <span class="sidebar-section-label">Workspace</span>
-        <?php foreach ($navigation as $navigationItem): ?>
+        <span class="sidebar-section-label">Overview</span>
+        <?php foreach ($navigation as $index => $navigationItem): ?>
             <?php [$label, $href, $icon] = $navigationItem; ?>
+            <?php if ($index === 1): ?><span class="sidebar-section-label">Mangrove monitoring</span><?php endif; ?>
+            <?php if ($label === 'User Management'): ?><span class="sidebar-section-label">Administration</span><?php endif; ?>
             <?php if (isset($navigationItem[3])): ?>
-                <?php $groupActive = $isActive($href) || $isActive('clusters.php'); ?>
-                <details class="analytics-nav" open>
-                    <summary class="analytics-nav-heading <?= $groupActive ? 'is-current' : '' ?>">
-                        <i class="bi bi-caret-right-fill analytics-nav-arrow" aria-hidden="true"></i>
-                        <a class="sidebar-link" href="<?= e(url($href)) ?>" <?= $isActive($href) ? 'aria-current="page"' : '' ?>><i class="bi <?= e($icon) ?>" aria-hidden="true"></i><span><?= e($label) ?></span></a>
-                    </summary>
+                <?php $groupActive = (bool) array_filter($navigationItem[3], static fn (array $child): bool => $isActive($child[1])); ?>
+                <details class="analytics-nav nav-group" <?= $groupActive ? 'open' : '' ?>>
+                    <summary class="analytics-nav-heading sidebar-link <?= $groupActive ? 'is-current' : '' ?>"><i class="bi <?= e($icon) ?>" aria-hidden="true"></i><span><?= e($label) ?></span><i class="bi bi-chevron-right analytics-nav-arrow" aria-hidden="true"></i></summary>
                     <div class="analytics-nav-children">
                         <?php foreach ($navigationItem[3] as [$childLabel, $childHref, $childIcon]): ?>
                             <a class="sidebar-link <?= $isActive($childHref) ? 'active' : '' ?>" href="<?= e(url($childHref)) ?>" <?= $isActive($childHref) ? 'aria-current="page"' : '' ?>><i class="bi <?= e($childIcon) ?>" aria-hidden="true"></i><span><?= e($childLabel) ?></span></a>
@@ -115,7 +83,7 @@ $isActive = static function (string $href) use ($requestPath, $navigationQuery):
 
     <div class="sidebar-footer">
         <a class="sidebar-link" href="<?= e(defined('MANGROOVES_CLOUD') ? url('downloads/ManGROOVES-Supabase.apk') : 'https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk') ?>" download="ManGROOVES-Supabase.apk">
-            <i class="bi bi-download" aria-hidden="true"></i><span>Android APK</span>
+            <i class="bi bi-download" aria-hidden="true"></i><span>Download Android app</span>
         </a>
     </div>
 </aside>

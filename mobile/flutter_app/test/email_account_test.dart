@@ -149,11 +149,13 @@ void main() {
       await tap(tester, find.text('Continue'));
       await tester.enterText(field('Verification code'), '123456');
       await tap(tester, find.text('Verify code'));
+      await tap(tester, find.byType(DropdownButtonFormField<String>).last);
+      await tap(tester, find.text('Cebu City').last);
       await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
       await tester.enterText(field('Mobile number'), '09171234567');
       await tester.enterText(
-        field('House no., street or sitio'),
+        field('Street / purok / sitio (optional)'),
         'Test Street',
       );
       await tap(tester, find.text('Finish registration'));
@@ -220,11 +222,13 @@ void main() {
       expect(api.logins, 0);
       await tap(tester, find.text('Finish registration'));
       expect(api.completed, isNull);
+      await tap(tester, find.byType(DropdownButtonFormField<String>).last);
+      await tap(tester, find.text('Cebu City').last);
       await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
       await tester.enterText(field('Mobile number'), '09171234567');
       await tester.enterText(
-        field('House no., street or sitio'),
+        field('Street / purok / sitio (optional)'),
         'Test Street',
       );
       await tap(tester, find.text('Finish registration'));
@@ -243,13 +247,15 @@ void main() {
       await tap(tester, find.text('Continue'));
       await tester.enterText(field('Verification code'), '123456');
       await tap(tester, find.text('Verify code'));
-      await tap(tester, find.byType(DropdownButtonFormField<String>));
+      await tap(tester, find.byType(DropdownButtonFormField<String>).first);
       await tap(tester, find.text('Expert').last);
+      await tap(tester, find.byType(DropdownButtonFormField<String>).last);
+      await tap(tester, find.text('Cebu City').last);
       await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
       await tester.enterText(field('Mobile number'), '09171234567');
       await tester.enterText(
-        field('House no., street or sitio'),
+        field('Street / purok / sitio (optional)'),
         'Test Street',
       );
       await tap(tester, find.text('Submit expert application'));
@@ -341,11 +347,13 @@ void main() {
       await tap(tester, find.text('Continue'));
       await tester.enterText(field('Verification code'), '123456');
       await tap(tester, find.text('Verify code'));
+      await tap(tester, find.byType(DropdownButtonFormField<String>).last);
+      await tap(tester, find.text('Cebu City').last);
       await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
       await tester.enterText(field('Mobile number'), '09171234567');
       await tester.enterText(
-        field('House no., street or sitio'),
+        field('Street / purok / sitio (optional)'),
         'Test Street',
       );
       await tap(tester, find.text('Finish registration'));
@@ -364,11 +372,13 @@ void main() {
       await tap(tester, find.text('Continue'));
       await tester.enterText(field('Verification code'), '123456');
       await tap(tester, find.text('Verify code'));
+      await tap(tester, find.byType(DropdownButtonFormField<String>).last);
+      await tap(tester, find.text('Cebu City').last);
       await tap(tester, find.byType(BarangayPicker));
       await tap(tester, find.text('Inayawan').last);
       await tester.enterText(field('Mobile number'), '09171234567');
       await tester.enterText(
-        field('House no., street or sitio'),
+        field('Street / purok / sitio (optional)'),
         'Test Street',
       );
       await tap(tester, find.text('Finish registration'));

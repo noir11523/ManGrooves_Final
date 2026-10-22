@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {build} from 'esbuild';
 import {JSDOM} from 'jsdom';
+import {analyticsForUser} from '../../functions/api/core/monitoring-analytics.js';
 const dom=new JSDOM('<div id="app"></div><div id="toast" hidden></div>',{url:'https://example.test/#badges'});
 dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
 for(const key of ['window','document','location','history','navigator','FormData','File','Event'])Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
@@ -17,6 +18,49 @@ const bundle=await build({entryPoints:[fileURLToPath(new URL('../src/app.js',imp
 await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const $=s=>document.querySelector(s);
+
+test('analytics renders empty evidence honestly, validates dates and links priorities accessibly',async()=>{
+ const user={id:2,role:'system_admin',full_name:'Test Admin'};
+ const analytics=analyticsForUser(user,[],[],{date_from:'2026-08-01',date_to:'2026-10-21'});
+ globalThis.testApi=async path=>path==='me.php'?{user}:{analytics};
+ history.replaceState(null,'','#analytics');await globalThis.restoreTestAccount({id:'admin'});await tick();
+ assert.match($('#content').textContent,/Insufficient data/);assert.equal(document.querySelectorAll('canvas').length,0);
+ assert.match($('#content').textContent,/No verified visits/);assert.ok($('#analytics-pdf'));
+ $('[data-section]').click();assert.equal(document.activeElement.id,'priority-areas');
+ $('[name=date_from]').value='2026-10-22';$('#analytics-filters').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}));
+ assert.match($('#analytics-filters .error').textContent,/Start date must be on or before end date/);
+ assert.equal(location.hash,'#analytics');
+});
+
+test('profile city changes reset barangay and optional address parts keep their values',async()=>{
+ history.replaceState(null,'','#profile');
+ const user={id:1,role:'guardian',full_name:'Test User',barangay_id:1,house_unit:'Unit 3B',zip_code:'6000',address_line:'Original address'};
+ globalThis.testApi=async path=>path==='me.php'?{user}:{user,barangays:[{id:1,name:'Poblacion',city_municipality:'Cebu City'},{id:2,name:'Poblacion',city_municipality:'Danao City'}]};
+ await globalThis.restoreTestAccount({id:'user'});await tick();
+ assert.equal($('[name=house_unit]').required,false);assert.equal($('[name=street_sitio]').required,false);assert.equal($('[name=zip_code]').required,false);assert.equal($('[name=province_display]').value,'Cebu');assert.equal($('[name=country]'),null);
+ const city=$('[data-address-city]');city.value='Danao City';city.dispatchEvent(new Event('change'));
+ assert.equal($('[name=barangay_id]').value,'');assert.equal($('datalist').children.length,1);assert.match($('datalist option').value,/Danao City/);
+ const barangay=$('[data-barangay-search]');barangay.value='Poblacion — Cebu City';barangay.dispatchEvent(new Event('input'));assert.equal(barangay.checkValidity(),false);
+ barangay.value=$('datalist option').value;barangay.dispatchEvent(new Event('input'));assert.equal($('[name=barangay_id]').value,'2');assert.equal(barangay.checkValidity(),true);
+ assert.equal($('[name=house_unit]').value,'Unit 3B');assert.equal($('[name=zip_code]').value,'6000');
+});
+
+test('review and verified follow-up forms have one Feedback field and retain saved instructions',async()=>{
+ const report={id:1,user_id:1,report_code:'Report #1',status:'pending',suggested_health:'Healthy',observations:[],verification_history:[],expert_feedback:'Inspect the roots.'};
+ const writes=[];globalThis.testApi=async(path,{body}={})=>{
+  if(path==='me.php')return {user:{id:2,role:'expert',full_name:'Expert'}};
+  if(path==='report.php')return {report};if(path==='species.php')return {species:[]};
+  if(path==='review.php'){writes.push(body);Object.assign(report,body);return {};}
+  throw Error(path);
+ };
+ history.replaceState(null,'','#report/1?review=1');await globalThis.restoreTestAccount({id:'expert'});await tick();
+ assert.equal(document.querySelectorAll('#review textarea').length,1);assert.equal($('[name=follow_up_note]'),null);assert.equal($('[name=expert_feedback]').value,'Inspect the roots.');assert.equal($('#corrections').hidden,true);
+ report.status='verified';await globalThis.restoreTestAccount({id:'expert'});await tick();
+ assert.equal(document.querySelectorAll('section>h2').length>0,true);assert.equal($('#review-area').textContent.includes('rejecting'),false);assert.equal([...document.querySelectorAll('h2')].filter(h=>h.textContent==='Feedback').length,0);
+ $('[name=expert_feedback]').value='Check the leaves on the next visit.';$('[name=needs_follow_up]').checked=true;
+ $('#review').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await tick();await tick();
+ assert.equal(writes[0].expert_feedback,'Check the leaves on the next visit.');assert.equal(writes[0].follow_up_note,undefined);assert.equal(writes[0].action,'followup');assert.equal(document.querySelectorAll('#review textarea').length,1);
+});
 
 test('profile password visibility is independent and validation happens before confirmation',async()=>{
  history.replaceState(null,'','#profile');
@@ -36,7 +80,7 @@ test('profile password visibility is independent and validation happens before c
 });
 
 test('review queue and history expose filters and retain them on later pages',async()=>{
- for(const [route,path,key,value] of [['verification','verification.php','health','Unknown'],['history','validation-history.php','action','correct']]){
+ for(const [route,path,key,value] of [['verification','reports.php','health','Unknown'],['history','validation-history.php','action','correct']]){
   history.replaceState(null,'',`#${route}?q=coast&${key}=${value}`);
   globalThis.testApi=async endpoint=>{
    if(endpoint==='me.php')return {user:{id:2,role:'expert',full_name:'Test Expert'}};
@@ -71,32 +115,24 @@ test('report filters use one status control and one tag, and clear stale attenti
  assert.equal(calls.at(-1).status,'verified');
  assert.equal(calls.at(-1).needs_attention,undefined);
 });
-test('verification cards apply the selected status, reset pagination and keep search and dates',async()=>{
+test('legacy review URL uses the unified report filters without duplicate status cards',async()=>{
  history.replaceState(null,'','#verification?q=coast&date_from=2026-10-01&page=2');
  const calls=[];
  globalThis.testApi=async(path,options)=>{
   if(path==='me.php')return {user:{id:2,role:'expert',full_name:'Test Expert'}};
-  assert.equal(path,'verification.php');calls.push({...options.query});
-  return {page:1,pages:1,total:1,summary:{pending:8,verified_attention:3,verified:9,rejected:2},items:[{id:9,report_code:'Report #9',guardian_name:'Local Guardian',status:options.query.status||'pending',display_health:'Stressed',submitted_at:'2026-10-01 14:29:00'}]};
+  assert.equal(path,'reports.php');calls.push({...options.query});
+  return {page:1,pages:1,total:1,items:[{id:9,report_code:'Report #9',guardian_name:'Local Guardian',status:options.query.status||'pending',can_review:options.query.status==='pending',display_health:'Stressed',submitted_at:'2026-10-01 14:29:00'}]};
  };
  await globalThis.restoreTestAccount({id:'expert'});await tick();
- assert.equal(document.querySelectorAll('.verification-stats a').length,4);
- const attention=[...document.querySelectorAll('.verification-stats a')].find(a=>a.textContent.includes('Verified needing'));
- assert.match(attention.href,/verified_attention=1/);assert.match(attention.href,/q=coast/);assert.match(attention.href,/date_from=2026-10-01/);assert.doesNotMatch(attention.href,/page=/);
- attention.click();await new Promise(resolve=>setTimeout(resolve,20));
- assert.equal(calls.at(-1).verified_attention,'1');assert.match($('.verification-help').textContent,/Verified reports/);
- assert.match($('.report-table').textContent,/Local Guardian/);
- const verified=[...document.querySelectorAll('.verification-stats a')].find(a=>a.textContent==='Verified9');verified.click();await new Promise(resolve=>setTimeout(resolve,20));
- assert.equal(calls.at(-1).status,'verified');assert.equal(calls.at(-1).verified_attention,undefined);
- assert.equal($('.report-table a').textContent,'View');
- for(const [status,label,count] of [['rejected','Rejected',2],['pending','Pending',8]]){
-  const card=[...document.querySelectorAll('.verification-stats a')].find(a=>a.textContent===`${label}${count}`);
-  card.click();await new Promise(resolve=>setTimeout(resolve,20));
-  assert.equal(calls.at(-1).status,status);assert.equal(calls.at(-1).verified_attention,undefined);
-  assert.equal(calls.at(-1).q,'coast');assert.equal(calls.at(-1).date_from,'2026-10-01');
-  assert.equal(card.querySelector('strong').textContent,String(count));
+ assert.equal(document.querySelectorAll('.verification-stats a').length,0);
+ assert.equal($('#filters [name=status_filter]').value,'pending');
+ assert.equal($('.report-table a').textContent,'Review');
+ for(const status of ['verified','rejected','pending']){
+  $('#filters [name=status_filter]').value=status;$('#filters').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(calls.at(-1).status,status);assert.equal(calls.at(-1).page,undefined);assert.equal(calls.at(-1).q,'coast');assert.equal(calls.at(-1).date_from,'2026-10-01');
  }
 });
+
 test('badges display artwork and progress, with certificates only for earned awards',async()=>{
  history.replaceState(null,'','#badges');
  let earned=true;

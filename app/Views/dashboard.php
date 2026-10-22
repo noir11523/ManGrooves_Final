@@ -10,29 +10,26 @@ $extraHead = '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/
 $pageScripts = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>'
     . '<script src="' . e(asset('js/maps.js') . '?v=' . $mapScriptVersion) . '"></script>';
 $statCards = [
-    ['label' => 'Total Reports Verified', 'value' => $stats['total_reports'] ?? 0, 'icon' => 'bi-files', 'tone' => 'success', 'href' => url('reports.php?status=verified')],
-    ['label' => 'Pending', 'value' => ($isGuardian ? ($stats['pending_reports'] ?? 0) : ($stats['pending_review_reports'] ?? $stats['pending_reports'] ?? 0)), 'icon' => 'bi-hourglass-split', 'tone' => 'warning', 'href' => url($isGuardian ? 'reports.php?status=pending' : 'admin/verification.php?status=pending')],
+    ['label' => 'Verified reports', 'value' => $stats['total_reports'] ?? 0, 'icon' => 'bi-files', 'tone' => 'success', 'href' => url('reports.php?status=verified')],
+    ['label' => 'Pending', 'value' => ($stats['pending_reports'] ?? 0), 'icon' => 'bi-hourglass-split', 'tone' => 'warning', 'href' => url($isGuardian ? 'reports.php?status=pending' : 'reports.php?status=pending')],
     ['label' => 'Rejected', 'value' => $stats['rejected_reports'] ?? 0, 'icon' => 'bi-x-circle', 'tone' => 'danger', 'href' => url('reports.php?status=rejected')],
     ['label' => 'Needs attention', 'value' => $stats['needs_attention'] ?? 0, 'icon' => 'bi-exclamation-triangle', 'tone' => 'danger', 'href' => url('reports.php?needs_attention=1')],
-    ['label' => 'Clusters', 'value' => $stats['map_clusters'] ?? 0, 'icon' => 'bi-geo-alt', 'tone' => 'primary', 'href' => url('clusters.php')],
+    ['label' => 'Monitored clusters', 'value' => $stats['map_clusters'] ?? 0, 'icon' => 'bi-geo-alt', 'tone' => 'primary', 'href' => url('clusters.php')],
 ];
 ?>
 <a class="btn btn-outline-success mb-3" href="<?= e(url('report-map.php')) ?>"><i class="bi bi-map me-1" aria-hidden="true"></i>Report map</a>
 
 <section class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
     <div>
-        <p class="text-uppercase text-success fw-semibold small mb-1"><?= $isGuardian ? 'Guardian workspace' : ($role === 'expert' ? 'Expert workspace' : 'System administration') ?></p>
-        <h1 class="h2 mb-1">Hi, <?= e($user['first_name'] ?? explode(' ', trim((string) $user['full_name']))[0] ?: $user['full_name']) ?>!</h1>
-        <p class="text-body-secondary mb-0">
-            Your latest mangrove updates.
-        </p>
+        <h1 class="h2 mb-1">Dashboard</h1>
+        <p class="text-body-secondary mb-0">Monitor mangrove reports, site conditions, and system activity.</p>
     </div>
 
 </section>
 
-<section class="row g-3 mb-4" aria-label="Report summary">
+<section class="dashboard-stats mb-4" aria-label="Report summary">
     <?php foreach ($statCards as $card): ?>
-        <div class="col-6 col-lg-4">
+        <div>
             <a class="card h-100 border-0 shadow-sm text-decoration-none text-body" href="<?= e($card['href']) ?>">
                 <div class="card-body d-flex align-items-center gap-3">
                     <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-<?= e($card['tone']) ?>-subtle text-<?= e($card['tone']) ?> fs-4" style="width:3rem;height:3rem">

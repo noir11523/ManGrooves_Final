@@ -1,3 +1,4 @@
+import 'verification_screen.dart';
 import '../shared/species_names.dart';
 import 'follow_up_screen.dart';
 
@@ -43,10 +44,44 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String _dateFrom = '', _dateTo = '';
 
   Future<void> _openReport(int id) async {
+    final item = _reports?.where((r) => r['id'] == id).firstOrNull;
+    List<Map<String, dynamic>> species = [];
+    if (item?['can_review'] == true) {
+      try {
+        final catalog = await widget.api.cloudRequest('species.php');
+        species = (catalog['species'] as List? ?? [])
+            .map((s) => Map<String, dynamic>.from(s as Map))
+            .toList();
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                error is ApiException
+                    ? error.message
+                    : 'Could not load review choices. Try again.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    }
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => ReportDetailScreen(api: widget.api, reportId: id),
+        builder: (_) => item?['can_review'] == true
+            ? ReviewReportScreen(
+                api: widget.api,
+                reportId: id,
+                species: species,
+              )
+            : ReportDetailScreen(
+                api: widget.api,
+                reportId: id,
+                manageFollowUp: item?['can_manage_follow_up'] == true,
+              ),
       ),
     );
     if (mounted) await _load();
@@ -286,7 +321,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 TextButton(
                                   onPressed: () =>
                                       _openReport(report['id'] as int),
-                                  child: const Text('View'),
+                                  child: Text(
+                                    report['can_review'] == true
+                                        ? 'Review'
+                                        : 'View',
+                                  ),
                                 ),
                                 OutlinedButton(
                                   onPressed: () async {

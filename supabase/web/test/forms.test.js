@@ -37,7 +37,7 @@ const ui = await import(`data:text/javascript;base64,${Buffer.from(bundle.output
 const $ = selector => document.querySelector(selector);
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const change = element => element.dispatchEvent(new Event('change', {bubbles: true}));
-const set = (name, value) => { if(name==='barangay_id'&&$('[data-barangay-search]')) { const input=$('[data-barangay-search]');input.value=$('datalist option').value;change(input);set('phone','09171234567');set('address_line','Test Street');return; } const input = $(`[name=${name}]`); input.value = value; change(input); };
+const set = (name, value) => { if(name==='barangay_id'&&$('[data-barangay-search]')) { if($('[data-address-city]')){const city=$('[data-address-city]');city.value=city.options[1].value;change(city);}const input=$('[data-barangay-search]');input.value=$('datalist option').value;change(input);set('phone','09171234567');set('street_sitio','Test Street');return; } const input = $(`[name=${name}]`); input.value = value; change(input); };
 const submit = () => { const form = $('#report-form'); return form.onsubmit({preventDefault() {}, submitter: $('#next')}); };
 const finishCategories = async () => { for(const c of reference.criteria)if(!(ui.reportDraft.observations[c.code]?.length))$(`[name=obs_${c.code}][value="${c.options.find(o=>o.code==='none_of_the_above'||o.code==='no_animals')?.id??c.options[0].id}"]`).click();for(let i=0;i<reference.criteria.length+3&&ui.reportDraft.step===2;i++)await submit(); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };

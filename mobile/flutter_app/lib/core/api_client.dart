@@ -221,18 +221,24 @@ class ApiClient {
     },
   );
   Future<Map<String, dynamic>> analytics() => _get('analytics.php');
-  Future<Uint8List> analyticsPdf() => _withConnectionRecovery(() async {
-    final response = await http
-        .get(_uri('export-analytics.php'), headers: _headers())
-        .timeout(const Duration(seconds: 60));
-    if (response.statusCode != 200) _decode(response);
-    if (!(response.headers['content-type'] ?? '').startsWith(
-      'application/pdf',
-    )) {
-      throw const ApiException('The PDF could not be generated.');
-    }
-    return response.bodyBytes;
-  });
+  Future<Map<String, dynamic>> filteredAnalytics(Map<String, String> filters) =>
+      _get('analytics.php', query: filters);
+  Future<Uint8List> analyticsPdf({Map<String, String> filters = const {}}) =>
+      _withConnectionRecovery(() async {
+        final response = await http
+            .get(
+              _uri('export-analytics.php', query: filters),
+              headers: _headers(),
+            )
+            .timeout(const Duration(seconds: 60));
+        if (response.statusCode != 200) _decode(response);
+        if (!(response.headers['content-type'] ?? '').startsWith(
+          'application/pdf',
+        )) {
+          throw const ApiException('The PDF could not be generated.');
+        }
+        return response.bodyBytes;
+      });
   Future<Map<String, dynamic>> notifications({int page = 1}) =>
       _get('notifications.php', query: {'page': '$page'});
   Future<Map<String, dynamic>> markNotificationRead(int id) =>

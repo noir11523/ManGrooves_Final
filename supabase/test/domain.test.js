@@ -34,7 +34,7 @@ test('local dates keep reports in the correct Manila day and chart month', () =>
   const submitted_at = '2026-09-30T16:30:00.000Z';
   assert.equal(manilaDate(submitted_at), '2026-10-01');
   assert.equal(wireDates({submitted_at}).submitted_at, '2026-10-01 00:30:00');
-  const result = analyticsForUser({role: 'guardian'}, [{status: 'verified', final_health: 'Healthy', submitted_at}], [], {date_from: '2026-10-01', date_to: '2026-10-01'});
+  const result = analyticsForUser({role: 'guardian'}, [{status: 'verified', final_health: 'Healthy', submitted_at,verified_at:submitted_at}], [], {date_from: '2026-10-01', date_to: '2026-10-01'});
   assert.equal(result.verification.total, 1); assert.equal(result.growth[0].month, '2026-10');
 });
 test('badge metrics exclude rejected and corrected reports where appropriate', () => {
@@ -103,14 +103,14 @@ test('password policy allows ordinary 8–25 character passwords', () => {
   assert.equal(password('a'.repeat(25)).length, 25);
   for (const value of ['short', 'x'.repeat(26), 'abc\0defgh']) assert.throws(() => password(value));
 });
-test('analytics uses verified counts and only admin receives survival statistics', () => {
-  const rows = [{id: 1, status: 'verified', final_health: 'Healthy', cluster_id: 1, observed_alive_count: 8, submitted_at: '2026-10-01T00:00:00Z'},
+test('analytics retains verified counts without claiming unsupported survival', () => {
+  const rows = [{id: 1, status: 'verified', final_health: 'Healthy', cluster_id: 1, observed_alive_count: 8, verified_at:'2026-10-01T12:00:00Z', submitted_at: '2026-10-01T00:00:00Z'},
     {id: 2, status: 'pending', suggested_health: 'Stressed', observed_alive_count: 1, cluster_id: 1, submitted_at: '2026-10-02T00:00:00Z'}];
   const clusters = [{id: 1, name: 'Site', initial_seedlings: 10}], query = {date_from: '2026-10-01', date_to: '2026-10-02'};
   const admin = analyticsForUser({role: 'system_admin'}, rows, clusters, query);
-  assert.equal(admin.overall_survival, 80); assert.equal(admin.health.Healthy, 1); assert.equal(admin.verification.pending, 1);
+  assert.equal(admin.overall_survival, null); assert.equal(admin.health.Healthy, 1); assert.equal(admin.verification.pending, 1);
   const expert = analyticsForUser({role: 'expert'}, rows, clusters, query);
-  assert.equal(expert.overall_survival, undefined); assert.equal(expert.clusters[0].initial_seedlings, undefined);
+  assert.equal(expert.overall_survival, null); assert.equal(expert.clusters[0].initial_seedlings, undefined);
 });
 
 test('pending health and healthy follow-ups never inflate verified health attention',()=>{
@@ -118,9 +118,9 @@ test('pending health and healthy follow-ups never inflate verified health attent
  const rows=[{status:'verified',final_health:'Healthy',needs_follow_up:true},
  {status:'verified',final_health:'At Risk'},{status:'verified',final_health:'Stressed'},
  ...['Healthy','Stressed','At Risk','Unknown'].map(suggested_health=>({status:'pending',suggested_health})),
- {status:'rejected',suggested_health:'At Risk'}].map((r,i)=>({...r,id:i+1,submitted_at}));
+ {status:'rejected',suggested_health:'At Risk'}].map((r,i)=>({...r,id:i+1,submitted_at,verified_at:submitted_at}));
  const stats=dashboardStats(rows,[]),a=analyticsForUser({role:'guardian'},rows,[],{date_from:'2026-10-01',date_to:'2026-10-02'});
  assert.equal(stats.total_reports,3);assert.equal(stats.pending_reports,4);assert.equal(stats.needs_attention,2);
- assert.equal(a.verification.total,3);assert.equal(a.verification.pending,4);assert.equal(a.high_risk_total,2);
- assert.deepEqual(a.health,{Healthy:1,Stressed:1,'At Risk':1});assert.equal(a.growth[0].verified_reports,3);
+ assert.equal(a.verification.total,3);assert.equal(a.verification.pending,4);assert.equal(a.high_risk_total,0);
+ assert.deepEqual(a.health,{Healthy:1,Stressed:1,'At Risk':1,Unknown:0});assert.equal(a.growth[0].verified_reports,3);
 });

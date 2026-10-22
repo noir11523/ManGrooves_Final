@@ -43,18 +43,18 @@ final class CloudRouter
             self::page($page, $title, !Auth::check()); return;
         }
         $pages = [
-            '/dashboard.php' => ['dashboard', 'Dashboard'], '/reports.php' => ['reports', 'Report history'],
+            '/dashboard.php' => ['dashboard', 'Dashboard'], '/reports.php' => ['reports', 'Reports'],
             '/report-detail.php' => ['report', 'Report details'], '/submit-report.php' => ['submit', 'Submit Report'],
             '/analytics.php' => ['analytics', 'Analytics'], '/clusters.php' => ['clusters', 'Mangrove timeline'],
             '/cluster.php' => ['cluster', 'Mangrove timeline'], '/report-map.php' => ['report-map', 'Report map'],
             '/settings.php' => ['profile', 'Profile settings'], '/notifications.php' => ['notifications', 'Notifications'],
-            '/badges.php' => ['badges', 'My badges'], '/admin/verification.php' => ['verification', 'Review reports'],
+            '/badges.php' => ['badges', 'My badges'], '/admin/verification.php' => ['verification', 'Reports'],
             '/admin/report.php' => ['report', 'Report details'], '/admin/analytics.php' => ['analytics', 'Analytics'],
-            '/admin/cluster.php' => ['cluster', 'Mangrove timeline'], '/admin/validation-history.php' => ['history', 'Report history'],
+            '/admin/cluster.php' => ['cluster', 'Mangrove timeline'], '/admin/validation-history.php' => ['history', 'Reports'],
             '/admin/checklist.php' => ['checklist', 'Health checklist'], '/admin/users.php' => ['users', 'Users'],
             '/admin/species.php' => ['species', 'Species and Sites'], '/admin/badges.php' => ['badge-settings', 'Badge settings'],
             '/admin/audit.php' => ['audit', 'Audit log'], '/admin/expert-applications.php' => ['expert-applications', 'Expert applications'],
-            '/admin/certificate-settings.php' => ['certificate-settings', 'Certificate signer'],
+            '/admin/certificate-settings.php' => ['certificate-settings', 'Certificates'],
         ];
         if (!isset($pages[$path])) throw new CloudError('Page not found.', 404);
         [$page, $title] = $pages[$path];

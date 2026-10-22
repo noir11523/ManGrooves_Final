@@ -1,3 +1,4 @@
+import '../shared/residential_address_fields.dart';
 import '../shared/species_names.dart';
 
 import 'package:flutter/material.dart';
@@ -136,6 +137,9 @@ class _ManagementScreenState extends State<ManagementScreen> {
       if (!_users && !_species && item == null) 'metric': 'verified_reports',
       if (item == null) 'target_value': 1,
     };
+    final house = TextEditingController(),
+        street = TextEditingController(),
+        zip = TextEditingController();
     final form = GlobalKey<FormState>();
     bool busy = false;
     String successMessage = 'Saved.';
@@ -274,18 +278,17 @@ class _ManagementScreenState extends State<ManagementScreen> {
                               : roles,
                         ),
                         if (item == null) ...[
-                          BarangayPicker(
-                            items: _barangays,
-                            value: int.tryParse('${values['barangay_id']}'),
-                            enabled: !busy,
-                            onChanged: (v) =>
+                          ResidentialAddressFields(
+                            barangays: _barangays,
+                            barangayId: int.tryParse(
+                              '${values['barangay_id']}',
+                            ),
+                            onBarangayChanged: (v) =>
                                 update(() => values['barangay_id'] = v),
-                          ),
-                          const SizedBox(height: 16),
-                          input(
-                            'address_line',
-                            'House / building, street or sitio',
-                            max: 200,
+                            house: house,
+                            street: street,
+                            zip: zip,
+                            enabled: !busy,
                           ),
                           input(
                             'password',
@@ -415,6 +418,11 @@ class _ManagementScreenState extends State<ManagementScreen> {
                                 try {
                                   final payload = <String, dynamic>{
                                     ...values,
+                                    if (_users && item == null) ...{
+                                      'house_unit': house.text,
+                                      'street_sitio': street.text,
+                                      'zip_code': zip.text,
+                                    },
                                     if (_users && item == null)
                                       'action': 'create_staff',
                                     if (!_users)
@@ -877,11 +885,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
           const SizedBox(height: 8),
           Text('${item['email']}'),
           Text('${item['phone'] ?? 'No mobile number'}'),
-          if ('${item['address_line'] ?? ''}'.isNotEmpty)
-            Text('${item['address_line']}'),
-          Text(
-            '${item['barangay_name'] ?? ''} · ${item['city_municipality'] ?? 'Cebu City'}',
-          ),
+          Text(formatResidentialAddress(item)),
           const SizedBox(height: 12),
           Text(
             '${item['role_label'] ?? roles[item['role']]} · ${const {'active': 'Active', 'inactive': 'Suspended', 'pending_approval': 'Awaiting approval', 'rejected': 'Declined'}[item['status']] ?? item['status']}',

@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {bindMenu} from '../src/navigation.js';
+import {bindMenu,navigationItems,renderNavigation} from '../src/navigation.js';
+
+test('admin menu groups existing modules once and expands only the current section',()=>{
+ const items=navigationItems('system_admin');assert.equal(items.length,7);
+ const dom=new JSDOM(renderNavigation('system_admin','expert-applications'));
+ assert.equal(dom.window.document.querySelectorAll('details[open]').length,1);
+ assert.equal(dom.window.document.querySelector('details[open] summary').textContent,'User Management');
+ assert.equal(dom.window.document.querySelector('[aria-current=page]').textContent,'Expert applications');
+ const routes=[...dom.window.document.querySelectorAll('a')].map(a=>a.getAttribute('href'));assert.equal(routes.length,new Set(routes).size);assert.ok(!routes.includes('#verification'));assert.ok(routes.includes('#reports'));assert.ok(routes.includes('#clusters'));
+ const guardian=renderNavigation('guardian','clusters');assert.ok(!guardian.includes('#users'));assert.ok(!guardian.includes('#audit'));assert.ok(guardian.includes('#submit'));
+});
 
 test('mobile menu supports closing, keyboard focus, navigation and desktop resize', () => {
   const dom = new JSDOM(`<div class="shell"><aside id="site-menu"><button class="menu-close">Close menu</button><a href="#reports">Reports</a><a href="#profile">Profile</a></aside><button class="menu-backdrop" hidden></button><div class="shell-main"><button class="mobile-menu" aria-expanded="false">Menu</button></div></div>`);

@@ -9,17 +9,10 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
     </div>
     <div class="topbar-title d-none d-lg-block">
         <p class="eyebrow mb-0"><?= e($authUser['role'] === 'guardian' ? 'Guardian workspace' : 'Conservation operations') ?></p>
-        <h1><?= e($displayTitle) ?></h1>
+        <p class="topbar-page-label"><?= e($displayTitle) ?></p>
     </div>
     <div class="topbar-actions ms-auto">
 
-        <div class="dropdown d-lg-none">
-            <button class="icon-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Analytics and timelines"><i class="bi bi-bar-chart" aria-hidden="true"></i></button>
-            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                <li><a class="dropdown-item" href="<?= e(url('analytics.php')) ?>">Analytics</a></li>
-                <li><a class="dropdown-item" href="<?= e(url('clusters.php')) ?>">Mangrove timeline</a></li>
-            </ul>
-        </div>
         <a class="icon-button position-relative" href="<?= e(url('notifications.php')) ?>" aria-label="Notifications<?= $unreadNotificationCount ? ', ' . $unreadNotificationCount . ' unread' : '' ?>">
             <i class="bi bi-bell" aria-hidden="true"></i>
             <?php if ($unreadNotificationCount > 0): ?><span class="notification-count" aria-hidden="true"><?= e((string) min($unreadNotificationCount, 99)) ?><?= $unreadNotificationCount > 99 ? '+' : '' ?></span><?php endif; ?>

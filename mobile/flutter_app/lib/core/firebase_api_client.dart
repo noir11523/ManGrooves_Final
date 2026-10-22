@@ -298,10 +298,16 @@ class FirebaseApiClient extends ApiClient {
   }
 
   @override
-  Future<Uint8List> analyticsPdf() async {
+  Future<Map<String, dynamic>> filteredAnalytics(Map<String, String> filters) =>
+      _request('analytics.php', query: filters);
+
+  @override
+  Future<Uint8List> analyticsPdf({
+    Map<String, String> filters = const {},
+  }) async {
     final response = await _client
         .get(
-          resolve('export-analytics.php'),
+          resolve('export-analytics.php').replace(queryParameters: filters),
           headers: {'Authorization': 'Bearer ${await _session.token()}'},
         )
         .timeout(const Duration(seconds: 120));

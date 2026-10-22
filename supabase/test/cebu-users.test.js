@@ -16,13 +16,13 @@ test('Cebu directory covers 53 municipalities/cities, disambiguates names and ke
  assert.equal(new Set(rows.map(b=>b.name+'|'+b.city_municipality)).size,1203);
  assert.deepEqual(directory.length,rows.length);
 });
-test('profile accepts Philippine mobile formats, requires an address and a listed Cebu barangay',async()=>{
+test('profile accepts Philippine mobile formats, accepts optional street details and requires a listed Cebu barangay',async()=>{
  for(const value of ['09171234567','+63 917 123 4567','639171234567'])assert.equal(mobileNumber(value),'+639171234567');
  for(const value of ['', '12345','+15551234567'])assert.throws(()=>mobileNumber(value));
  const service={get:async(_,id)=>directory.find(b=>b.id===id)};
  const input={barangay_id:1,phone:'09171234567',address_line:'12 Test Street'};
  assert.equal((await profileDetails(service,input)).city_municipality,'Cebu City');
- await assert.rejects(profileDetails(service,{...input,address_line:''}));
+ assert.equal((await profileDetails(service,{...input,address_line:''})).address_line,null);
  await assert.rejects(profileDetails(service,{...input,barangay_id:-55}));
 });
 test('user badges and roles distinguish applicants and suspended experts without hiding application access',()=>{

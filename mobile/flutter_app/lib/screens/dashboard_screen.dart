@@ -4,7 +4,6 @@ import '../core/api_client.dart';
 import '../shared/follow_up_card.dart';
 import 'report_detail_screen.dart';
 import 'reports_screen.dart';
-import 'verification_screen.dart';
 import 'cluster_health_map.dart';
 import 'cluster_timeline_screen.dart';
 import 'report_map_screen.dart';
@@ -41,20 +40,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool attention = false,
     int? clusterId,
   }) {
-    final review = status == 'pending' && _data?['user']?['role'] != 'guardian';
     Navigator.push(
       context,
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
-          appBar: AppBar(title: Text(review ? 'Review reports' : 'Reports')),
-          body: review
-              ? VerificationScreen(api: widget.api)
-              : ReportsScreen(
-                  api: widget.api,
-                  initialStatus: status,
-                  needsAttention: attention,
-                  clusterId: clusterId,
-                ),
+          appBar: AppBar(title: const Text('Reports')),
+          body: ReportsScreen(
+            api: widget.api,
+            initialStatus: status,
+            showSubmitter: _data?['user']?['role'] != 'guardian',
+            needsAttention: attention,
+            clusterId: clusterId,
+          ),
         ),
       ),
     ).then((_) {
@@ -108,12 +105,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              "Hi, ${user['first_name'] ?? user['full_name']?.toString().split(' ').first ?? 'there'}!",
-              style: Theme.of(context).textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const Text('Your latest mangrove updates.'),
+            const Text('Monitor mangrove reports and site conditions.'),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -137,7 +129,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisExtent: 185,
               children: [
                 _StatCard(
-                  'Total Reports Verified',
+                  'Verified reports',
                   stats['total_reports'],
                   Icons.assignment_outlined,
                   () => _openReports(status: 'verified'),
@@ -164,7 +156,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   () => _openReports(attention: true),
                 ),
                 _StatCard(
-                  'Clusters',
+                  'Monitored clusters',
                   stats['map_clusters'] ?? clusters.length,
                   Icons.hub_outlined,
                   () => Navigator.push(
@@ -280,10 +272,10 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     color: switch (label) {
-      'Total Reports Verified' => const Color(0xFFE6F0DD),
+      'Verified reports' => const Color(0xFFE6F0DD),
       'Pending' => const Color(0xFFFFF3D2),
       'Rejected' || 'Needs attention' => const Color(0xFFF9E6DF),
-      'Clusters' => const Color(0xFFDDEDE8),
+      'Monitored clusters' => const Color(0xFFDDEDE8),
       _ => const Color(0xFFE2ECF5),
     },
     clipBehavior: Clip.antiAlias,

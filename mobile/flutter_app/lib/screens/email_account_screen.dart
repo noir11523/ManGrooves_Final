@@ -1,3 +1,5 @@
+import '../shared/residential_address_fields.dart';
+
 import 'dart:io';
 
 import 'package:image_picker/image_picker.dart';
@@ -34,7 +36,9 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
       'password',
       'password_confirmation',
       'code',
-      'address_line',
+      'house_unit',
+      'street_sitio',
+      'zip_code',
     ])
       name: TextEditingController(),
   };
@@ -779,14 +783,15 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
       ),
       const SizedBox(height: 16),
     ],
-    BarangayPicker(
-      items: _barangays,
-      value: _barangay,
+    ResidentialAddressFields(
+      barangays: _barangays,
+      barangayId: _barangay,
+      onBarangayChanged: (v) => setState(() => _barangay = v),
+      house: _fields['house_unit']!,
+      street: _fields['street_sitio']!,
+      zip: _fields['zip_code']!,
       enabled: !_busy,
-      onChanged: (v) => setState(() => _barangay = v),
     ),
-    const SizedBox(height: 16),
-    _field('address_line', 'House no., street or sitio'),
     _field('phone', 'Mobile number'),
   ];
 

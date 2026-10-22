@@ -1,4 +1,4 @@
-import {barangayPicker,bindBarangayPicker,contactFields} from './address-fields.js';
+import {residentialAddressFields,formattedAddress,bindBarangayPicker,contactFields} from './address-fields.js';
 import {api,login,friendly} from './client.js';
 import {$,esc,field,select,errorBox,formValues,showError,toast} from './ui.js';
 
@@ -72,7 +72,7 @@ export async function registrationPage(layout) {
         <p class="verified-email" id="verified-email"></p>
         ${select('role','Join as',[['guardian','Coastal Guardian'],['expert','Expert']])}
         <div id="expert-proof" hidden><p class="notice">Experts need admin approval. Your ID photo is private and visible only to administrators.</p><label class="field"><span>Work or professional ID photo</span><input type="file" name="id_photo" accept="image/jpeg,image/png,image/webp" aria-describedby="expert-id-help"><small id="expert-id-help">Upload one clear JPG, PNG or WebP photo, up to 5 MB. Make sure your name and credentials are readable.</small></label><img id="id-photo-preview" class="preview-photo" alt="Your selected ID photo" hidden></div>
-        ${barangayPicker(config.barangays)}${contactFields()}
+        ${residentialAddressFields(config.barangays)}${contactFields()}
       </fieldset>
       <button type="submit" class="registration-submit" id="registration-submit">Continue</button>
       <div class="registration-secondary"><button type="button" class="outline" id="resend-code" hidden>Resend code</button><button type="button" class="outline" id="registration-back" hidden>Change email</button></div>
@@ -80,7 +80,7 @@ export async function registrationPage(layout) {
       <p class="registration-signin">Already have an account? <a href="#login">Sign in</a></p>
     </form>`;
   const form=$('#registration'),email=form.elements.email,code=form.elements.code,button=$('#registration-submit');
-  const sets=[...form.querySelectorAll('fieldset')],steps=[...area.querySelectorAll('.account-steps li')];
+  const sets=[...form.querySelectorAll('fieldset[data-step]')],steps=[...area.querySelectorAll('.account-steps li')];
   let step=0,busy=false,proof=null,account=null,sentEmail='',resendAfter=0,expiresAt=0,timer;
   bindRegistrationPasswords(form);
   bindBarangayPicker(form,config.barangays);

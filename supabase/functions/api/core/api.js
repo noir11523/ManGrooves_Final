@@ -1,3 +1,4 @@
+import {writeMonitoringReport} from './analytics-export.js';
 import {traitImages} from './trait-images.js';
 import {followUpAvailable} from './follow-up.js';
 import {sharedSite,visibleSite} from './site-access.js';
@@ -151,7 +152,13 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
           const result = await service.submit(user, input, files.photo, files.closeup_photo, Object.keys(files).filter(k=>/^extra_photo_\d+$/.test(k)).sort().map(k=>files[k]));
           return send(res, {report: result.result ?? result, message: result.message ?? 'Report already received.'}, 201);
         }
-        case 'reports.php': only('GET'); return send(res, reportList(await service.reports(user), {sort:user.role==='guardian'?'newest':'oldest',...req.query}));
+        case 'reports.php': {
+          only('GET');let rows=await service.reports(user),query=req.query;
+          if(query.analytics_scope==='1'){const a=await service.analytics(user,query,rows);const ids=new Set(a.report_ids);rows=rows.filter(r=>ids.has(r.id));query={q:query.q,page:query.page};}
+          const result=reportList(rows,{sort:query.status==='pending'?'oldest':'newest',...query});
+          const own=new Map(rows.map(r=>[r.id,r.user_id]));result.items=result.items.map(r=>({...r,can_review:user.role!=='guardian'&&own.get(r.id)!==user.id&&r.status==='pending',can_manage_follow_up:user.role!=='guardian'&&own.get(r.id)!==user.id&&r.status==='verified'}));
+          return send(res,result);
+        }
         case 'report.php': only('GET'); return send(res, {report: await service.detail(user, integer(req.query.id, 'report'))});
         case 'photo.php': {
           only('GET'); const id = integer(req.query.id, 'report'), report = await service.get('reports', id);
@@ -210,18 +217,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
           only('GET'); requireRole(user, 'system_admin'); const analytics = await service.analytics(user, req.query);
           res.set({'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="ManGROOVES-analytics.pdf"'});
           const pdf = new PDFDocument({margin: 45}); pdf.pipe(res);
-          pdf.fontSize(22).text('ManGROOVES monitoring report');
-          pdf.moveDown().fontSize(11).text(`${analytics.filters.date_from} to ${analytics.filters.date_to}`);
-          pdf.text(`Generated ${now()}`);
-          pdf.moveDown();
-          for (const [key, value] of Object.entries(analytics.verification)) pdf.text(`${key.replaceAll('_', ' ')}: ${value}`);
-          pdf.moveDown().text(`Current survival: ${analytics.overall_survival === null ? 'No baseline available' : `${analytics.overall_survival}%`}`);
-          pdf.text('Survival uses the latest verified count per site. Counts may cover different areas.');
-          pdf.moveDown().fontSize(15).text('Verified health');
-          for (const [key, value] of Object.entries(analytics.health)) pdf.fontSize(11).text(`${key}: ${value}`);
-          pdf.moveDown().fontSize(15).text('Sites needing attention');
-          if (!analytics.high_risk.length) pdf.fontSize(11).text('None in this period.');
-          for (const r of analytics.high_risk) pdf.fontSize(11).text(`${r.report_code} - ${r.cluster_name ?? 'Unassigned'} - ${r.final_health}`);
+          writeMonitoringReport(pdf,analytics,now());
           await pdf.end(); return;
         }
         case 'sites.php': if(!get)only('POST');return send(res,await manageSites(service,user,post?req.body??{}:null));

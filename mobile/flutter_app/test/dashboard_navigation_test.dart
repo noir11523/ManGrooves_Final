@@ -101,7 +101,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Total Reports Verified'));
+        await tester.tap(find.text('Verified reports'));
         await tester.pumpAndSettle();
         expect(api.status, 'verified');
         expect(find.text('No reports match this filter.'), findsOneWidget);
@@ -114,11 +114,8 @@ void main() {
           await tester.pumpAndSettle();
           expect(api.status, status);
           if (status == 'pending') {
-            expect(api.reviewOpened, role != 'guardian');
-            expect(
-              find.byType(VerificationScreen),
-              role == 'guardian' ? findsNothing : findsOneWidget,
-            );
+            expect(api.reviewOpened, false);
+            expect(find.byType(VerificationScreen), findsNothing);
           }
           expect(api.attention, false);
           await tester.tap(find.byType(BackButton));
@@ -130,8 +127,8 @@ void main() {
         expect(api.attention, true);
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.text('Clusters'));
-        await tester.tap(find.text('Clusters'));
+        await tester.ensureVisible(find.text('Monitored clusters'));
+        await tester.tap(find.text('Monitored clusters'));
         await tester.pumpAndSettle();
         expect(find.byType(ClustersScreen), findsOneWidget);
         expect(find.text('No clusters found.'), findsOneWidget);

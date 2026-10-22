@@ -274,7 +274,6 @@ class ReviewReportScreen extends StatefulWidget {
 
 class _ReviewReportScreenState extends State<ReviewReportScreen> {
   final _feedback = TextEditingController();
-  final _followUpNote = TextEditingController();
   bool _needsFollowUp = false;
   Map<String, dynamic>? _report;
   String? _health;
@@ -311,7 +310,10 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
       return;
     }
     if (action == 'reject' && _feedback.text.trim().isEmpty) {
-      setState(() => _error = 'Enter actionable feedback before rejecting.');
+      setState(
+        () => _error =
+            'Explain what needs to change before rejecting this report.',
+      );
       return;
     }
     final verb = switch (action) {
@@ -355,8 +357,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
         'rarity_level': _rarity,
 
         'expert_feedback': _feedback.text,
-        'needs_follow_up': _needsFollowUp,
-        'follow_up_note': _followUpNote.text,
+        'needs_follow_up': action != 'reject' && _needsFollowUp,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -377,7 +378,6 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
   @override
   void dispose() {
     _feedback.dispose();
-    _followUpNote.dispose();
     super.dispose();
   }
 
@@ -622,25 +622,16 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                     controlAffinity: ListTileControlAffinity.leading,
                     title: const Text('Needs follow-up'),
                   ),
-                if (_needsFollowUp && _decision != 'reject')
-                  TextField(
-                    controller: _followUpNote,
-                    enabled: !_busy,
-                    maxLength: 1000,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Follow-up note (optional)',
-                      hintText:
-                          'Why does this mangrove need another observation?',
-                    ),
-                  ),
                 TextField(
                   controller: _feedback,
                   enabled: !_busy,
                   maxLines: 4,
                   maxLength: 5000,
                   decoration: const InputDecoration(
-                    labelText: 'Expert feedback',
+                    labelText: 'Feedback',
+                    hintText: 'Add your findings and instructions for the next visit.',
+                    helperText: 'Required when rejecting a report.',
+                    helperMaxLines: 2,
                   ),
                 ),
               ],

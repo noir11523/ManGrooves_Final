@@ -1,3 +1,4 @@
+import '../shared/residential_address_fields.dart';
 import '../shared/barangay_picker.dart';
 
 import 'package:flutter/material.dart';
@@ -30,7 +31,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _lastName = TextEditingController();
   final _email = TextEditingController();
   final _phone = TextEditingController();
-  final _address = TextEditingController();
+  final _house = TextEditingController();
+  final _street = TextEditingController();
+  final _zip = TextEditingController();
   Map<String, dynamic>? _user;
   List<Map<String, dynamic>> _barangays = [];
   int? _barangayId;
@@ -52,7 +55,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _lastName.text = user['last_name']?.toString() ?? '';
     _email.text = user['email']?.toString() ?? '';
     _phone.text = user['phone']?.toString() ?? '';
-    _address.text = user['address_line']?.toString() ?? '';
+    _house.text = user['house_unit']?.toString() ?? '';
+    _street.text = user['street_sitio']?.toString() ?? '';
+    _zip.text = user['zip_code']?.toString() ?? '';
     _barangayId = user['barangay_id'] as int?;
   }
 
@@ -83,7 +88,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'first_name': _firstName.text.trim(),
         'last_name': _lastName.text.trim(),
         'phone': _phone.text,
-        'address_line': _address.text,
+        'house_unit': _house.text,
+        'street_sitio': _street.text,
+        'zip_code': _zip.text,
         'barangay_id': _barangayId,
       });
       final updated = Map<String, dynamic>.from(response['user'] as Map);
@@ -106,7 +113,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _lastName.dispose();
     _email.dispose();
     _phone.dispose();
-    _address.dispose();
+    _house.dispose();
+    _street.dispose();
+    _zip.dispose();
     super.dispose();
   }
 
@@ -219,25 +228,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    BarangayPicker(
-                      items: _barangays,
-                      value: _barangayId,
+                    ResidentialAddressFields(
+                      barangays: _barangays,
+                      barangayId: _barangayId,
+                      onBarangayChanged: (v) => setState(() => _barangayId = v),
+                      house: _house,
+                      street: _street,
+                      zip: _zip,
                       enabled: !_saving,
-                      onChanged: (value) => setState(() => _barangayId = value),
+                      legacyAddress: user['address_version'] == 2
+                          ? null
+                          : user['address_line']?.toString(),
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _address,
-                      maxLength: 200,
-                      decoration: const InputDecoration(
-                        labelText: 'House no., street or sitio',
-                        counterText: '',
-                      ),
-                      validator: (value) => (value ?? '').trim().isEmpty
-                          ? 'Enter your street, sitio, or address.'
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: _saving ? null : _save,
                       icon: _saving

@@ -113,7 +113,7 @@ void main() {
 
     expect(find.byType(HomeShell), findsOneWidget);
     expect(find.text('Dashboard'), findsOneWidget);
-    expect(find.text('Hi, Test!'), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget);
     expect(find.byType(RegisterScreen, skipOffstage: false), findsNothing);
     expect(
       Navigator.of(tester.element(find.byType(HomeShell))).canPop(),

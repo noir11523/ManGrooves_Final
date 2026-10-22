@@ -99,6 +99,14 @@ try {
   await request('complete-registration.php',{token:proof.verification_token},{...registration,email:'another@example.test'},403);
   await request('complete-registration.php',{token:proof.verification_token},registration,201);
   const registered=await signIn(registration.email),me=await request('me.php',{token:registered.idToken});assert.equal(me.user.role,'guardian');pass('verified guardian can sign in immediately');
+  const profileInput={first_name:'New',last_name:'Guardian',phone:'09171234567',barangay_id:1,city_municipality:'Cebu City',house_unit:'Unit 3B',street_sitio:'Purok 3',zip_code:'6000'};
+  const accountToken={token:registered.idToken};
+  await request('profile.php',accountToken,{...profileInput,city_municipality:'Mandaue City'},422);
+  await request('profile.php',accountToken,{...profileInput,zip_code:'6x00'},422);
+  const updatedProfile=await request('profile.php',accountToken,profileInput);
+  assert.equal(updatedProfile.user.house_unit,'Unit 3B');assert.equal(updatedProfile.user.street_sitio,'Purok 3');assert.equal(updatedProfile.user.zip_code,'6000');assert.ok(updatedProfile.user.city_psgc);assert.equal(updatedProfile.user.address_line,'Test Street');
+  assert.equal((await request('profile.php',accountToken)).user.house_unit,'Unit 3B');
+  pass('structured profile updates persist valid geography and separate address fields while preserving legacy text');
   const candidate={...registration,email:'expert-applicant@example.test',role:'expert',expert_id_code:' WORK-2026/001 '};
   await request('register.php',null,candidate,201);
   const expertProof=await request('verify-email.php',null,{email:candidate.email,code:'123456'});
@@ -206,6 +214,12 @@ try {
   await request('review.php',expert,{report_id:firstId,action:'confirm',needs_follow_up:true,follow_up_note:'Recheck the site on the next visit.'});
   const reviewedFirst=(await request(`report.php?id=${firstId}`,guardian)).report;
   assert.equal(reviewedFirst.status,'verified');assert.equal(reviewedFirst.needs_follow_up,true);
+  assert.equal(reviewedFirst.expert_feedback,'Recheck the site on the next visit.');assert.equal(reviewedFirst.follow_up_note,null);
+  await request('review.php',expert,{report_id:firstId,action:'followup',needs_follow_up:true,expert_feedback:'Check the roots on the next visit.'});
+  const followFeedback=(await request(`report.php?id=${firstId}`,guardian)).report;assert.equal(followFeedback.expert_feedback,'Check the roots on the next visit.');assert.equal(followFeedback.follow_up_note,null);
+  const followReminder=(await request('dashboard.php',guardian)).reminders.find(r=>r.id===firstId);assert.equal(followReminder.expert_feedback,'Check the roots on the next visit.');
+  await request('review.php',guardian,{report_id:firstId,action:'followup',needs_follow_up:false},403);
+  pass('one Feedback field drives review details and follow-up reminders while legacy notes remain readable and role checks hold');
   const verifiedStats=(await request('dashboard.php',guardian)).stats;assert.equal(verifiedStats.total_reports,1);assert.equal(verifiedStats.pending_reports,0);assert.equal(verifiedStats.needs_attention,0);
   pass('staff verification updates verified totals and keeps healthy follow-ups out of health attention');
   const publication = await submission(other), publicationSaved=await request('submit-report.php',other,publication.body,201);

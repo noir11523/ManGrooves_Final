@@ -248,9 +248,8 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
           _signature = null;
           _removeSignature = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Certificate signer saved.')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Certificates saved.')));
       }
       await _load();
     } catch (e) {
@@ -498,7 +497,7 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
     appBar: AppBar(
       title: Text(
         widget.certificates
-            ? 'Certificate signer'
+            ? 'Certificates'
             : (widget.applicationUid == null
                   ? 'Expert applications'
                   : 'Expert application'),

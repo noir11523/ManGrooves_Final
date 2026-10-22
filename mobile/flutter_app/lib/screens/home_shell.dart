@@ -13,7 +13,8 @@ import 'dashboard_screen.dart';
 import 'profile_screen.dart';
 import 'reports_screen.dart';
 import 'submit_report_screen.dart';
-import 'verification_screen.dart';
+import 'report_map_screen.dart';
+import 'audit_log_screen.dart';
 import 'notifications_screen.dart';
 import 'cluster_timeline_screen.dart';
 import 'explore_sites_screen.dart';
@@ -37,6 +38,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   int _reportsVersion = 0;
+  bool _mapVisited = false;
   GlobalKey<SubmitReportScreenState> _submissionKey =
       GlobalKey<SubmitReportScreenState>();
   int? _followUpReportId;
@@ -71,17 +73,102 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  Future<void> _openMenu() async {
+    final admin = _user['role'] == 'system_admin';
+    final groups = <String, Map<String, String>>{
+      'Reports & Monitoring': {
+        'timeline': 'Mangrove timeline',
+        'explore': 'Explore mangrove sites',
+        if (_guardian) 'map': 'Report map',
+      },
+      if (_guardian)
+        'Analytics & Decision Support': {'analytics': 'Monitoring analytics'},
+      if (!_guardian && widget.api.supportsCloudAccounts)
+        'Mangrove Data': {
+          'species': 'Species & sites',
+          if (admin) 'checklist': 'Health checklist',
+        },
+      if (admin && widget.api.supportsCloudAccounts)
+        'User Management': {
+          'users': 'All users',
+          'applications': 'Expert applications',
+        },
+      if (admin && widget.api.supportsCloudAccounts)
+        'Recognition': {'badge-settings': 'Badges', 'signer': 'Certificates'},
+      if (admin && widget.api.supportsCloudAccounts)
+        'System Management': {'audit': 'Audit logs'},
+      if (_user['role'] == 'expert') 'Recognition': {'badges': 'My badges'},
+    };
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: .8,
+        child: Column(
+          children: [
+            ListTile(
+              title: const Text('Menu'),
+              trailing: IconButton(
+                tooltip: 'Close menu',
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final group in groups.entries)
+                    ExpansionTile(
+                      title: Text(group.key),
+                      children: [
+                        for (final item in group.value.entries)
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                            ),
+                            title: Text(item.value),
+                            onTap: () => Navigator.pop(context, item.key),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final Widget page = switch (choice) {
+      'timeline' => ClustersScreen(api: widget.api),
+      'map' => ReportMapScreen(api: widget.api),
+      'explore' => ExploreSitesScreen(api: widget.api, user: _user),
+      'analytics' => Scaffold(
+        appBar: AppBar(title: const Text('Analytics')),
+        body: AnalyticsScreen(api: widget.api),
+      ),
+      'checklist' => ChecklistScreen(api: widget.api),
+      'applications' => CloudAdminScreen(api: widget.api),
+      'signer' => CloudAdminScreen(api: widget.api, certificates: true),
+      'audit' => AuditLogScreen(api: widget.api),
+      'badges' => Scaffold(
+        appBar: AppBar(title: const Text('My badges')),
+        body: BadgesScreen(api: widget.api),
+      ),
+      _ => ManagementScreen(api: widget.api, page: choice),
+    };
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => page),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final titles = _guardian
         ? ['Dashboard', 'My reports', 'Submit Report', 'My badges', 'Account']
-        : [
-            'Dashboard',
-            'Review reports',
-            'Report history',
-            'Analytics',
-            'Account',
-          ];
+        : ['Dashboard', 'All reports', 'Report map', 'Analytics', 'Account'];
     final pages = _guardian
         ? <Widget>[
             DashboardScreen(
@@ -121,12 +208,15 @@ class _HomeShellState extends State<HomeShell> {
           ]
         : <Widget>[
             DashboardScreen(api: widget.api, active: _index == 0),
-            VerificationScreen(api: widget.api, active: _index == 1),
             ReportHistoryScreen(
               key: ValueKey(_reportsVersion),
               api: widget.api,
-              active: _index == 2,
+              active: _index == 1,
             ),
+            if (_index == 2 || _mapVisited)
+              ReportMapScreen(api: widget.api)
+            else
+              const SizedBox.shrink(),
             AnalyticsScreen(api: widget.api, active: _index == 3),
             ProfileScreen(
               initialUser: _user,
@@ -153,98 +243,10 @@ class _HomeShellState extends State<HomeShell> {
         appBar: AppBar(
           leading: _index == 0 ? null : BackButton(onPressed: back),
           actions: [
-            if (!_guardian)
-              PopupMenuButton<String>(
-                tooltip: 'Menu',
-                icon: const Icon(Icons.menu),
-                itemBuilder: (_) => [
-                  if (widget.api.supportsCloudAccounts && !_guardian)
-                    const PopupMenuItem(
-                      value: 'species',
-                      child: Text('Species and Sites'),
-                    ),
-                  if (widget.api.supportsCloudAccounts &&
-                      _user['role'] == 'system_admin') ...const [
-                    PopupMenuItem(value: 'users', child: Text('Users')),
-                    PopupMenuItem(
-                      value: 'checklist',
-                      child: Text('Health checklist'),
-                    ),
-                    PopupMenuItem(
-                      value: 'badge-settings',
-                      child: Text('Manage badges'),
-                    ),
-                    PopupMenuItem(
-                      value: 'applications',
-                      child: Text('Expert applications'),
-                    ),
-                    PopupMenuItem(
-                      value: 'signer',
-                      child: Text('Certificate signer'),
-                    ),
-                  ],
-                  if (_user['role'] == 'expert')
-                    const PopupMenuItem(
-                      value: 'badges',
-                      child: Text('My badges'),
-                    ),
-                ],
-                onSelected: (choice) {
-                  final Widget page = switch (choice) {
-                    'checklist' => ChecklistScreen(api: widget.api),
-                    'applications' => CloudAdminScreen(api: widget.api),
-                    'signer' => CloudAdminScreen(
-                      api: widget.api,
-                      certificates: true,
-                    ),
-                    'badges' => Scaffold(
-                      appBar: AppBar(title: const Text('My badges')),
-                      body: BadgesScreen(api: widget.api),
-                    ),
-                    _ => ManagementScreen(api: widget.api, page: choice),
-                  };
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(builder: (_) => page),
-                  );
-                },
-              ),
-            PopupMenuButton<String>(
-              tooltip: 'Analytics and timelines',
-              icon: const Icon(Icons.insights_outlined),
-              onSelected: (choice) async {
-                if (choice == 'analytics' && !_guardian) {
-                  setState(() => _index = 3);
-                  return;
-                }
-                Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => choice == 'analytics'
-                        ? Scaffold(
-                            appBar: AppBar(title: const Text('Analytics')),
-                            body: AnalyticsScreen(api: widget.api),
-                          )
-                        : choice == 'explore'
-                        ? ExploreSitesScreen(api: widget.api, user: widget.user)
-                        : ClustersScreen(
-                            api: widget.api,
-                            initialTab: choice == 'growth' ? 1 : 0,
-                          ),
-                  ),
-                );
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'analytics', child: Text('Analytics')),
-                PopupMenuItem(
-                  value: 'explore',
-                  child: Text('Explore mangrove sites'),
-                ),
-                PopupMenuItem(
-                  value: 'timeline',
-                  child: Text('Mangrove timeline'),
-                ),
-              ],
+            IconButton(
+              tooltip: 'Menu',
+              icon: const Icon(Icons.menu),
+              onPressed: _openMenu,
             ),
             IconButton(
               tooltip: 'Notifications',
@@ -276,7 +278,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
         body: IndexedStack(index: _index, children: pages),
-        floatingActionButton: _user['role'] == 'expert' && _index == 2
+        floatingActionButton: _user['role'] == 'expert' && _index == 1
             ? FloatingActionButton.extended(
                 icon: const Icon(Icons.add_a_photo_outlined),
                 label: const Text('Submit Report'),
@@ -302,7 +304,10 @@ class _HomeShellState extends State<HomeShell> {
         bottomNavigationBar: NavigationBar(
           labelPadding: const EdgeInsets.fromLTRB(2, 4, 2, 0),
           selectedIndex: _index,
-          onDestinationSelected: (value) => setState(() => _index = value),
+          onDestinationSelected: (value) => setState(() {
+            _index = value;
+            if (!_guardian && value == 2) _mapVisited = true;
+          }),
           destinations: [
             const NavigationDestination(
               icon: Icon(Icons.dashboard_outlined),
@@ -318,7 +323,7 @@ class _HomeShellState extends State<HomeShell> {
               selectedIcon: Icon(
                 _guardian ? Icons.assignment : Icons.fact_check,
               ),
-              label: _guardian ? 'Reports' : 'Review',
+              label: 'Reports',
             ),
             if (_guardian)
               const NavigationDestination(
@@ -343,7 +348,7 @@ class _HomeShellState extends State<HomeShell> {
               const NavigationDestination(
                 icon: Icon(Icons.assignment_outlined),
                 selectedIcon: Icon(Icons.assignment),
-                label: 'History',
+                label: 'Map',
               ),
             if (!_guardian)
               const NavigationDestination(

@@ -7,10 +7,14 @@
     <?php endforeach; ?>
         <?php if ($mobileMoreItems): ?>
         <div class="dropup mobile-more">
-            <button class="mobile-nav-link" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Open menu"><i class="bi bi-list" aria-hidden="true"></i><span>Menu</span></button>
+            <button class="mobile-nav-link" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Open menu"><i class="bi bi-list" aria-hidden="true"></i><span>Menu</span></button>
             <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="max-height:75vh;overflow:auto">
                 <?php foreach ($mobileMoreItems as $entry): ?>
-                    <li><a class="dropdown-item" href="<?= e(url($entry[1])) ?>"><?= e($entry[0]) ?></a></li>
+                    <?php if (isset($entry[3])): ?>
+                    <li><details class="mobile-menu-group"><summary><?= e($entry[0]) ?></summary>
+                    <?php foreach ($entry[3] as $child): ?><a class="dropdown-item" href="<?= e(url($child[1])) ?>" <?= $isActive($child[1]) ? 'aria-current="page"' : '' ?>><?= e($child[0]) ?></a><?php endforeach; ?>
+                    </details></li>
+                    <?php else: ?><li><a class="dropdown-item" href="<?= e(url($entry[1])) ?>"><?= e($entry[0]) ?></a></li><?php endif; ?>
                 <?php endforeach; ?>
             </ul>
         </div>

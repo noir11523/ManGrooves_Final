@@ -13,7 +13,8 @@ class FollowUpCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final note = '${report['follow_up_note'] ?? ''}'.trim();
+    final note =
+        '${report['expert_feedback'] ?? report['follow_up_note'] ?? ''}'.trim();
     return Card(
       color: const Color(0xFFFFF4D6),
       shape: RoundedRectangleBorder(

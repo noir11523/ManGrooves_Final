@@ -47,7 +47,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   Future<void> _editFollowUp() async {
     final note = TextEditingController(
-      text: _report?['follow_up_note']?.toString() ?? '',
+      text: _report?['expert_feedback']?.toString() ?? '',
     );
     bool needed = _report?['needs_follow_up'] == true;
     final saved = await showDialog<bool>(
@@ -66,17 +66,15 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   onChanged: (v) => update(() => needed = v ?? false),
                   title: const Text('Needs follow-up'),
                 ),
-                if (needed)
-                  TextField(
-                    controller: note,
-                    maxLength: 1000,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Follow-up note (optional)',
-                      hintText:
-                          'Why does this mangrove need another observation?',
-                    ),
+                TextField(
+                  controller: note,
+                  maxLength: 5000,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Feedback',
+                    hintText: 'Add your findings and instructions for the next visit.',
                   ),
+                ),
               ],
             ),
           ),
@@ -100,7 +98,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           'report_id': widget.reportId,
           'action': 'followup',
           'needs_follow_up': needed,
-          'follow_up_note': note.text,
+          'expert_feedback': note.text,
         });
         await _load();
       } catch (error) {
@@ -288,11 +286,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             _report!['follow_up_state'] != null)
           _InfoCard(
             title: 'Follow-up',
-            rows: {
-              'Status': _report!['follow_up_state'] ?? 'Follow-up needed',
-              if (_report!['follow_up_note'] != null)
-                'Note': _report!['follow_up_note'],
-            },
+            rows: {'Status': _report!['follow_up_state'] ?? 'Follow-up needed'},
           ),
         if (_report!['can_follow_up'] == true)
           FilledButton.icon(
@@ -349,7 +343,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             false)) ...[
           const SizedBox(height: 12),
           _InfoCard(
-            title: 'Expert feedback',
+            title: 'Feedback',
             rows: {'Feedback': _report!['expert_feedback']},
           ),
         ],

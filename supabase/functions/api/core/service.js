@@ -10,6 +10,7 @@ import { saveImage } from './uploads.js';
 import {startRegistration} from './registration.js';
 import {profileDetails} from './profile-fields.js';
 import {cebuBarangays} from './barangays.js';
+import {reviewFeedback} from './review-feedback.js';
 
 export class Service extends Store {
   constructor(db, auth, bucket, mailer = null) { super(db); this.auth = auth; this.bucket = bucket; this.mailer = mailer; }
@@ -90,10 +91,13 @@ export class Service extends Store {
     const children = new Set(rows.filter(r => r.status !== 'rejected').map(r => r.parent_report_id));
     const reminders = user.role === 'guardian' ? rows.filter(r => followUpAvailable(r) && !children.has(r.id))
       .map(r => ({id: r.id, report_code: reportLabel(r), cluster_id: r.cluster_id, cluster_name: r.cluster_name,
-        follow_up_note:r.follow_up_note, due_state:'requested'})) : [];
+        expert_feedback:reviewFeedback(r), follow_up_note:reviewFeedback(r), due_state:'requested'})) : [];
     return {user: publicUser(user), stats: {...dashboardStats(rows, clusters), pending_review_reports: rows.filter(r=>r.status==='pending'&&r.user_id!==user.id).length}, latest_reports: reportList(rows).items.slice(0, 6), reminders, clusters};
   }
-  async analytics(user, query = {}) { return analyticsForUser(user, await this.reports(user), await this.clusters(user), query); }
+  async analytics(user, query = {}, reportRows = null) {
+    const [rows,clusters]=await Promise.all([reportRows??this.reports(user),this.clusters(user)]);
+    return analyticsForUser(user,rows,clusters,query);
+  }
   async detail(user, id) {
     if(user.role!=='guardian') await this.ensureStaffNumbers();
     let report = await this.get('reports', id);
@@ -108,7 +112,7 @@ export class Service extends Store {
     delete visible.observation_snapshots;
     const speciesId=report.final_species_id??report.suggested_species_id;
     const species=speciesId?await this.get('species',speciesId):null;
-    return {...visible, species_local_name:species?.local_name??report.species_local_name, species_common_name:species?.common_name??report.species_common_name,
+    return {...visible, expert_feedback:reviewFeedback(report)||null, follow_up_note:null, species_local_name:species?.local_name??report.species_local_name, species_common_name:species?.common_name??report.species_common_name,
       can_follow_up:report.user_id===user.id && followUpAvailable(report), follow_up_state:followUpState(report),
       observation_history:observationHistory(report,await this.reportViews(user,await this.rows('reports',[['user_id','==',report.user_id]]))),
       extra_photo_urls:(extra_photo_paths??[]).map((_,index)=>`photo.php?id=${id}&view=extra&index=${index}`), closeup_photo_url:closeup_photo_path ? `photo.php?id=${id}&view=closeup` : null, report_code:reportLabel(report), needs_attention:verifiedNeedsAttention(report)?1:0, observations: [...groups.values()], photo_url: photo_path ? `photo.php?id=${id}` : null,
@@ -297,8 +301,7 @@ export class Service extends Store {
     if (action === 'followup') return this.updateFollowUp(user,input);
     if (!['confirm', 'correct', 'reject'].includes(action)) throw new AppError('Choose Confirm, Correct, or Reject.');
     const needsFollowUp = input.needs_follow_up === true || String(input.needs_follow_up)==='1';
-    const followUpNote = text(input.follow_up_note??'', 'the follow-up note', 1000, false);
-    const comment = text(input.expert_feedback ?? input.comment ?? '', 'feedback', 5000, action === 'reject');
+    const comment = text(reviewFeedback({...input,expert_feedback:input.expert_feedback??input.comment}), 'feedback', 5000, action === 'reject');
     const catalog = await this.species(), [clusterId, noticeId] = await this.ids(2);
     return this.db.runTransaction(async tx => {
       const actor = await tx.get(this.ref('users', user.uid)); requireRole(actor.data(), 'expert', 'system_admin');
@@ -327,7 +330,7 @@ export class Service extends Store {
         cluster_id: action === 'reject' ? previous.cluster_id : cluster.id, cluster_name: action === 'reject' ? previous.cluster_name : cluster.name,
         rarity_level: rarity, needs_attention: action !== 'reject' && ['Stressed','At Risk','Unknown'].includes(health) ? 1 : 0,
         species_local_name:action==='reject'?null:species?.local_name??null, species_common_name:action==='reject'?null:species?.common_name??null,
-        needs_follow_up:action!=='reject'&&needsFollowUp, follow_up_note:action!=='reject'&&needsFollowUp?followUpNote||null:null,
+        needs_follow_up:action!=='reject'&&needsFollowUp, follow_up_note:null,
         expert_id: user.id, expert_feedback: comment || null, verified_at: now(), corrected: action === 'correct',
         next_followup_date: null};
       tx.set(ref, report);
@@ -353,16 +356,16 @@ export class Service extends Store {
     requireRole(user,'expert','system_admin');
     const id=integer(input.report_id,'report');
     const needed=input.needs_follow_up===true||String(input.needs_follow_up)==='1';
-    const note=text(input.follow_up_note??'', 'the follow-up note',1000,false);
     return this.db.runTransaction(async tx=>{
       requireRole((await tx.get(this.ref('users',user.uid))).data(),'expert','system_admin');
       const ref=this.ref('reports',id), report=(await tx.get(ref)).data();
       if(!report) throw new AppError('Report not found.',404);
       if(report.user_id===user.id) throw new AppError('Ask another expert to review your own report.',403);
       if(report.status!=='verified') throw new AppError('Verify this observation before requesting a follow-up.',409);
-      const update={needs_follow_up:needed, follow_up_note:needed?note||null:null};
+      const feedback = text(Object.hasOwn(input,'expert_feedback') ? input.expert_feedback : Object.hasOwn(input,'follow_up_note') ? reviewFeedback({...report,follow_up_note:input.follow_up_note}) : reviewFeedback(report), 'feedback',5000,false);
+      const update={needs_follow_up:needed, expert_feedback:feedback||null, follow_up_note:null};
       tx.update(ref,update);
-      this.audit(tx,user,'report.follow_up_updated','report',id,{before:{needs_follow_up:!!report.needs_follow_up,follow_up_note:report.follow_up_note??null},after:update});
+      this.audit(tx,user,'report.follow_up_updated','report',id,{before:{needs_follow_up:!!report.needs_follow_up,expert_feedback:report.expert_feedback??null,follow_up_note:report.follow_up_note??null},after:update});
       return {report_id:id,...update};
     });
   }

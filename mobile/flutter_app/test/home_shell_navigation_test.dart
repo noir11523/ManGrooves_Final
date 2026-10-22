@@ -30,6 +30,13 @@ class _Api extends ApiClient {
   }
 
   @override
+  Future<Map<String, dynamic>> reportMap({
+    int page = 1,
+    String status = '',
+    String health = '',
+    String query = '',
+  }) async => {'items': [], 'pages': 1};
+  @override
   Future<Map<String, dynamic>> reportForm() async => {};
   @override
   Future<Map<String, dynamic>> badges() async => {'metrics': {}};
@@ -111,44 +118,47 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('Report map'), findsOneWidget);
         expect(find.byTooltip('Notifications'), findsOneWidget);
-        await tester.tap(find.byTooltip('Analytics and timelines'));
-        await tester.pumpAndSettle();
-        expect(find.byType(PopupMenuItem<String>).first, findsOneWidget);
-        expect(
-          tester
-              .widget<PopupMenuItem<String>>(
-                find.byType(PopupMenuItem<String>).first,
-              )
-              .value,
-          'analytics',
-        );
-        await tester.tap(
-          find.widgetWithText(PopupMenuItem<String>, 'Analytics'),
-        );
-        await tester.pumpAndSettle();
-        expect(
-          find.text(
-            role == 'guardian' ? 'My analytics' : 'Community analytics',
-          ),
-          findsOneWidget,
-        );
+        if (role == 'guardian') {
+          await tester.tap(find.byTooltip('Menu'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Analytics & Decision Support'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Monitoring analytics'));
+          await tester.pumpAndSettle();
+        } else {
+          await tester.tap(
+            find.descendant(
+              of: find.byType(NavigationBar),
+              matching: find.text('Analytics'),
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
         expect(
           find.text(
             role == 'guardian'
-                ? 'Your reports only.'
-                : 'Reports from all users.',
+                ? 'My monitoring analytics'
+                : 'Analytics & Decision Support',
           ),
           findsOneWidget,
         );
         expect(find.text(role == 'guardian' ? '3' : '12'), findsOneWidget);
-        expect(
-          find.text('Generate PDF'),
-          role == 'system_admin' ? findsOneWidget : findsNothing,
-        );
+        if (role == 'system_admin') {
+          await tester.scrollUntilVisible(
+            find.text('Generate PDF report'),
+            300,
+            scrollable: find.byType(Scrollable).last,
+          );
+          expect(find.text('Generate PDF report'), findsOneWidget);
+        } else {
+          expect(find.text('Generate PDF report'), findsNothing);
+        }
         expect(tester.takeException(), isNull);
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Analytics and timelines'));
+        await tester.tap(find.byTooltip('Menu'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Reports & Monitoring'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Mangrove timeline'));
         await tester.pumpAndSettle();
@@ -162,7 +172,7 @@ void main() {
         for (final label
             in role == 'guardian'
                 ? ['Reports', 'Submit Report', 'Badges', 'Account']
-                : ['Review', 'History', 'Analytics', 'Account']) {
+                : ['Reports', 'Map', 'Analytics', 'Account']) {
           await tester.tap(
             find.descendant(
               of: find.byType(NavigationBar),
@@ -199,7 +209,7 @@ void main() {
         await tester.tap(
           find.descendant(
             of: find.byType(NavigationBar),
-            matching: find.text(role == 'guardian' ? 'Reports' : 'History'),
+            matching: find.text('Reports'),
           ),
         );
         await tester.pumpAndSettle();
@@ -210,8 +220,8 @@ void main() {
         );
         if (role != 'guardian') {
           final analyticsLoads = api.analyticsLoads,
-              verificationLoads = api.verificationLoads;
-          for (final label in ['Analytics', 'Review']) {
+              reportLoads = api.reportLoads;
+          for (final label in ['Analytics', 'Reports']) {
             await tester.tap(
               find.descendant(
                 of: find.byType(NavigationBar),
@@ -221,7 +231,7 @@ void main() {
             await tester.pumpAndSettle();
           }
           expect(api.analyticsLoads, greaterThan(analyticsLoads));
-          expect(api.verificationLoads, greaterThan(verificationLoads));
+          expect(api.reportLoads, greaterThan(reportLoads));
         }
         await tester.tap(
           find.descendant(

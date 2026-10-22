@@ -22,6 +22,8 @@ class _Api extends ApiClient {
       },
       'health': {'Healthy': 0, 'Stressed': 0, 'At Risk': 0},
       'high_risk_total': 2,
+      'monitored_clusters': 5,
+      'clusters_needing_attention': 2,
       'high_risk': [],
       'growth': [],
     },
@@ -86,14 +88,14 @@ Future<void> smallPhone(WidgetTester tester, Widget child) async {
 
 void main() {
   testWidgets(
-    'analytics distinguishes verified totals, pending and attention on a small phone',
+    'analytics distinguishes report totals, unique sites and insufficient survival data',
     (tester) async {
       await smallPhone(tester, Scaffold(body: AnalyticsScreen(api: _Api())));
       for (final entry in {
-        'Total Reports Verified': '12',
-        'Pending': '7',
-        'Rejected': '3',
-        'Needs attention': '2',
+        'Verified reports': '12',
+        'Monitored clusters': '5',
+        'Clusters needing attention': '2',
+        'Survival rate': 'Insufficient data',
       }.entries) {
         final card = find.ancestor(
           of: find.text(entry.key),
