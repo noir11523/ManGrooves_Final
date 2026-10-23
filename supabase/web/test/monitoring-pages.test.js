@@ -41,8 +41,9 @@ test('timeline exposes both histories, honours count deep link and keeps unknown
  globalThis.charts=[];globalThis.testApi=async()=>({cluster:{name:'Coast'},timeline:[{id:1,report_code:'Report #1',submitted_at:'2026-10-01',health:'Healthy',observed_alive_count:0,can_view_details:false},{id:2,report_code:'Report #2',submitted_at:'2026-10-02',health:'Unknown',observed_alive_count:null,can_view_details:true}]});
  const dispose=await mangroveTimeline(root,1,{tab:'growth'},name=>`<h1>${name}</h1>`,()=>{});
  assert.equal(document.activeElement.id,'mangrove-counts');assert.ok($('#health-history'));assert.ok($('#mangrove-counts'));assert.equal(charts.length,2);
+ assert.equal($('#mangrove-counts h2').textContent,'Growth Timeline');assert.equal($('.timeline-summary'),null);assert.equal(root.textContent.includes('Formerly'),false);
  assert.deepEqual(charts[1].config.data.datasets[0].data,[0]);assert.deepEqual(charts[0].config.data.datasets[0].data,[2,null]);
  assert.equal(root.querySelector('a[href="#report/1"]'),null);assert.ok(root.querySelector('a[href="#report/2"]'));
  assert.equal($('.timeline-shortcuts'),null);dispose();assert.ok(charts.every(c=>c.destroyed));
- globalThis.testApi=async()=>({cluster:{name:'New site'},timeline:[]});const close=await mangroveTimeline(root,1,{},name=>`<h1>${name}</h1>`,()=>{});assert.match($('#mangrove-counts').textContent,/No counts recorded/);assert.match($('#health-history').textContent,/after staff review/);close();
+ globalThis.testApi=async()=>({cluster:{name:'New site'},timeline:[]});const close=await mangroveTimeline(root,1,{},name=>`<h1>${name}</h1>`,()=>{});assert.match($('#mangrove-counts').textContent,/No counts recorded/);assert.match($('#health-history').textContent,/No verified visits/);close();
 });

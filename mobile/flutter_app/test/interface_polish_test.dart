@@ -88,14 +88,13 @@ Future<void> smallPhone(WidgetTester tester, Widget child) async {
 
 void main() {
   testWidgets(
-    'analytics distinguishes report totals, unique sites and insufficient survival data',
+    'analytics distinguishes reports and sites with a compact overview',
     (tester) async {
       await smallPhone(tester, Scaffold(body: AnalyticsScreen(api: _Api())));
       for (final entry in {
         'Verified reports': '12',
-        'Monitored clusters': '5',
-        'Clusters needing attention': '2',
-        'Survival rate': 'Insufficient data',
+        'Sites': '5',
+        'Needs attention': '2',
       }.entries) {
         final card = find.ancestor(
           of: find.text(entry.key),
@@ -107,6 +106,8 @@ void main() {
           findsOneWidget,
         );
       }
+      expect(find.text('Survival rate'), findsNothing);
+      expect(find.text('Methods and data limitations'), findsNothing);
       expect(find.text('Verified'), findsNothing);
       expect(find.text('Needs review'), findsNothing);
       expect(tester.takeException(), isNull);

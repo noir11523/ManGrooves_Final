@@ -56,20 +56,14 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList()
           ..sort(
-            (a, b) => '${a['submitted_at']}'.compareTo('${b['submitted_at']}'),
+            (a, b) =>
+                '${a['submitted_at']}'.compareTo('${b['submitted_at']}') != 0
+                ? '${a['submitted_at']}'.compareTo('${b['submitted_at']}')
+                : (a['id'] as num).compareTo(b['id'] as num),
           );
     final counts = entries
         .where((e) => e['observed_alive_count'] != null)
         .toList();
-    String countChange(Map e) {
-      final index = counts.indexWhere((c) => c['id'] == e['id']);
-      if (index <= 0) return 'First recorded count';
-      final delta =
-          (e['observed_alive_count'] as num) -
-          (counts[index - 1]['observed_alive_count'] as num);
-      return '${delta > 0 ? '+' : ''}$delta since previous count';
-    }
-
     return Scaffold(
       appBar: AppBar(title: const Text('Mangrove timeline')),
       body: _data == null
@@ -88,36 +82,10 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Health history and mangrove counts from verified field visits, together in one timeline.',
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Latest health: ${entries.isEmpty ? 'Awaiting review' : entries.last['health']}',
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Latest count: ${counts.isEmpty ? 'Not recorded' : '${counts.last['observed_alive_count']} living mangroves'}',
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${entries.length} verified visits · ${counts.length} with counts',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   for (final section
                       in widget.initialTab == 1 ? [1, 0] : [0, 1]) ...[
                     Text(
-                      section == 0 ? 'Health history' : 'Mangrove counts',
+                      section == 0 ? 'Health history' : 'Growth Timeline',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
@@ -125,29 +93,19 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
                       if (entries.isNotEmpty)
                         VisitChart(entries: entries, growth: false)
                       else
-                        const Text(
-                          'No verified health results yet. Reports appear after staff review.',
-                        ),
-                      if (entries.length == 1)
-                        const Text(
-                          'First verified visit. More visits will show changes over time.',
-                        ),
+                        const Text('No verified visits yet.'),
                     ] else ...[
+                      const Text('Living mangroves'),
+                      const SizedBox(height: 8),
                       if (counts.isNotEmpty)
                         VisitChart(entries: counts, growth: true)
                       else
-                        const Text(
-                          'No counts recorded yet. Add the number of living mangroves when submitting a report. It appears here after staff verification.',
-                        ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Formerly Growth timeline. This shows changes in the number of living mangroves, not tree height. Compare visits covering the same area.',
-                      ),
+                        const Text('No counts recorded yet.'),
                     ],
                     const SizedBox(height: 24),
                   ],
                   Text(
-                    'Verified visits',
+                    'Visit history (${entries.length})',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 12),
@@ -183,12 +141,11 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
                             const SizedBox(height: 12),
                             if (entry['observed_alive_count'] != null) ...[
                               Text(
-                                '${entry['observed_alive_count']} living mangroves',
+                                '${entry['observed_alive_count']} living mangrove${entry['observed_alive_count'] == 1 ? '' : 's'}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              Text(countChange(entry)),
                             ] else
                               const Text('Count not recorded'),
                             if (entry['expert_feedback'] != null)
@@ -280,7 +237,7 @@ class VisitChart extends StatelessWidget {
                       meta: meta,
                       child: Text(
                         '${entries[i]['submitted_at']}'
-                            .split(' ')
+                            .split(RegExp('[ T]'))
                             .first
                             .substring(5),
                         style: const TextStyle(fontSize: 10),
@@ -314,7 +271,7 @@ class VisitChart extends StatelessWidget {
                     .map(
                       (p) => LineTooltipItem(
                         growth
-                            ? '${p.y.toInt()} living mangroves'
+                            ? '${p.y.toInt()} living mangrove${p.y == 1 ? '' : 's'}'
                             : {0: 'At Risk', 1: 'Stressed', 2: 'Healthy'}[p.y
                                       .toInt()] ??
                                   'Not sure',

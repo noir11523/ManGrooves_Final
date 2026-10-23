@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
+    "pretest": "node build.mjs",
     "test": "node --test test/*.test.mjs",
     "test:map-layout": "node test/map-layout.mjs",
     "preview": "node preview.mjs",

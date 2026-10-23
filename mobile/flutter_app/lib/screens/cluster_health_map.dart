@@ -130,7 +130,7 @@ class ClusterHealthMap extends StatelessWidget {
                     Navigator.pop(sheet);
                     onOpenTimeline!(int.parse('${cluster['id']}'), 1);
                   },
-                  child: const Text('Mangrove counts'),
+                  child: const Text('Growth Timeline'),
                 ),
               ],
             ],

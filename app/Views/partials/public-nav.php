@@ -27,7 +27,7 @@
                 <?php endif; ?>
                 <li class="nav-item ms-lg-2">
                     <a class="btn btn-outline-secondary btn-sm" href="<?= e(defined('MANGROOVES_CLOUD') ? url('downloads/ManGROOVES-Supabase.apk') : 'https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk') ?>" download="ManGROOVES-Supabase.apk">
-                        <i class="bi bi-download me-1" aria-hidden="true"></i> Android APK
+                        <i class="bi bi-download me-1" aria-hidden="true"></i> Android app
                     </a>
                 </li>
             </ul>

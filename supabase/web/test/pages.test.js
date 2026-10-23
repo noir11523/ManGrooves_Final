@@ -24,7 +24,8 @@ test('analytics renders empty evidence honestly, validates dates and links prior
  const analytics=analyticsForUser(user,[],[],{date_from:'2026-08-01',date_to:'2026-10-21'});
  globalThis.testApi=async path=>path==='me.php'?{user}:{analytics};
  history.replaceState(null,'','#analytics');await globalThis.restoreTestAccount({id:'admin'});await tick();
- assert.match($('#content').textContent,/Insufficient data/);assert.equal(document.querySelectorAll('canvas').length,0);
+ assert.equal($('.analytics-filter-panel').open,false);assert.equal(document.querySelectorAll('canvas').length,0);
+ assert.equal($('#content').textContent.includes('Methods and data limitations'),false);assert.equal($('#content').textContent.includes('Survival rate'),false);assert.equal(document.querySelectorAll('.analytics-overview .stat').length,3);
  assert.match($('#content').textContent,/No verified visits/);assert.ok($('#analytics-pdf'));
  $('[data-section]').click();assert.equal(document.activeElement.id,'priority-areas');
  $('[name=date_from]').value='2026-10-22';$('#analytics-filters').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}));

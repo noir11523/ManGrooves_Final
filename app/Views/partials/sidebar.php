@@ -13,7 +13,7 @@ $navigation = [
         ['Mangrove timeline', 'clusters.php', 'bi-clock-history'],
         ...($guardian ? [['Explore mangrove sites', 'explore.php', 'bi-tree']] : []),
     ]],
-    ['Analytics & Decision Support', '', 'bi-bar-chart-fill', [['Monitoring analytics', 'analytics.php', 'bi-graph-up']]],
+    ['Analytics', 'analytics.php', 'bi-bar-chart-fill'],
 ];
 if (!$guardian) $navigation[] = ['Mangrove Data', '', 'bi-tree-fill', [
     ['Species & sites', 'admin/species.php', 'bi-tree'],
@@ -83,7 +83,7 @@ $isActive = static function (string $href) use ($requestPath, $navigationQuery):
 
     <div class="sidebar-footer">
         <a class="sidebar-link" href="<?= e(defined('MANGROOVES_CLOUD') ? url('downloads/ManGROOVES-Supabase.apk') : 'https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk') ?>" download="ManGROOVES-Supabase.apk">
-            <i class="bi bi-download" aria-hidden="true"></i><span>Download Android app</span>
+            <i class="bi bi-download" aria-hidden="true"></i><span>Android app</span>
         </a>
     </div>
 </aside>

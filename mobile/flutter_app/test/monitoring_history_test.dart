@@ -108,7 +108,7 @@ class _Api extends ApiClient {
     'timeline': [
       {
         'id': 1,
-        'submitted_at': '2026-09-01',
+        'submitted_at': '2026-09-01T00:00:00Z',
         'health': 'Stressed',
         'observed_alive_count': 10,
         'can_view_details': false,
@@ -225,6 +225,9 @@ void main() {
     'merged timeline shows health and counts and redacts private report links',
     (tester) async {
       await _phone(tester, ClusterTimelineScreen(api: _Api(), clusterId: 1));
+      expect(find.text('Growth Timeline'), findsOneWidget);
+      expect(find.textContaining('T00:00'), findsNothing);
+      expect(find.textContaining('Latest count:'), findsNothing);
       await tester.scrollUntilVisible(
         find.text('Community observation'),
         400,
@@ -254,7 +257,7 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('10 living mangroves'), findsOneWidget);
-      expect(find.text('+2 since previous count'), findsOneWidget);
+      expect(find.text('+2 since previous count'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

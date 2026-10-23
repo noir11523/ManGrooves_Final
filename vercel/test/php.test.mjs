@@ -66,8 +66,8 @@ test('PHP home renders before any API call and loads real counts separately',asy
   for(const card of articles){const link=card.querySelector('a'),image=card.querySelector('img');assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');assert.ok(link.getAttribute('aria-label').startsWith('Read article:'));assert.ok(image.getAttribute('src').startsWith('/assets/img/'));assert.equal(image.getAttribute('loading'),'lazy');}
   assert.match(articles[1].textContent,/Illustrative photo/);
   assert.equal(doc.querySelector('#publicNavigation a[href="#for-experts"]'),null);
-  assert.equal(doc.querySelector('a[download]').textContent.trim(),'Android APK');
-  assert.match(doc.querySelector('#for-experts').textContent,/work or professional ID code/);
+  assert.equal(doc.querySelector('a[download]').textContent.trim(),'Android app');
+  assert.match(doc.querySelector('#for-experts').textContent,/work or professional ID photo/);
   const routes=new Set();
   for(const link of doc.querySelectorAll('a[href]')){
     const url=new URL(link.getAttribute('href'),origin+'/index.php');
@@ -91,7 +91,7 @@ test('the PHP dashboard renders explicit follow-up requests and image restoratio
   assert.equal(dashboard.res.status,200);assert.match(dashboard.text,/Check the roots on your next visit/);
   assert.match(dashboard.text,/submit-report\.php\?parent=10&amp;cluster=1/);assert.doesNotMatch(dashboard.text,/Overdue|days until/i);
   const dashboardDom=new JSDOM(dashboard.text);
-  const clusterCard=[...dashboardDom.window.document.querySelectorAll('[aria-label="Report summary"] a')].find(a=>a.textContent.includes('Clusters'));
+  const clusterCard=[...dashboardDom.window.document.querySelectorAll('[aria-label="Report summary"] a')].find(a=>a.textContent.includes('Monitored clusters'));
   assert.equal(clusterCard.getAttribute('href'),'/clusters.php');dashboardDom.window.close();
   const staff=(await login('admin')).b;
   const restored=await staff.request('/cloud-api.php?route=trait-images.php',{trait:'root_type',value:'Prop roots',remove:true});
@@ -107,7 +107,7 @@ test('map security policy allows the actual tile provider',async()=>{
 test('APK is downloadable and the profile menu has no install action',async()=>{
   const {b}=await login();const dashboard=await b.request('/dashboard.php');
   assert.doesNotMatch(dashboard.text,/data-install-app|>Install app</);
-  assert.match(dashboard.text,/Android APK/);
+  assert.match(dashboard.text,/Android app/);
   const topbar=dashboard.text.match(/<header class="app-topbar">[\s\S]*?<\/header>/)?.[0];
   assert.match(topbar,/Profile settings/);assert.doesNotMatch(topbar,/Install app|Download Android APK/);
   assert.doesNotMatch(dashboard.text,/class="sidebar-user"/);assert.match(topbar,/Clement Guardian/);
@@ -119,7 +119,7 @@ test('APK is downloadable and the profile menu has no install action',async()=>{
 });
 test('signed-in PHP dashboard and secure session survive a separate HTTP request',async()=>{
   const {b,result}=await login();assert.equal(result.res.status,200);assert.match(result.res.headers.get('set-cookie'),/HttpOnly/i);assert.match(result.res.headers.get('set-cookie'),/SameSite=Lax/i);assert.doesNotMatch(b.cookie,/user-guardian|refresh-guardian|Example123/);
-  const {res,text}=await b.request('/dashboard.php');assert.equal(res.status,200);assert.match(text,/Hi, Clement!/);assert.match(text,/Report #10/);assert.match(text,/2 unread/);
+  const {res,text}=await b.request('/dashboard.php');assert.equal(res.status,200);assert.match(text,/<h1[^>]*>Dashboard/);assert.match(text,/Report #10/);assert.match(text,/2 unread/);
   const token=await b.request('/cloud-session.php',{action:'token'});assert.equal(token.data.access_token,'user-guardian');
 });
 test('all roles keep account actions in the top bar and reachable mobile navigation',async()=>{
@@ -128,25 +128,28 @@ test('all roles keep account actions in the top bar and reachable mobile navigat
     const {text}=await b.request('/dashboard.php');
     const dom=new JSDOM(text),doc=dom.window.document;
     const sidebar=doc.querySelector('.app-sidebar'),topbar=doc.querySelector('.app-topbar');
-    if(role!=='guardian')assert.deepEqual([...sidebar.querySelectorAll('nav > a span')].slice(0,3).map(s=>s.textContent),['Dashboard','Review reports','Report history']);
+    assert.equal(sidebar.querySelectorAll('a[href="/analytics.php"]').length,1,role);
+    assert.equal(sidebar.querySelector('a[href="/reports.php"] span').textContent,role==='guardian'?'My reports':'All reports');
+    assert.equal(sidebar.querySelector('a[href="/clusters.php"] span').textContent,'Mangrove timeline');
+    assert.equal(sidebar.querySelector('a[href="/admin/verification.php"]'),null);
     assert.equal(sidebar.querySelectorAll('a[href="/notifications.php"],a[href="/settings.php"],form[action="/logout.php"]').length,0,role);
     assert.equal(sidebar.querySelectorAll('a[download]').length,1,role);
+    assert.equal(sidebar.querySelector('a[download] span').textContent,'Android app');assert.ok(sidebar.querySelector('a[download] .bi-download'));
     assert.equal(doc.querySelectorAll('form[action="/logout.php"]').length,1,role);
     assert.ok(topbar.querySelector('form[action="/logout.php"] input[type="hidden"]'),role+' keeps CSRF-protected sign out');
     assert.equal(topbar.querySelectorAll('a[href="/settings.php"]').length,1,role);
     assert.equal(topbar.querySelectorAll('a[href="/notifications.php"]').length,1,role);
     assert.equal(topbar.querySelector('.notification-count').textContent,'2');
     const pending=[...doc.querySelectorAll('a')].find(a=>a.querySelector('.small')?.textContent==='Pending');
-    assert.equal(pending.getAttribute('href'),role==='guardian'?'/reports.php?status=pending':'/admin/verification.php?status=pending');
+    assert.equal(pending.getAttribute('href'),'/reports.php?status=pending');
     assert.equal(doc.querySelector('a[href*="photo-credits"]'),null);
     const bottom=[...doc.querySelectorAll('.mobile-bottom-nav > a')].map(a=>a.getAttribute('href'));
-    if(role==='guardian')assert.equal(doc.querySelector('.mobile-bottom-nav a[href="/submit-report.php"] span').textContent,'Submit Report');
-    if(role!=='admin')assert.equal(sidebar.querySelector('a[href="/submit-report.php"] span').textContent,'Submit Report');
+    if(role==='guardian')assert.equal(doc.querySelector('.mobile-bottom-nav a[href="/submit-report.php"] span').textContent,'Submit');
+    if(role!=='admin')assert.equal(sidebar.querySelector('a[href="/submit-report.php"] span').textContent,'Submit report');
     const more=[...topbar.querySelector('[aria-label="Account menu"]').parentElement.querySelectorAll('a')].map(a=>a.getAttribute('href'));
     assert.equal(new Set(bottom).size,bottom.length,role);
     assert.equal(more.some(href=>bottom.includes(href)||href==='/analytics.php'),false,role);
-    const insights=topbar.querySelector('[aria-label="Analytics and timelines"]').parentElement;
-    assert.deepEqual([...insights.querySelectorAll('a')].map(a=>a.textContent),['Analytics','Mangrove timeline']);
+    assert.equal(topbar.querySelector('[aria-label="Analytics and timelines"]'),null);
     // Follow every workspace entry to catch removed access and incorrect role routes.
     const routes=new Set([...sidebar.querySelectorAll('nav a'),...topbar.querySelectorAll('a'),...doc.querySelectorAll('.mobile-bottom-nav a')].map(a=>a.getAttribute('href')));
     for(const route of routes)assert.equal((await b.request(route)).res.status,200,role+' '+route);

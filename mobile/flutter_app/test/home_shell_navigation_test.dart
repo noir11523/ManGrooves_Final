@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:mangrooves_mobile/core/api_client.dart';
 import 'package:mangrooves_mobile/screens/home_shell.dart';
+import 'package:mangrooves_mobile/screens/analytics_screen.dart';
 
 class _Api extends ApiClient {
   _Api(this.role);
@@ -121,9 +122,7 @@ void main() {
         if (role == 'guardian') {
           await tester.tap(find.byTooltip('Menu'));
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Analytics & Decision Support'));
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Monitoring analytics'));
+          await tester.tap(find.text('Analytics'));
           await tester.pumpAndSettle();
         } else {
           await tester.tap(
@@ -135,23 +134,24 @@ void main() {
           await tester.pumpAndSettle();
         }
         expect(
-          find.text(
-            role == 'guardian'
-                ? 'My monitoring analytics'
-                : 'Analytics & Decision Support',
+          find.descendant(
+            of: find.byType(AnalyticsScreen),
+            matching: find.text(
+              role == 'guardian' ? 'My analytics' : 'Analytics',
+            ),
           ),
           findsOneWidget,
         );
         expect(find.text(role == 'guardian' ? '3' : '12'), findsOneWidget);
         if (role == 'system_admin') {
           await tester.scrollUntilVisible(
-            find.text('Generate PDF report'),
+            find.text('Export PDF'),
             300,
             scrollable: find.byType(Scrollable).last,
           );
-          expect(find.text('Generate PDF report'), findsOneWidget);
+          expect(find.text('Export PDF'), findsOneWidget);
         } else {
-          expect(find.text('Generate PDF report'), findsNothing);
+          expect(find.text('Export PDF'), findsNothing);
         }
         expect(tester.takeException(), isNull);
         await tester.tap(find.byType(BackButton));

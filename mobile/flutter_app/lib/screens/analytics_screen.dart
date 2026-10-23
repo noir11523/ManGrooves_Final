@@ -206,15 +206,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
     final personal = a['scope'] == 'personal';
     Widget metric(String label, String value) => Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(value, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(label),
-          ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 100),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 6),
+              Text(label, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
         ),
       ),
     );
@@ -224,15 +227,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
           Text(
-            personal
-                ? 'My monitoring analytics'
-                : 'Analytics & Decision Support',
+            personal ? 'My analytics' : 'Analytics',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
-          Text(
-            personal
-                ? 'Your reports only.'
-                : 'Verified monitoring records from authorized sites.',
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => ClustersScreen(api: widget.api),
+                ),
+              ),
+              icon: const Icon(Icons.timeline),
+              label: const Text('Mangrove timeline'),
+            ),
           ),
           if (_loading) const LinearProgressIndicator(),
           if (_error != null)
@@ -242,7 +251,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
           Card(
             child: ExpansionTile(
-              title: const Text('Monitoring filters'),
+              title: const Text('Filters'),
               subtitle: Text('${_from.text} to ${_to.text}'),
               childrenPadding: const EdgeInsets.all(16),
               children: [
@@ -255,7 +264,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       _date(_to, 'End date'),
                       const SizedBox(height: 12),
                       _choice(
-                        'Monitoring site',
+                        'Site',
                         _site,
                         rows(options['clusters']),
                         (v) => _site = v,
@@ -268,7 +277,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         (v) => _species = v,
                       ),
                       const SizedBox(height: 12),
-                      _choice('Latest site condition', _health, [
+                      _choice('Latest health', _health, [
                         for (final h in colors.keys) {'id': h, 'name': h},
                       ], (v) => _health = v),
                       const SizedBox(height: 16),
@@ -315,9 +324,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ],
             ),
           ),
-          const Text(
-            'Visit dates use submission time. Only reviews completed by the end date are included.',
-          ),
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, size) => Wrap(
@@ -327,16 +333,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 for (final entry in {
                   'Verified reports':
                       '${verification['verified'] ?? verification['total'] ?? 0}',
-                  'Monitored clusters':
-                      '${a['monitored_clusters'] ?? sites.length}',
-                  'Clusters needing attention':
-                      '${a['clusters_needing_attention'] ?? 0}',
-                  'Survival rate': 'Insufficient data',
+                  'Sites': '${a['monitored_clusters'] ?? sites.length}',
+                  'Needs attention': '${a['clusters_needing_attention'] ?? 0}',
                 }.entries)
                   SizedBox(
                     width: MediaQuery.textScalerOf(context).scale(16) > 22
                         ? size.maxWidth
-                        : (size.maxWidth - 8) / 2,
+                        : MediaQuery.textScalerOf(context).scale(16) > 20
+                        ? (size.maxWidth - 8) / 2
+                        : (size.maxWidth - 16) / 3,
                     child: metric(entry.key, entry.value),
                   ),
               ],
@@ -348,21 +353,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               child: OutlinedButton.icon(
                 onPressed: _exporting ? null : _exportPdf,
                 icon: const Icon(Icons.picture_as_pdf),
-                label: Text(
-                  _exporting ? 'Generating PDF...' : 'Generate PDF report',
-                ),
+                label: Text(_exporting ? 'Generating PDF...' : 'Export PDF'),
               ),
             ),
           _ChartCard(
-            title: 'Latest verified cluster conditions',
+            title: 'Site health',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('One latest eligible visit per site.'),
+                const Text('Latest verified visit'),
                 if (total == 0)
                   const Padding(
                     padding: EdgeInsets.all(16),
-                    child: Text('No verified sites match these filters.'),
+                    child: Text('No verified sites yet.'),
                   )
                 else
                   SizedBox(
@@ -402,26 +405,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ],
                     ),
                   ),
-                Text('$total monitored clusters'),
               ],
             ),
           ),
           const SizedBox(height: 12),
           _ChartCard(
-            title: 'Mangrove health trends',
+            title: 'Monthly observations',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Verified visits by month. Gaps mean no observations, not zero living mangroves.',
-                ),
+                const Text('Verified reports'),
                 if (maxVisits == 0)
                   const Padding(
                     padding: EdgeInsets.all(16),
                     child: Text('No verified visits in this period.'),
                   )
                 else ...[
-                  for (final m in months)
+                  for (final m in months.where(
+                    (m) => (m['verified_reports'] as num? ?? 0) > 0,
+                  ))
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Column(
@@ -457,7 +459,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ),
                     ),
                   ExpansionTile(
-                    title: const Text('View exact monthly counts'),
+                    title: const Text('Chart data'),
                     children: [
                       for (final m in months)
                         ListTile(
@@ -478,34 +480,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
           const SizedBox(height: 12),
           _ChartCard(
-            title: 'Monitoring progress',
+            title: 'Follow-ups',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  '${progress['followup_reports'] ?? 0} verified follow-up reports at ${progress['clusters_with_followups'] ?? 0} sites.',
+                  'Verified: ${progress['followup_reports'] ?? 0}  ·  Awaiting a visit: ${progress['awaiting_followup'] ?? 0}',
                 ),
                 Text(
-                  '${progress['awaiting_followup'] ?? 0} sites awaiting an observation.',
-                ),
-                Text(
-                  'Latest linked visits: ${progress['improved'] ?? 0} improved, ${progress['unchanged'] ?? 0} unchanged, ${progress['declined'] ?? 0} declined.',
-                ),
-                const Text(
-                  'Comparisons use a verified parent visit at the same site. Condition changes do not measure tree growth.',
-                ),
-                TextButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => ClustersScreen(api: widget.api),
-                    ),
-                  ),
-                  child: const Text('Open Mangrove timeline'),
-                ),
-                const Text('Survival trend unavailable'),
-                Text(
-                  '${a['survival_reason'] ?? 'Verified baseline and comparable follow-up measurements are needed.'}',
+                  'Improved: ${progress['improved'] ?? 0} · Unchanged: ${progress['unchanged'] ?? 0} · Declined: ${progress['declined'] ?? 0}',
                 ),
               ],
             ),
@@ -514,7 +497,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           if (sites.isNotEmpty)
             ClusterHealthMap(
               clusters: sites,
-              title: 'Monitoring map',
+              title: 'Site map',
               onOpenReports: (id) => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
@@ -532,18 +515,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
           const SizedBox(height: 12),
           Text(
-            'Priority monitoring areas',
+            'Needs attention',
             style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const Text(
-            'Operational guidance; field assessment is needed before restoration decisions.',
           ),
           if (priority.isEmpty)
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text(
-                'No sites need additional attention under these filters.',
-              ),
+              child: Text('No sites need attention.'),
             ),
           for (final c in priority)
             Card(
@@ -556,16 +534,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       '${c['name']}',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    Text('${c['priority']} priority | ${c['latest_health']}'),
-                    Text('Trend: ${c['trend']}'),
-                    Text('${c['reason']}'),
+                    Text(
+                      '${c['latest_health']} · ${c['priority'] == 'Insufficient data' ? 'Needs review' : '${c['priority']} priority'}',
+                    ),
+                    if ([
+                      'Improved',
+                      'Unchanged',
+                      'Declined',
+                    ].contains(c['trend']))
+                      Text('${c['trend']}'),
                     Text('Visit: ${c['last_monitoring_date']}'),
                     Text(
                       c['latest_health'] == 'Unknown'
-                          ? 'Ask an expert to clarify the condition.'
+                          ? 'Confirm health'
                           : c['priority'] == 'High'
-                          ? 'Prioritize a field assessment.'
-                          : 'Arrange another observation.',
+                          ? 'Inspect site'
+                          : 'Schedule a visit',
                     ),
                     Wrap(
                       spacing: 12,
@@ -592,19 +576,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 ),
               ),
             ),
-          Card(
-            child: ExpansionTile(
-              title: const Text('Methods and data limitations'),
-              childrenPadding: const EdgeInsets.all(16),
-              children: [
-                for (final value in (a['methodology'] as Map? ?? {}).values)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text('$value'),
-                  ),
-              ],
-            ),
-          ),
         ],
       ),
     );

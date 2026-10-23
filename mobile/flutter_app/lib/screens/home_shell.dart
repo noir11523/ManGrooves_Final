@@ -81,8 +81,6 @@ class _HomeShellState extends State<HomeShell> {
         'explore': 'Explore mangrove sites',
         if (_guardian) 'map': 'Report map',
       },
-      if (_guardian)
-        'Analytics & Decision Support': {'analytics': 'Monitoring analytics'},
       if (!_guardian && widget.api.supportsCloudAccounts)
         'Mangrove Data': {
           'species': 'Species & sites',
@@ -118,6 +116,12 @@ class _HomeShellState extends State<HomeShell> {
             Expanded(
               child: ListView(
                 children: [
+                  if (_guardian)
+                    ListTile(
+                      leading: const Icon(Icons.bar_chart),
+                      title: const Text('Analytics'),
+                      onTap: () => Navigator.pop(context, 'analytics'),
+                    ),
                   for (final group in groups.entries)
                     ExpansionTile(
                       title: Text(group.key),

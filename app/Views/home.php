@@ -192,7 +192,7 @@
             <div class="home-expert-intro">
                 <h2 class="section-title" id="expert-title">Expert-reviewed monitoring</h2>
                 <?php if (defined('MANGROOVES_CLOUD')): ?>
-                    <p>Expert applicants enter a work or professional ID code. An administrator checks the credential before granting review access.</p>
+                    <p>Upload a work or professional ID photo. An administrator reviews your application.</p>
                     <a class="text-link" href="<?= e(url('register.php')) ?>">Apply as an expert <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
                 <?php else: ?>
                     <p>Expert access is managed by the project administrator. Qualified professionals and authorized reviewers need approval before they can review community reports.</p>

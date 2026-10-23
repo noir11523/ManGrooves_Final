@@ -62,9 +62,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Insufficient data'), findsOneWidget);
+      expect(find.text('Survival rate'), findsNothing);
+      expect(find.text('Methods and data limitations'), findsNothing);
       expect(find.text('100%'), findsNothing);
-      await tester.tap(find.text('Monitoring filters'));
+      await tester.tap(find.text('Filters'));
       await tester.pumpAndSettle();
       final site = find.byType(DropdownButtonFormField<String>).at(0);
       await tester.ensureVisible(site);
