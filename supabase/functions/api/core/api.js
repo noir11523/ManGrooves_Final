@@ -179,7 +179,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
         }
         case 'cluster.php': {
           only('GET'); const id = integer(req.query.id, 'cluster'), cluster = await service.get('clusters', id);
-          if (!cluster || !visibleSite(cluster,user) || (user.role === 'guardian' && cluster.barangay_id !== user.barangay_id)) throw new AppError('Cluster not found.', 404);
+          if (!cluster || !visibleSite(cluster,user) || (user.role === 'guardian' && !(await service.clusters(user)).some(c=>c.id===cluster.id))) throw new AppError('Cluster not found.', 404);
           if(user.role!=='guardian') await service.ensureStaffNumbers();
           const timeline = (await service.reportViews(user,await service.rows('reports', [['cluster_id', '==', id]]))).filter(r => r.status === 'verified')
             .sort((a, b) => -newest(a, b)).map(r => {

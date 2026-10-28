@@ -1,10 +1,12 @@
-import {AppError,text} from './domain.js';
+import {AppError,text,distanceMeters} from './domain.js';
+import {reportBarangay} from './report-geography.js';
 
 export function placeResults(data) {
   return (data?.features??[]).slice(0,5).flatMap(feature=>{
     const [longitude,latitude]=feature.geometry?.coordinates??[],p=feature.properties??{};
     if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||Math.abs(latitude)>90||Math.abs(longitude)>180)return [];
-    const label=[p.name,[p.housenumber,p.street].filter(Boolean).join(' '),p.district,p.city,p.state,p.country].filter(Boolean);
+    const area=reportBarangay(latitude,longitude);
+    const label=[p.name,[p.housenumber,p.street].filter(Boolean).join(' '),...(area?[area.name,area.city_municipality,'Cebu']:[p.district,p.city,p.state,p.country])].filter(Boolean);
     return [{label:[...new Set(label)].join(', '),latitude,longitude}];
   });
 }
@@ -31,9 +33,22 @@ export async function searchPlaces(service,user,query,fetcher=fetch) {
     url.searchParams.set('lat',String(barangay?.center_lat??10.3157));url.searchParams.set('lon',String(barangay?.center_lng??123.8854));
   }
   const promise=(async()=>{try {
-    const response=await fetcher(url,{signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
-    if(!response.ok)throw new Error('Search unavailable');
-    return {places:placeResults(await response.json()),attribution:'OpenStreetMap / Photon'};
+    const barangay=reverse?reportBarangay(latitude,longitude,service.rows?await service.rows('barangays'):undefined):null;
+    const area=barangay?{id:barangay.id,name:barangay.name,city_municipality:barangay.city_municipality}:null;
+    let data;
+    try {
+      const response=await fetcher(url,{signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
+      if(!response.ok)throw new Error('Search unavailable');
+      data=await response.json();
+    } catch(error) {if(!reverse)throw error;}
+    let places=placeResults(data);
+    if(reverse&&barangay) {
+      const feature=data?.features?.[0],p=feature?.properties??{},point=feature?.geometry?.coordinates;
+      const sameArea=point&&distanceMeters(latitude,longitude,point[1],point[0])<=250&&reportBarangay(point[1],point[0])?.psgc_code===barangay.psgc_code;
+      const label=[...(sameArea?[p.name,[p.housenumber,p.street].filter(Boolean).join(' ')]:[]),barangay.name,barangay.city_municipality,'Cebu'].filter(Boolean);
+      places=[{label:[...new Set(label)].join(', '),latitude,longitude}];
+    }
+    return {places,...(reverse?{barangay:area}:{}),attribution:'OpenStreetMap / Photon'};
   } catch {cache.delete(key);throw new AppError('Address search is unavailable. You can still tap the map.',503);}})();
   if(cache.size>=250)cache.delete(cache.keys().next().value);
   cache.set(key,{promise,expires:Date.now()+300000});

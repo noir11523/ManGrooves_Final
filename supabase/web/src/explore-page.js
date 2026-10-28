@@ -13,14 +13,17 @@ export function filterExploreSites(sites,species,filters={}) {
 export async function exploreSites(node,query={},viewer=null) {
   const data=await api('explore.php',{anonymous:true});if(!node.isConnected)return ()=>{};
   const sites=data.clusters??[],catalog=data.species??[];
-  const places=[...new Map(sites.map(s=>[s.barangay_id,[s.barangay_name,s.city_municipality].filter(Boolean).join(', ')])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
-  const canTimeline=site=>viewer&&(viewer.role!=='guardian'||Number(site.barangay_id)===Number(viewer.barangay_id));
+  const ownSites=viewer?.role==='guardian'?new Set(((await api('clusters.php').catch(()=>({clusters:[]}))).clusters??[]).map(s=>String(s.id))):new Set();
+  if(!node.isConnected)return ()=>{};
+  const places=[...new Map(sites.filter(s=>s.barangay_id!=null).map(s=>[s.barangay_id,[s.barangay_name,s.city_municipality].filter(Boolean).join(', ')])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+  const canTimeline=site=>viewer&&(viewer.role!=='guardian'||Number(site.barangay_id)===Number(viewer.barangay_id)||ownSites.has(String(site.id)));
   const timelineLink=site=>!viewer?'#login':canTimeline(site)?`#cluster/${site.id}`:null;
-  node.innerHTML=`<section class="explore-page"><header class="page-head"><div><h1>Explore mangrove sites</h1><p class="muted">Shared sites with verified reports. Find a species, place or health result.</p></div></header>
+  node.innerHTML=`<section class="explore-page"><header class="page-head"><div><h1>Explore mangrove sites</h1><p class="muted">Find sites by species, barangay or health.</p></div><a class="button outline" id="explore-back" href="${viewer?'#dashboard':'#home'}">← Back</a></header>
     <form id="explore-filters" class="card"><div class="row">${field('q','Search sites or species',query.q??'','search','placeholder="Site, barangay or mangrove name" maxlength="200"')}${select('species_id','Species',[['','All species'],...catalog.map(s=>[s.id,s.scientific_name])],query.species_id)}${select('barangay_id','Location',[['','All locations'],...places],query.barangay_id)}${select('health','Health status',[['','All health'],...['Healthy','Stressed','At Risk','Unknown'].map(h=>[h,h])],query.health)}</div><div class="actions"><button type="submit">Apply filters</button><button type="button" class="outline" id="explore-reset">Reset filters</button></div></form>
     <div class="map-toolbar"><p id="explore-count" role="status"></p></div><div id="explore-map" class="map large report-map-canvas" aria-label="Shared mangrove sites"></div><div class="legend">${['Healthy','Stressed','At Risk','Unknown'].map((h,i)=>`<span style="--c:${['#3f7f43','#cf961d','#c6513c','#788778'][i]}">${h}</span>`).join('')}</div><p class="muted">Hover for a summary, or tap a pin for site details. Timelines follow your account’s access.</p><div id="explore-sites" class="explore-results"></div>
     </section>`;
   const $=s=>node.querySelector(s),canvas=map($('#explore-map'),[]);let markers=[],current=[];
+  $('#explore-back').onclick=e=>{if(document.referrer&&new URL(document.referrer).origin===location.origin&&history.length>1){e.preventDefault();history.back();}};
   const fit=()=>{const points=current.map(mapPoint).filter(Boolean);if(points.length)canvas.fitBounds(points,{padding:[30,30],maxZoom:16});};
   const draw=()=>{
     const filters=Object.fromEntries(new FormData($('#explore-filters')));current=filterExploreSites(sites,catalog,filters);markers.forEach(m=>m.remove());markers=[];

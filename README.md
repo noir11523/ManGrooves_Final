@@ -4,7 +4,7 @@
 
 **[Download the Android APK](https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk).** Open the link on your Android phone to download the app. The website and APK use the same Supabase accounts and data. Verified guardians go directly to their dashboard after finishing registration; expert applications still need admin approval.
 
-Current Android release: **2.0.0+62**. Mangrove timeline now shows Health history, Growth Timeline and compact visit history. Analytics has shorter labels, collapsible filters and fewer repeated sections. The download link reads **Android app** with its existing icon. See the [release notes](docs/RELEASE_2_0_0_62.md), [calculation methods](docs/RELEASE_2_0_0_61.md), [photo sources](docs/OBSERVATION_PHOTOS.md), and [Cebu directory](docs/CEBU_BARANGAYS.md).
+Current Android release: **2.0.0+63**. Explore has a Back button. Report barangays follow the map pin, and GPS retries and moved pins update the location name on web and Android. See the [release notes](docs/RELEASE_2_0_0_63.md), [timeline and analytics interface](docs/RELEASE_2_0_0_62.md), [calculation methods](docs/RELEASE_2_0_0_61.md), [photo sources](docs/OBSERVATION_PHOTOS.md), and [Cebu directory](docs/CEBU_BARANGAYS.md).
 
 Unfinished reports save on the current device, including the photo, checklist and current step. Location-name suggestions select a pin that continues into the map step. See the [draft and location notes](docs/VERCEL_PHP.md#report-drafts-and-locations) for recovery behavior and GPS limitations.
 

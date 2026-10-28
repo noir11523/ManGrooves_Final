@@ -55,6 +55,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   final _stepScroll = ScrollController();
   final Map<int, GlobalKey> _categoryKeys = {};
   final _sitio = TextEditingController();
+  String? _reportBarangay;
   final _aliveCount = TextEditingController();
   final _remarks = TextEditingController();
   final _picker = ImagePicker();
@@ -468,6 +469,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     _cancelGps();
     _parentRequest++;
     setState(() {
+      _reportBarangay = null;
       _followup = false;
       _loadingParents = false;
       _parentsFailed = false;
@@ -490,6 +492,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       }
     });
 
+    if (_location != null) {
+      unawaited(_fillNearbyAddress(_location!));
+    }
     await _saveDraft();
   }
 
@@ -612,6 +617,27 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         return;
       }
       _location = captured;
+      final selectedSite = _clusters
+          .where((s) => s['id'] == _clusterId)
+          .firstOrNull;
+      final siteCenter = _coordinates(selectedSite);
+      if (siteCenter != null &&
+          const Distance().as(LengthUnit.Meter, siteCenter, captured.point) >
+              ((selectedSite!['radius_meters'] as num?)?.toDouble() ?? 75)) {
+        _clusterId = null;
+        _parentReportId = null;
+        _previousReports = [];
+        _followup = false;
+        _parentRequest++;
+      }
+      _placeTimer?.cancel();
+      _placeRequest++;
+      _placeSuggestions = [];
+      _reportBarangay = null;
+      if (_clusterId == null) {
+        _sitio.text =
+            'Pinned location (${captured.latitude.toStringAsFixed(5)}, ${captured.longitude.toStringAsFixed(5)})';
+      }
       _selectedPlaceLabel = null;
       _approximatePosition = null;
       _areaCenter = null;
@@ -622,7 +648,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _gettingLocation = false;
         _gpsProgressAccuracy = null;
       });
-      await _fillNearbyAddress(_location!);
+      await _fillNearbyAddress(_location!, replace: true);
     } catch (_) {
       if (!mounted || !widget.active || request != _locationRequest) return;
       await _findApproximateArea(request, failureHint: failureHint);
@@ -894,9 +920,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _sitio.text = '${selected['sitio_name'] ?? selected['name']}';
       }
     }
-    if (location.name == null) {
-      await _fillNearbyAddress(location, replace: true);
-    }
+    await _fillNearbyAddress(location, replace: location.name == null);
     await _saveDraft();
   }
 
@@ -938,13 +962,16 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     ReportLocation point, {
     bool replace = false,
   }) async {
-    if (_clusterId != null ||
-        !widget.api.supportsCloudAccounts ||
-        (!replace && _sitio.text.trim().isNotEmpty)) {
+    if (!widget.api.supportsCloudAccounts) {
       return;
     }
     final requestedName = _sitio.text;
-    if (mounted) setState(() => _placeMessage = 'Finding the address…');
+    if (mounted) {
+      setState(() {
+        _reportBarangay = null;
+        _placeMessage = 'Finding the address…';
+      });
+    }
     try {
       final result = await widget.api.cloudRequest(
         'places.php',
@@ -953,14 +980,23 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           'longitude': '${point.longitude}',
         },
       );
-      if (!mounted || _location != point || _sitio.text != requestedName) {
+      if (!mounted || _location != point) {
         return;
       }
+      final barangay = result['barangay'] as Map?;
+      setState(
+        () => _reportBarangay = barangay == null
+            ? 'Barangay not identified. Check the pin.'
+            : 'Barangay: ${barangay['name']}, ${barangay['city_municipality']}',
+      );
       final places = result['places'] as List? ?? [];
       if (places.isNotEmpty) {
         final name = '${places.first['label']}';
-        _sitio.text = name.length > 120 ? name.substring(0, 120) : name;
+        if (replace && _clusterId == null && _sitio.text == requestedName) {
+          _sitio.text = name.length > 120 ? name.substring(0, 120) : name;
+        }
         setState(() => _placeMessage = null);
+        await _saveDraft();
       } else {
         setState(
           () => _placeMessage = 'Address unavailable. Your pin is saved.',
@@ -1049,6 +1085,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     });
     FocusScope.of(context).unfocus();
     _draftEdited();
+    unawaited(_fillNearbyAddress(_location!));
   }
 
   void _nextFromSite() {
@@ -1384,6 +1421,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   void _reset() {
+    _reportBarangay = null;
     _placeTimer?.cancel();
     _placeRequest++;
     _placeSuggestions = [];
@@ -1868,6 +1906,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 _placeMessage!,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+            if (_reportBarangay != null)
+              Text(_reportBarangay!, key: const ValueKey('report-barangay')),
             ..._placeSuggestions.map(
               (place) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),

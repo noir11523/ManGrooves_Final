@@ -372,9 +372,9 @@ export async function reportWizard(node, query, user = null) {
     if (b) canvas.setView([b.center_lat, b.center_lng], 15);
     const cluster = data.clusters.find(c => String(c.id) === String(draft.fields.cluster_id));
     if (cluster) { L.circle([cluster.center_lat, cluster.center_lng], {radius: cluster.radius_meters, color: '#5e8751', fillOpacity: .08}).addTo(canvas); canvas.setView([cluster.center_lat, cluster.center_lng], 18); }
-    let addressGeneration = 0, lastAddressAt = 0, pinWarning = '';
-    async function address(lat, lng) {
-      if(draft.fields.cluster_id)return;
+    let addressGeneration = 0, addressTimer, pinWarning = '';
+    async function address(lat, lng, replaceName = true) {
+      if(stopped||draft.step!==1||canvas!==currentCanvas)return;
       const generation = ++addressGeneration;
       locationInput.setAttribute('aria-busy','true');
       $('#nearby-address').textContent='Finding the address…';
@@ -383,14 +383,18 @@ export async function reportWizard(node, query, user = null) {
         const result = await api('places.php', {query: {latitude: lat, longitude: lng}});
       if (stopped || draft.step !== 1 || canvas !== currentCanvas || generation !== addressGeneration || Math.abs(Number(draft.fields.latitude) - Number(lat)) > 0.0000001 || Math.abs(Number(draft.fields.longitude) - Number(lng)) > 0.0000001) return;
         const label = result.places?.[0]?.label;
+        draft.fields.report_barangay=result.barangay?[result.barangay.name,result.barangay.city_municipality].filter(Boolean).join(', '):'';
+        $('#report-barangay').textContent=draft.fields.report_barangay?`Barangay: ${draft.fields.report_barangay}`:'Barangay not identified. Check the pin.';
+        void persist();
         if (!label) {$('#nearby-address').textContent='No address found. Your pin is saved.';return;}
         $('#place-search').placeholder = label;
-        if (draft.fields.sitio_name===requestedName) { draft.fields.sitio_name = label.slice(0,120); locationInput.value = draft.fields.sitio_name; void persist(); }
-        $('#nearby-address').textContent = `Nearby address: ${label}. Check the map pin.`;
+        if (replaceName && !draft.fields.cluster_id && draft.fields.sitio_name===requestedName) { draft.fields.sitio_name = label.slice(0,120); locationInput.value = draft.fields.sitio_name; void persist(); }
+        $('#nearby-address').textContent = '';
       } catch { if(generation===addressGeneration && canvas===currentCanvas) $('#nearby-address').textContent='Address unavailable. Your pin is saved; you can enter a nearby landmark.'; }
       finally {if(generation===addressGeneration && canvas===currentCanvas)locationInput.removeAttribute('aria-busy');}
     }
     $('#location-status').insertAdjacentHTML('afterend', '<small id="nearby-address" class="muted"></small>');
+    locationInput.closest('.field').insertAdjacentHTML('afterend','<p id="report-barangay" role="status"></p>');
     function choose(lat, lng, source, accuracy, restoring = false) {
       const selectedSite=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
       if(!restoring && draft.fields.parent_report_id && (!selectedSite || canvas.distance([lat,lng],[selectedSite.center_lat,selectedSite.center_lng])>Number(selectedSite.radius_meters||75))){
@@ -416,13 +420,16 @@ export async function reportWizard(node, query, user = null) {
         }
         locationInput.readOnly=Boolean(draft.fields.cluster_id);
         if(draft.fields.cluster_id){draft.fields.sitio_name=site.sitio_name||site.name;locationInput.value=draft.fields.sitio_name;}
-        else if(source==='manual') {draft.fields.sitio_name=`Pinned location (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)})`;locationInput.value=draft.fields.sitio_name;}
+        else {draft.fields.sitio_name=`Pinned location (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)})`;locationInput.value=draft.fields.sitio_name;}
+        draft.fields.report_barangay='';$('#report-barangay').textContent='Finding barangay…';
+        ++addressGeneration;clearTimeout(addressTimer);++searchGeneration;clearTimeout(searchTimer);$('#place-results').replaceChildren();
         changed();
-        if (source === 'manual' || Date.now() - lastAddressAt > 15000) { lastAddressAt = Date.now(); void address(lat, lng); }
+        const selectedName=draft.fields.sitio_name;
+        addressTimer=setTimeout(()=>void address(lat,lng,draft.fields.sitio_name===selectedName),250);
       }
       return true;
     }
-    if (draft.fields.location_source) { choose(Number(draft.fields.latitude), Number(draft.fields.longitude), draft.fields.location_source, draft.fields.location_accuracy, true); canvas.setView([draft.fields.latitude, draft.fields.longitude], 18); }
+    if (draft.fields.location_source) { choose(Number(draft.fields.latitude), Number(draft.fields.longitude), draft.fields.location_source, draft.fields.location_accuracy, true); canvas.setView([draft.fields.latitude, draft.fields.longitude], 18); void address(Number(draft.fields.latitude),Number(draft.fields.longitude),false); }
     $('#place-search').oninput=()=>{
       clearTimeout(searchTimer);const generation=++searchGeneration,q=$('#place-search').value.trim(),target=$('#place-results');
       draft.fields.sitio_name=locationInput.value.slice(0,120);void persist();

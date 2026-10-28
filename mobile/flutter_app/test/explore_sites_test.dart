@@ -23,42 +23,48 @@ class _Api extends ApiClient {
     Map<String, String>? query,
     Map<String, dynamic>? body,
     bool anonymous = false,
-  }) async => {
-    'species': [
-      {
-        'id': 1,
-        'scientific_name': 'Avicennia marina',
-        'local_name': 'Bungalon',
-      },
-      {'id': 2, 'scientific_name': 'Rhizophora apiculata'},
-    ],
-    'clusters': [
-      {
-        'id': 1,
-        'name': 'Cebu coast',
-        'barangay_id': 1,
-        'barangay_name': 'Poblacion',
-        'city_municipality': 'Cebu City',
-        'species_id': 1,
-        'latest_health': 'Healthy',
-        'verified_count': 2,
-        'latitude': 10.28,
-        'longitude': 123.88,
-      },
-      {
-        'id': 2,
-        'name': 'Danao coast',
-        'barangay_id': 2,
-        'barangay_name': 'Poblacion',
-        'city_municipality': 'Danao City',
-        'species_id': 2,
-        'latest_health': 'Stressed',
-        'verified_count': 1,
-        'latitude': 10.3,
-        'longitude': 123.9,
-      },
-    ],
-  };
+  }) async => path == 'clusters.php'
+      ? {
+          'clusters': [
+            {'id': 1},
+          ],
+        }
+      : {
+          'species': [
+            {
+              'id': 1,
+              'scientific_name': 'Avicennia marina',
+              'local_name': 'Bungalon',
+            },
+            {'id': 2, 'scientific_name': 'Rhizophora apiculata'},
+          ],
+          'clusters': [
+            {
+              'id': 1,
+              'name': 'Cebu coast',
+              'barangay_id': 1,
+              'barangay_name': 'Poblacion',
+              'city_municipality': 'Cebu City',
+              'species_id': 1,
+              'latest_health': 'Healthy',
+              'verified_count': 2,
+              'latitude': 10.28,
+              'longitude': 123.88,
+            },
+            {
+              'id': 2,
+              'name': 'Danao coast',
+              'barangay_id': 2,
+              'barangay_name': 'Poblacion',
+              'city_municipality': 'Danao City',
+              'species_id': 2,
+              'latest_health': 'Stressed',
+              'verified_count': 1,
+              'latitude': 10.3,
+              'longitude': 123.9,
+            },
+          ],
+        };
 }
 
 void main() {

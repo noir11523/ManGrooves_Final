@@ -253,10 +253,15 @@ class _LiveGps extends _Gps {
   @override
   Stream<Position> getPositionStream({LocationSettings? locationSettings}) =>
       positions.stream;
-  void send(double accuracy, {bool stale = false}) => positions.add(
+  void send(
+    double accuracy, {
+    bool stale = false,
+    double latitude = 10.2833,
+    double longitude = 123.8833,
+  }) => positions.add(
     Position(
-      latitude: 10.2833,
-      longitude: 123.8833,
+      latitude: latitude,
+      longitude: longitude,
       timestamp: DateTime.now().subtract(Duration(minutes: stale ? 2 : 0)),
       accuracy: accuracy,
       altitude: 0,
@@ -267,6 +272,29 @@ class _LiveGps extends _Gps {
       speedAccuracy: 0,
     ),
   );
+}
+
+class _AddressApi extends _SearchApi {
+  final lookups = <Completer<Map<String, dynamic>>>[];
+  @override
+  Future<Map<String, dynamic>> cloudRequest(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? query,
+    bool anonymous = false,
+  }) {
+    if (query?['latitude'] != null) {
+      final pending = Completer<Map<String, dynamic>>();
+      lookups.add(pending);
+      return pending.future;
+    }
+    return super.cloudRequest(
+      path,
+      body: body,
+      query: query,
+      anonymous: anonymous,
+    );
+  }
 }
 
 class _Drafts extends ReportDraftStore {
@@ -348,6 +376,101 @@ Future<void> openLocation(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'GPS retry replaces the previous location name and stale addresses cannot win',
+    (tester) async {
+      final old = GeolocatorPlatform.instance, gps = _LiveGps();
+      GeolocatorPlatform.instance = gps;
+      addTearDown(() async {
+        GeolocatorPlatform.instance = old;
+        await gps.positions.close();
+      });
+      final api = _AddressApi(), drafts = _Drafts();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftOwner: 'address-retry',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await openLocation(tester);
+      gps.send(9);
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(api.lookups.length, 1);
+      await tester.ensureVisible(field('Sitio or location name'));
+      await tester.enterText(field('Sitio or location name'), 'Pier');
+      await tester.pump(const Duration(milliseconds: 750));
+      await tester.pump();
+      await tap(tester, find.text('Pier 3, Cebu City'));
+      await tester.pump();
+      expect(api.lookups.length, 2);
+      api.lookups[0].complete({
+        'places': [
+          {'label': 'Old GPS address'},
+        ],
+      });
+      await tester.pump();
+      expect(
+        tester
+            .widget<TextField>(field('Sitio or location name'))
+            .controller!
+            .text,
+        'Pier 3, Cebu City',
+      );
+      api.lookups[1].complete({
+        'places': [
+          {'label': 'Pier address'},
+        ],
+        'barangay': {'name': 'Parian', 'city_municipality': 'Cebu City'},
+      });
+      await tester.pump();
+      await tap(tester, find.byKey(const ValueKey('device-location')));
+      gps.send(8, latitude: 10.273, longitude: 123.866);
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(api.lookups.length, 3);
+      expect(
+        tester
+            .widget<TextField>(field('Sitio or location name'))
+            .controller!
+            .text,
+        contains('Pinned location'),
+      );
+      api.lookups[2].complete({
+        'places': [
+          {'label': 'Cogon Pardo, Cebu City'},
+        ],
+        'barangay': {'name': 'Cogon Pardo', 'city_municipality': 'Cebu City'},
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        tester
+            .widget<TextField>(field('Sitio or location name'))
+            .controller!
+            .text,
+        'Cogon Pardo, Cebu City',
+      );
+      expect(find.text('Barangay: Cogon Pardo, Cebu City'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
   testWidgets(
     'duplicate photos stay out of the draft and count guidance is conditional',
     (tester) async {

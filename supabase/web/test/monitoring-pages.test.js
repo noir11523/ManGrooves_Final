@@ -22,6 +22,7 @@ const sites=[{id:1,name:'North coast',barangay_id:1,barangay_name:'Poblacion',ci
 test('Explore intersects species, health and disambiguated location; empty species has no broken map action',async()=>{
  globalThis.testApi=async()=>({species,clusters:sites});const dispose=await exploreSites(root,{}, {role:'system_admin'});
  try{
+  assert.equal($('#explore-back').getAttribute('href'),'#dashboard');
   assert.equal(filterExploreSites(sites,species,{q:'bungalon'}).length,1);
   assert.equal(filterExploreSites(sites,species,{q:'danao',species_id:1}).length,0);
   assert.match($('[name=barangay_id]').textContent,/Poblacion, Cebu City/);assert.match($('[name=barangay_id]').textContent,/Poblacion, Danao City/);
@@ -33,7 +34,7 @@ test('Explore intersects species, health and disambiguated location; empty speci
  }finally{dispose();}
 });
 test('Explore preserves guardian scope and public timeline links require sign-in',async()=>{
- globalThis.testApi=async()=>({species,clusters:sites});let dispose=await exploreSites(root,{}, {role:'guardian',barangay_id:1});
+ globalThis.testApi=async path=>({species,clusters:path==='clusters.php'?[sites[0]]:sites});let dispose=await exploreSites(root,{}, {role:'guardian',barangay_id:1});
  assert.ok($('#explore-sites a[href="#cluster/1"]'));assert.equal($('#explore-sites a[href="#cluster/2"]'),null);assert.match($('#explore-sites').textContent,/Outside your barangay/);dispose();
  dispose=await exploreSites(root);assert.equal(root.querySelector('a[href="#species?tab=sites"]'),null);assert.equal($('#explore-sites').querySelectorAll('a[href="#login"]').length,2);dispose();
 });

@@ -92,6 +92,40 @@ Future<void> _openPicker(
 }
 
 void main() {
+  testWidgets('moving a pin refreshes its displayed name before confirmation', (
+    tester,
+  ) async {
+    ReportLocation? result;
+    await _openPicker(
+      tester,
+      initial: const ReportLocation.manual(
+        latitude: 10.2833,
+        longitude: 123.8833,
+      ),
+      initialName: 'Old landmark',
+      api: _PlaceApi(),
+      onResult: (value) => result = value,
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('location-map')),
+      const Offset(70, 20),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(_field('Find an address or landmark'))
+          .controller!
+          .text,
+      'Test seaside landmark',
+    );
+    await tester.tap(find.byKey(const ValueKey('confirm-location')));
+    await tester.pumpAndSettle();
+    expect(result?.name, 'Test seaside landmark');
+    expect(result?.source, 'manual');
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'choosing an address moves the pin and returns a manual observation location',
     (tester) async {

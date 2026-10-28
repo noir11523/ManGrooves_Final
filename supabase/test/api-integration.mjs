@@ -57,7 +57,7 @@ let color = 10;
 async function submission(user, changes = {}, photo) {
   const bytes = photo ?? Buffer.from(fixture);
   if (!photo) bytes[25] = Math.min(255, bytes[25] + (color++ % 100)); // Make each test image's JPEG pixels distinct.
-  const fields = {latitude: 10.2833, longitude: 123.8833, location_source: 'gps', location_accuracy: 10, sitio_name: 'Test shoreline',
+  const fields = {latitude: 10.268, longitude: 123.873, location_source: 'gps', location_accuracy: 10, sitio_name: 'Test shoreline',
     observed_alive_count: 10, root_type: reference.species[0].root_type, leaf_shape: reference.species[0].leaf_shape, bark_texture: reference.species[0].bark_texture,
     field_confirmation: '1', observations: healthy, checklist_versions: Object.fromEntries(reference.criteria.map(c => [c.id, c.version])), ...changes};
   const body = new FormData(); body.set('payload', JSON.stringify(fields)); body.set('photo', new Blob([bytes], {type: 'image/jpeg'}), 'field.jpg');
@@ -390,7 +390,7 @@ try {
   await writeFile(new URL('../../tmp/report-sites/certificate-code.txt',import.meta.url),earnedRecord.certificate_code);
   pass('embedded certificate QR verifies an earned award publicly after temporary download expiry without exposing private fields');
   await request('sites.php',guardianSession,null,403);await request('sites.php',expert,{},422);
-  const siteInput={name:'Coastal nursery',sitio_name:'Nursery boardwalk',barangay_id:1,center_lat:10.2833,center_lng:123.8833,radius_meters:100};
+  const siteInput={name:'Coastal nursery',sitio_name:'Nursery boardwalk',barangay_id:1,center_lat:10.268,center_lng:123.873,radius_meters:100};
   await request('sites.php',admin,{...siteInput,center_lat:0,center_lng:0},422);
   await request('sites.php',admin,{...siteInput,center_lat:''},422);
   const createdSite=(await request('sites.php',admin,siteInput)).site;
@@ -539,6 +539,23 @@ try {
   assert.equal((await request('users.php?q=expert9103',admin)).total,0);
   assert.equal((await db.collection('users').doc(orphan.uid).get()).exists,true);
   pass('admin deletion removes login and Users entry, preserves reports, blocks self/unauthorized deletion and hides Auth orphans');
+  const elsewhere=await submission(guardianSession,{latitude:10.273,longitude:123.866,barangay_id:1,checklist_versions:versions});
+  const elsewhereSaved=await request('submit-report.php',guardianSession,elsewhere.body,201);
+  const recorded=(await db.collection('reports').doc(elsewhereSaved.report.report_id).get()).data();
+  const recordedSite=(await db.collection('clusters').doc(elsewhereSaved.report.cluster_id).get()).data();
+  assert.equal(recorded.barangay_name,'Cogon Pardo');assert.equal(recordedSite.barangay_name,'Cogon Pardo');assert.notEqual(recorded.barangay_id,1);
+  assert.equal((await request('me.php',guardianSession)).user.barangay_id,1);
+  assert.ok((await request('report-form.php',guardianSession)).clusters.some(c=>c.id===recordedSite.id));
+  await request(`cluster.php?id=${recordedSite.id}`,guardianSession);
+  const unrelated=await account(9201,'guardian');
+  await request(`cluster.php?id=${recordedSite.id}`,unrelated,null,404);
+  pass('reports save the pin barangay, preserve the profile, retain the owner timeline and protect other private sites');
+  await db.collection('clusters').doc(recordedSite.id).update({visibility:'shared',verified_count:1,barangay_id:1,barangay_name:'Inayawan'});
+  await db.collection('reports').doc(recorded.id).update({barangay_id:1,barangay_name:'Inayawan'});
+  const publicCorrected=(await request('explore.php')).clusters.find(c=>c.id===recordedSite.id);
+  assert.equal(publicCorrected.barangay_name,'Cogon Pardo');assert.notEqual(publicCorrected.barangay_id,1);
+  assert.equal((await request(`report.php?id=${recorded.id}`,guardianSession)).report.barangay_name,'Cogon Pardo');
+  pass('legacy incorrect report and site barangays resolve from coordinates in Explore and details');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

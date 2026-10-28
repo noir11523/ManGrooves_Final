@@ -231,11 +231,31 @@ test('dragged new-report pin refreshes the name, clears a distant site and ignor
  ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,fields:{cluster_id:'10',sitio_name:'Old site',latitude:10.2833,longitude:123.8833,location_source:'manual'}});
  const dispose=await ui.reportWizard($('#page'),{});
  try {
+  lookups=[];
   globalThis.testMarker.setLatLng([10.29,123.89]);globalThis.testMarker.events.dragend();
   assert.equal(ui.reportDraft.fields.cluster_id,'');assert.equal(ui.reportDraft.followup,false);assert.match(ui.reportDraft.fields.sitio_name,/Pinned location/);
+  await new Promise(r=>setTimeout(r,280));
   globalThis.testMarker.setLatLng([10.30,123.90]);globalThis.testMarker.events.dragend();
-  lookups[1]({places:[{label:'New shoreline'}]});await tick();assert.equal(ui.reportDraft.fields.sitio_name,'New shoreline');
+  await new Promise(r=>setTimeout(r,280));
+  lookups[1]({places:[{label:'New shoreline'}],barangay:{name:'Parian',city_municipality:'Cebu City'}});await tick();assert.equal(ui.reportDraft.fields.sitio_name,'New shoreline');assert.match($('#report-barangay').textContent,/Parian/);
   lookups[0]({places:[{label:'Older shoreline'}]});await tick();assert.equal(ui.reportDraft.fields.sitio_name,'New shoreline');
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('GPS refresh uses the final fix and replaces the prior pin name',async()=>{
+ const lookups=[];
+ globalThis.testApi=async(path,{query}={})=>path==='report-form.php'?{criteria:[],clusters:[],location:{}}:new Promise(resolve=>lookups.push({query,resolve}));
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,fields:{sitio_name:'Old landmark',latitude:10.268,longitude:123.873,location_source:'manual'}});
+ const dispose=await ui.reportWizard($('#page'),{});
+ try {
+  $('#gps').click();gps({coords:{latitude:10.272,longitude:123.866,accuracy:83},timestamp:Date.now()});
+  assert.match($('#place-search').value,/Pinned location/);await new Promise(r=>setTimeout(r,280));
+  gps({coords:{latitude:10.273,longitude:123.866,accuracy:8},timestamp:Date.now()});await new Promise(r=>setTimeout(r,280));
+  const last=lookups.at(-1);assert.equal(last.query.latitude,10.273);
+  last.resolve({places:[{label:'Cogon Pardo, Cebu City'}],barangay:{name:'Cogon Pardo',city_municipality:'Cebu City'}});await tick();
+  for(const lookup of lookups.slice(0,-1))lookup.resolve({places:[{label:'Outdated address'}]});await tick();
+  assert.equal($('#place-search').value,'Cogon Pardo, Cebu City');assert.match($('#report-barangay').textContent,/Cogon Pardo/);
+  assert.equal(Number(ui.reportDraft.fields.latitude),10.273);assert.equal(ui.reportDraft.fields.location_source,'gps');assert.equal($('#gps').disabled,false);
  }finally{dispose();ui.reportDraft.reset();}
 });
 

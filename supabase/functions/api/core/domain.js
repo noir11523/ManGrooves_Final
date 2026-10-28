@@ -99,7 +99,7 @@ export function validateLocation(input, barangay, cluster = null) {
     return Number(value);
   };
   const latitude = coordinate(input.latitude, 90, 'latitude'), longitude = coordinate(input.longitude, 180, 'longitude');
-  if (!barangay || distanceMeters(latitude, longitude, barangay.center_lat, barangay.center_lng) > (barangay.monitoring_radius_meters??5000)) throw new AppError('This pin is too far from your barangay. Check the location.');
+  if (!barangay || distanceMeters(latitude, longitude, barangay.center_lat, barangay.center_lng) > (barangay.monitoring_radius_meters??5000)) throw new AppError('This pin is outside the selected barangay area. Check the location.');
   if (!['gps', 'manual'].includes(input.location_source)) throw new AppError('Use GPS or place the pin on the map.');
   let accuracy = null;
   if (input.location_source === 'gps') {

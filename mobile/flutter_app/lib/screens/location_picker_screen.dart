@@ -44,6 +44,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   String? _placeLabel;
   final _search = TextEditingController();
   Timer? _debounce;
+  Timer? _addressTimer;
+  int _pinVersion = 0;
   int _searchVersion = 0;
   List<Map<String, dynamic>> _places = [];
   String? _searchMessage;
@@ -98,6 +100,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _addressTimer?.cancel();
+    _pinVersion++;
     _search.dispose();
     _searchVersion++;
     _map.dispose();
@@ -122,12 +126,60 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   void _moveTo(LatLng point, {String? label}) {
+    _selectPoint(point, label: label);
+    _map.move(point, _map.camera.zoom);
+  }
+
+  void _selectPoint(LatLng point, {String? label}) {
+    _debounce?.cancel();
+    _addressTimer?.cancel();
+    _searchVersion++;
+    final version = ++_pinVersion;
     setState(() {
       _selected = point;
       _edited = true;
       _placeLabel = label;
+      _places = [];
+      _searchMessage = null;
+      _search.text =
+          label ??
+          'Pinned location (${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)})';
     });
-    _map.move(point, _map.camera.zoom);
+    if (widget.api?.supportsCloudAccounts != true) return;
+    final requestedName = _search.text;
+    _addressTimer = Timer(const Duration(milliseconds: 350), () async {
+      if (!mounted || version != _pinVersion) return;
+      setState(() => _searchMessage = 'Finding the address…');
+      try {
+        final result = await widget.api!.cloudRequest(
+          'places.php',
+          query: {
+            'latitude': '${point.latitude}',
+            'longitude': '${point.longitude}',
+          },
+        );
+        if (!mounted || version != _pinVersion || _selected != point) return;
+        final places = result['places'] as List? ?? [];
+        final barangay = result['barangay'] as Map?;
+        setState(() {
+          if (label == null &&
+              places.isNotEmpty &&
+              _search.text == requestedName) {
+            _placeLabel = '${places.first['label']}';
+            _search.text = _placeLabel!;
+          }
+          _searchMessage = barangay == null
+              ? 'Check the map pin.'
+              : 'Barangay: ${barangay['name']}, ${barangay['city_municipality']}';
+        });
+      } catch (_) {
+        if (mounted && version == _pinVersion) {
+          setState(
+            () => _searchMessage = 'Address unavailable. Your pin is saved.',
+          );
+        }
+      }
+    });
   }
 
   Future<void> _enterCoordinates() async {
@@ -247,11 +299,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     onTap: (_, point) => _moveTo(point),
                     onPositionChanged: (camera, hasGesture) {
                       if (hasGesture) {
-                        setState(() {
-                          _selected = camera.center;
-                          _edited = true;
-                          _placeLabel = null;
-                        });
+                        _selectPoint(camera.center);
                       }
                     },
                   ),

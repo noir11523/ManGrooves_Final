@@ -11,16 +11,22 @@ import {startRegistration} from './registration.js';
 import {profileDetails} from './profile-fields.js';
 import {cebuBarangays} from './barangays.js';
 import {reviewFeedback} from './review-feedback.js';
+import {reportBarangay,withReportGeography} from './report-geography.js';
 
 export class Service extends Store {
   constructor(db, auth, bucket, mailer = null) { super(db); this.auth = auth; this.bucket = bucket; this.mailer = mailer; }
   async rows(collection,filters=[]) {
+    if(['reports','clusters'].includes(collection)) {
+      const [rows,barangays]=await Promise.all([super.rows(collection,filters.filter(([key])=>key!=='barangay_id')),this.rows('barangays')]);
+      return rows.map(row=>withReportGeography(row,barangays,collection==='clusters')).filter(row=>filters.filter(([key])=>key==='barangay_id').every(([key,op,value])=>op==='=='&&row[key]===value));
+    }
     if(collection!=='barangays')return super.rows(collection,filters);
     const rows=cebuBarangays(await super.rows('barangays'));
     return rows.filter(row=>filters.every(([key,op,value])=>op==='=='&&row[key]===value));
   }
   async get(collection,id) {
     if(collection==='barangays')return (await this.rows('barangays')).find(b=>String(b.id)===String(id))??null;
+    if(['reports','clusters'].includes(collection))return withReportGeography(await super.get(collection,id),await this.rows('barangays'),collection==='clusters');
     return super.get(collection,id);
   }
   async user(uid) {
@@ -68,13 +74,14 @@ export class Service extends Store {
     return this.reportViews(user,await this.rows('reports', user.role === 'guardian' ? [['user_id', '==', user.id]] : []));
   }
   async clusters(user) {
-    return (await this.rows('clusters', user.role === 'guardian' ? [['barangay_id', '==', user.barangay_id ?? -1]] : []))
-      .filter(c => !c.location_pending && visibleSite(c,user)).map(c => ({...c, latitude: c.center_lat, longitude: c.center_lng}));
+    const [sites,ownReports]=await Promise.all([this.rows('clusters'),user.role==='guardian'?super.rows('reports',[['user_id','==',user.id]]):[]]);
+    const visited=new Set(ownReports.map(r=>r.cluster_id));
+    return sites.filter(c => !c.location_pending && visibleSite(c,user) && (user.role!=='guardian'||c.barangay_id===user.barangay_id||Number(c.created_by)===Number(user.id)||visited.has(c.id))).map(c => ({...c, latitude: c.center_lat, longitude: c.center_lng}));
   }
   async form(user) {
     requireRole(user, 'guardian', 'expert');
     const [criteria, clusters, species, barangay] = await Promise.all([this.criteria(), this.clusters(user), this.species(), this.get('barangays', user.barangay_id)]);
-    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)), species, location: {barangay, max_distance_meters: barangay?.monitoring_radius_meters??5000, max_gps_accuracy_meters: 100},
+    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)), species, location: {barangay, max_distance_meters:null, scope:'Cebu', max_gps_accuracy_meters: 100},
       traits: Object.fromEntries(['root_type', 'leaf_shape', 'bark_texture'].map(k => [k, [...new Set(species.map(s => s[k]).filter(Boolean))].sort()]))};
   }
   async preview(user, input) {
@@ -172,11 +179,13 @@ export class Service extends Store {
   async submit(user, input, photo, closeupPhoto = null, extraPhotos = []) {
     requireRole(user, 'guardian', 'expert');
     if (String(input.field_confirmation) !== '1') throw new AppError('Confirm the photo, location, and observations are from this visit.');
-    const [criteria, catalog, barangay] = await Promise.all([this.criteria(), this.species(), this.get('barangays', user.barangay_id)]);
+    const [criteria, catalog, barangays] = await Promise.all([this.criteria(), this.species(), this.rows('barangays')]);
     if (!input.checklist_versions || criteria.some(c => input.checklist_versions[c.id] !== c.version)) {
       throw new AppError('The checklist changed. Review your answers again before submitting.', 409);
     }
     const classification = classify(criteria, input.observations), matching = matchSpecies(catalog, input);
+    const barangay=reportBarangay(input.latitude,input.longitude,barangays);
+    if(!barangay)throw new AppError('Barangay could not be identified. Place the pin within a Cebu barangay.');
     const location = validateLocation(input, barangay);
     const requestedCluster = input.cluster_id ? integer(input.cluster_id, 'cluster') : null;
     const parentId = input.parent_report_id ? integer(input.parent_report_id, 'follow-up report') : null;
@@ -229,14 +238,14 @@ export class Service extends Store {
         // Serialize cluster selection and creation so simultaneous submissions
         // at the same location cannot create duplicate clusters.
         const lockRef = this.ref('meta', 'clusters'), lock = await tx.get(lockRef);
-        const clusters = await this.transactionRows(tx, 'clusters', [['barangay_id', '==', user.barangay_id]]);
+        const clusters = (await this.transactionRows(tx, 'clusters')).map(c=>withReportGeography(c,barangays,true));
         const parentRef = parentId ? this.ref('reports', parentId) : null;
         const parent = parentRef ? (await tx.get(parentRef)).data() : null;
         if (parentId && (!parent || parent.user_id !== user.id || !followUpAvailable(parent))) throw new AppError('This follow-up is no longer available.');
         const selected = requestedCluster ?? parent?.cluster_id;
         if (parent && selected !== parent.cluster_id) throw new AppError('Use the same cluster as the previous report.');
         let cluster = selected ? clusters.find(c => c.id === selected) : null;
-        if (selected && (!cluster || !usableSite(cluster,user))) throw new AppError('Choose an active site in your barangay.');
+        if (selected && (!cluster || !usableSite(cluster,user))) throw new AppError('Choose an available site.');
         if (cluster) { validateLocation(input, barangay, cluster); fields.sitio_name=cluster.sitio_name||cluster.name; }
         // Lock in the version used for scoring; admin edits require a fresh preview.
         for (const c of criteria) {
@@ -245,8 +254,8 @@ export class Service extends Store {
         }
         // Every observation requires an independent staff review.
         const time = now(), best = matching.best;
-        if (!cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: fields.sitio_name, visibility:'personal', created_by:user.id, created_by_name:user.full_name, active:1, barangay_id: user.barangay_id,
-          barangay_name: barangay.name, center_lat: location.latitude, center_lng: location.longitude, radius_meters: 75, sitio_name: fields.sitio_name,
+        if (!cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: fields.sitio_name, visibility:'personal', created_by:user.id, created_by_name:user.full_name, active:1, barangay_id: barangay.id,
+          barangay_name: barangay.name, city_municipality:barangay.city_municipality, center_lat: location.latitude, center_lng: location.longitude, radius_meters: 75, sitio_name: fields.sitio_name,
           initial_seedlings: count, verified_count: 0, latest_health: 'Unknown', rarity_level: 'Unassigned', created_at: time};
         const sequenceRef=this.ref('meta',`report_sequence_${user.id}`), sequence=(await tx.get(sequenceRef)).data();
         const history=sequence ? [] : await this.transactionRows(tx,'reports',[['user_id','==',user.id]]);
@@ -256,7 +265,7 @@ export class Service extends Store {
         tx.set(staffSequenceRef,{last_number:staff_report_number});
         tx.set(sequenceRef,{last_number:report_number});
         const report = {id, report_number, staff_report_number, report_code: `Report #${report_number}`, user_id: user.id, uid: user.uid,
-          guardian_name: user.full_name, barangay_id: user.barangay_id, barangay_name: barangay.name, ...fields, ...location,
+          guardian_name: user.full_name, barangay_id: barangay.id, barangay_name: barangay.name, city_municipality:barangay.city_municipality, ...fields, ...location,
           cluster_id: cluster?.id ?? null, cluster_name: cluster?.name ?? null, parent_report_id: parentId, active_child_id: null,
           observed_alive_count: count, count_unknown:countUnknown, needs_follow_up:false, follow_up_note:null, health_score: classification.health_score, health_max_score: 6, context_score: classification.context_score,
           environmental_score: classification.environmental_score, suggested_health: classification.status, final_health: null,

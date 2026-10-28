@@ -27,6 +27,7 @@ class _ExploreSitesScreenState extends State<ExploreSitesScreen> {
   final _search = TextEditingController();
   final _scroll = ScrollController();
   String _species = '', _place = '', _health = '';
+  Set<String> _accessibleSites = {};
   @override
   void initState() {
     super.initState();
@@ -43,9 +44,21 @@ class _ExploreSitesScreenState extends State<ExploreSitesScreen> {
   Future<void> _load() async {
     try {
       final data = await widget.api.cloudRequest('explore.php');
+      Set<String> accessible = {};
+      if (widget.user['role'] == 'guardian') {
+        try {
+          final result = await widget.api.cloudRequest('clusters.php');
+          accessible = ((result['clusters'] as List?) ?? [])
+              .map((s) => '${s['id']}')
+              .toSet();
+        } catch (_) {
+          /* Public sites remain available if the account lookup fails. */
+        }
+      }
       if (mounted) {
         setState(() {
           _data = data;
+          _accessibleSites = accessible;
           _error = null;
         });
       }
@@ -62,7 +75,8 @@ class _ExploreSitesScreenState extends State<ExploreSitesScreen> {
 
   bool _canOpen(Map<String, dynamic> site) =>
       widget.user['role'] != 'guardian' ||
-      '${site['barangay_id']}' == '${widget.user['barangay_id']}';
+      '${site['barangay_id']}' == '${widget.user['barangay_id']}' ||
+      _accessibleSites.contains('${site['id']}');
   Widget _filter(
     String label,
     String value,
