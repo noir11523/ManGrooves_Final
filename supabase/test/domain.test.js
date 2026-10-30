@@ -116,11 +116,11 @@ test('analytics retains verified counts without claiming unsupported survival', 
 test('pending health and healthy follow-ups never inflate verified health attention',()=>{
  const submitted_at='2026-10-01T00:00:00Z';
  const rows=[{status:'verified',final_health:'Healthy',needs_follow_up:true},
- {status:'verified',final_health:'At Risk'},{status:'verified',final_health:'Stressed'},
+ {status:'verified',final_health:'At Risk'},{status:'verified',final_health:'Stressed'},{status:'verified',final_health:'Unknown'},
  ...['Healthy','Stressed','At Risk','Unknown'].map(suggested_health=>({status:'pending',suggested_health})),
  {status:'rejected',suggested_health:'At Risk'}].map((r,i)=>({...r,id:i+1,submitted_at,verified_at:submitted_at}));
  const stats=dashboardStats(rows,[]),a=analyticsForUser({role:'guardian'},rows,[],{date_from:'2026-10-01',date_to:'2026-10-02'});
- assert.equal(stats.total_reports,3);assert.equal(stats.pending_reports,4);assert.equal(stats.needs_attention,2);
- assert.equal(a.verification.total,3);assert.equal(a.verification.pending,4);assert.equal(a.high_risk_total,0);
- assert.deepEqual(a.health,{Healthy:1,Stressed:1,'At Risk':1,Unknown:0});assert.equal(a.growth[0].verified_reports,3);
+ assert.equal(stats.total_reports,4);assert.equal(stats.pending_reports,4);assert.equal(stats.needs_attention,3);
+ assert.equal(a.verification.total,4);assert.equal(a.verification.pending,4);assert.equal(a.high_risk_total,0);
+ assert.deepEqual(a.health,{Healthy:1,Stressed:1,'At Risk':1,Unknown:1});assert.equal(a.growth[0].verified_reports,4);
 });

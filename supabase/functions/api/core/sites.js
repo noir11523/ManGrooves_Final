@@ -5,20 +5,16 @@ export async function manageSites(service,user,input) {
   requireRole(user,'system_admin','expert');
   if (!input) return {sites:(await service.rows('clusters')).filter(s=>!s.deleted_at).sort((a,b)=>String(a.name).localeCompare(String(b.name))),barangays:await service.rows('barangays')};
   const id=input.id?integer(input.id,'site'):(await service.ids())[0];
-  if(['approve','delete'].includes(input.action))return service.db.runTransaction(async tx=>{
+  if(input.action==='approve')throw new AppError('Sites are added to the shared list after their first report is verified.',409);
+  if(input.action==='delete')return service.db.runTransaction(async tx=>{
     requireRole((await tx.get(service.ref('users',user.uid))).data(),'system_admin','expert');
     const ref=service.ref('clusters',id),previous=(await tx.get(ref)).data();
     if(!previous||previous.deleted_at)throw new AppError('Site not found.',404);
-    if(input.action==='approve'&&previous.location_pending)throw new AppError('Set the site pin before adding it to the site list.');
     if(input.version!==undefined&&input.version!==(previous.version??''))throw new AppError('This site changed. Reload before saving.',409);
     const lockRef=service.ref('meta','clusters'),lock=(await tx.get(lockRef)).data();
-    if(['approve','delete'].includes(input.action)){
-      if(!previous)throw new AppError('Site not found.',404);
-      const update=input.action==='approve'?{visibility:'shared',approved_by:user.id,approved_by_name:user.full_name,approved_at:now()}:{deleted_at:now(),active:0};
-      tx.update(ref,{...update,version:randomUUID(),updated_at:now()});tx.set(lockRef,{version:(lock?.version??0)+1});
-      service.audit(tx,user,`site.${input.action}`,'cluster',id,{name:previous.name});
-      return {message:input.action==='approve'?'Site added to the shared site list.':'Site deleted from the catalog. Existing reports are kept.'};
-    }
+    tx.update(ref,{deleted_at:now(),active:0,version:randomUUID(),updated_at:now()});tx.set(lockRef,{version:(lock?.version??0)+1});
+    service.audit(tx,user,'site.delete','cluster',id,{name:previous.name});
+    return {message:'Site deleted from the catalog. Existing reports are kept.'};
   });
   const barangayId=integer(input.barangay_id,'barangay'),barangay=await service.get('barangays',barangayId);
   if (!barangay) throw new AppError('Choose an available barangay.');

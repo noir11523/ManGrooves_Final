@@ -25,7 +25,7 @@ test('barangay still resolves offline and nearby addresses across a boundary can
   const service={limited:async()=>{},rows:async()=>cebuBarangays()};
   const query={latitude:10.273,longitude:123.866};
   const offline=await searchPlaces(service,{uid:'test',barangay_id:1},query,async()=>{throw Error('offline');});
-  assert.equal(offline.barangay.name,'Cogon Pardo');assert.equal(offline.places[0].label,'Cogon Pardo, Cebu City, Cebu');
+  assert.equal(offline.barangay.name,'Cogon Pardo');assert.equal(offline.places[0].label,'Cogon Pardo, Cebu City, Cebu, Philippines');
   const other=await searchPlaces(service,{uid:'test',barangay_id:1},query,async()=>({ok:true,json:async()=>({features:[{geometry:{coordinates:[123.90428,10.29706]},properties:{name:'Distant shop',district:'Wrong barangay'}}]})}));
-  assert.equal(other.places[0].label,'Cogon Pardo, Cebu City, Cebu');assert.equal(other.places[0].latitude,query.latitude);
+  assert.equal(other.places[0].label,'Cogon Pardo, Cebu City, Cebu, Philippines');assert.equal(other.places[0].latitude,query.latitude);
 });

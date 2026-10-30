@@ -259,13 +259,15 @@ test('GPS refresh uses the final fix and replaces the prior pin name',async()=>{
  }finally{dispose();ui.reportDraft.reset();}
 });
 
-test('site catalog filters and saves through the admin editor without leaving Sites',async()=>{
- const sites=[{id:10,name:'Coastal nursery',sitio_name:'Boardwalk',barangay_name:'Inayawan',barangay_id:1,center_lat:10.2833,center_lng:123.8833,radius_meters:100,active:1,version:'v1'},{id:11,name:'Old site',active:0,center_lat:10.28,center_lng:123.88}];let saved;
+test('site catalog filters and saves through the admin editor without publishing pending sites',async()=>{
+ const sites=[{id:10,name:'Coastal nursery',sitio_name:'Boardwalk',barangay_name:'Inayawan',barangay_id:1,center_lat:10.2833,center_lng:123.8833,radius_meters:100,active:1,version:'v1'},{id:11,name:'Old site',active:0,center_lat:10.28,center_lng:123.88},{id:12,name:'Personal pending',sitio_name:'Pending shore',barangay_name:'Inayawan',barangay_id:1,center_lat:10.28,center_lng:123.88,radius_meters:75,active:1,visibility:'personal',verified_count:0}];let saved;
  globalThis.testApi=async(path,{body}={})=>{assert.equal(path,'sites.php');if(body){saved=body;return {message:'Saved'};}return {sites,barangays:reference.barangays};};
  const dispose=await ui.adminPage($('#page'),'species',{tab:'sites'});
  try {
   const filters=$('.list-filters');filters.querySelector('[name=state]').value='active';filters.dispatchEvent(new Event('submit',{cancelable:true}));
-  assert.equal(document.querySelectorAll('tbody tr:not([hidden])').length,1);
+  assert.equal(document.querySelectorAll('tbody tr:not([hidden])').length,2);
+  assert.equal($('.approve-site'),null);assert.equal($('[data-id="12"] [data-label="Status"]').textContent,'Awaiting report verification');
+  assert.equal($('#page').textContent.includes('Add to site list'),false);
   $('.edit-site').click();const dialog=$('#admin-editor');dialog.querySelector('[name=name]').value='Renamed nursery';
   const form=dialog.querySelector('form');await form.onsubmit({preventDefault(){},target:form,submitter:form.querySelector('[type=submit]')});await tick();
   assert.equal(saved.name,'Renamed nursery');assert.equal(saved.version,'v1');assert.ok($('#add-site'));assert.equal($('#add'),null);
@@ -503,32 +505,32 @@ test('report draft restores fields, photo, checklist and step after reload, isol
   } finally { dispose();ui.reportDraft.reset();window.localStorage.clear();clearTimeout(ui.toast.timer); }
 });
 
-test('details address selection becomes the next-step map pin and a restored draft keeps it', async () => {
+test('location search is specific, sets the exact map pin, and typing another place clears that pin', async () => {
   globalThis.testApi=async(path,{query}={})=>{
     if(path==='report-form.php')return {criteria:reference.criteria,clusters:[],species:reference.species,
       traits:Object.fromEntries(['root_type','leaf_shape','bark_texture'].map(k=>[k,[reference.species[0][k]]])),location:{barangay:reference.barangays[0]}};
-    assert.equal(path,'places.php');assert.equal(query.q,'Pier');
-    return {places:[{label:'Pier 3, Cebu City',latitude:10.3012345,longitude:123.9012345}]};
+    assert.equal(path,'places.php');
+    if(query?.q==='Pier'){
+      assert.ok(Number.isFinite(query.bias_latitude));assert.ok(Number.isFinite(query.bias_longitude));
+      return {places:[{name:'Pier 3',address:'Pier 3, Basak Pardo, Cebu City, Cebu',label:'Pier 3, Basak Pardo, Cebu City, Cebu',latitude:10.3012345,longitude:123.9012345}]};
+    }
+    return {places:[]};
   };
   window.localStorage.clear();ui.reportDraft.reset();
   let dispose=await ui.reportWizard($('#page'),{}, {id:'place-user'});
   try {
-    const input=$('[name=sitio_name]');input.value='Pier';input.dispatchEvent(new Event('input',{bubbles:true}));
-    await new Promise(r=>setTimeout(r,750));await tick();
-    assert.match($('#details-places').textContent,/Pier 3/);$('#details-places button').click();
-    assert.equal(input.value,'Pier 3, Cebu City');assert.equal(ui.reportDraft.fields.location_source,'manual');
+    assert.equal($('[name=sitio_name]').type,'hidden');assert.equal($('#place-search'),null);
     const photo=new File(['photo'],'field.jpg',{type:'image/jpeg'});Object.defineProperty($('[name=photo]'),'files',{value:[photo]});change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[new File(['different close-up'],'closeup.jpg',{type:'image/jpeg'})]});change($('[name=closeup_photo]'));
-    set('observed_alive_count','12');
-    await submit();assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
-    assert.equal($('#place-search').value,'Pier 3, Cebu City');
+    set('observed_alive_count','12');await submit();assert.equal(ui.reportDraft.step,1);
+    $('#manual-pin').click();const input=$('#place-search');input.value='Pier';input.dispatchEvent(new Event('input',{bubbles:true}));
+    await new Promise(r=>setTimeout(r,750));await tick();assert.match($('#place-results').textContent,/Pier 3/);$('#place-results button').click();
+    assert.equal(ui.reportDraft.fields.location_source,'manual');assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
     assert.equal($('[name=latitude]').value,'10.3012345');assert.equal($('[name=longitude]').value,'123.9012345');
     await ui.reportDraft.flush();dispose();ui.reportDraft.reset();dispose=await ui.reportWizard($('#page'),{}, {id:'place-user'});
     assert.equal(ui.reportDraft.step,1);assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
-    assert.equal($('#place-search').value,'Pier 3, Cebu City');
-    $('#previous').click();await tick();const edited=$('[name=sitio_name]');edited.value='Different landmark';edited.dispatchEvent(new Event('input',{bubbles:true}));
+    const restoredInput=$('#place-search');restoredInput.value='Different landmark';restoredInput.dispatchEvent(new Event('input',{bubbles:true}));
     assert.equal(ui.reportDraft.fields.location_source,'');assert.equal(ui.reportDraft.fields.latitude,'');
-    // Leaving the step cancels delayed searches; a typed label alone is not a pin.
-    await submit();assert.equal(ui.reportDraft.step,1);assert.equal($('#place-search').value,'Different landmark');await submit();assert.equal(ui.reportDraft.step,1);
+    await new Promise(r=>setTimeout(r,750));await submit();assert.equal(ui.reportDraft.step,1);
     assert.match($('.error').textContent,/tap the map/);
   } finally {dispose();ui.reportDraft.reset();window.localStorage.clear();clearTimeout(ui.toast.timer);}
 });

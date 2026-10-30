@@ -64,16 +64,13 @@ class _SitesScreenState extends State<SitesScreen> {
     if (saved == true && mounted) await _load();
   }
 
-  Future<void> _action(Map<String, dynamic> site, String action) async {
-    final approve = action == 'approve';
+  Future<void> _delete(Map<String, dynamic> site) async {
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(approve ? 'Add to site list?' : 'Delete this site?'),
+        title: const Text('Delete this site?'),
         content: Text(
-          approve
-              ? 'Add this site to everyone’s available sites in this barangay?'
-              : 'Remove this site from choices? Existing reports will be kept.',
+          'Remove this site from choices? Existing reports will be kept.',
         ),
         actions: [
           TextButton(
@@ -82,12 +79,10 @@ class _SitesScreenState extends State<SitesScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: approve
-                ? null
-                : FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                  ),
-            child: Text(approve ? 'Add to site list' : 'Delete'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -96,7 +91,7 @@ class _SitesScreenState extends State<SitesScreen> {
     try {
       await widget.api.cloudRequest(
         'sites.php',
-        body: {...site, 'action': action},
+        body: {...site, 'action': 'delete'},
       );
       if (mounted) await _load();
     } catch (error) {
@@ -260,8 +255,9 @@ class _SitesScreenState extends State<SitesScreen> {
                 ),
                 CatalogStatus(
                   site['visibility'] == 'personal'
-                      ? 'Personal site · Not published'
+                      ? 'Awaiting report verification'
                       : 'Shared site',
+                  attention: site['visibility'] == 'personal',
                 ),
               ],
             ),
@@ -278,6 +274,13 @@ class _SitesScreenState extends State<SitesScreen> {
                 padding: EdgeInsets.only(top: 6),
                 child: Text(
                   'Set a map location to make this site available for reports.',
+                ),
+              ),
+            if (site['visibility'] == 'personal')
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'This site becomes available to everyone after its first report is verified.',
                 ),
               ),
             const Padding(
@@ -300,11 +303,6 @@ class _SitesScreenState extends State<SitesScreen> {
                     icon: const Icon(Icons.edit_outlined, size: 18),
                     label: const Text('Edit'),
                   ),
-                if (site['visibility'] == 'personal')
-                  FilledButton(
-                    onPressed: () => _action(site, 'approve'),
-                    child: const Text('Add to site list'),
-                  ),
                 if (!pending)
                   OutlinedButton(
                     onPressed: () => _archive(site),
@@ -314,7 +312,7 @@ class _SitesScreenState extends State<SitesScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Theme.of(context).colorScheme.error,
                   ),
-                  onPressed: () => _action(site, 'delete'),
+                  onPressed: () => _delete(site),
                   icon: const Icon(Icons.delete_outline, size: 18),
                   label: const Text('Delete'),
                 ),

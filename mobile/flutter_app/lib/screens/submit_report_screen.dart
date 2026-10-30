@@ -1496,7 +1496,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     final compactSteps =
         MediaQuery.sizeOf(context).width < 460 ||
         MediaQuery.textScalerOf(context).scale(16) > 20;
-    const stepNames = ['Photos', 'Location', 'Observations', 'Review'];
+    const stepNames = ['Photos', 'Location', 'Traits', 'Review'];
     return PopScope(
       canPop: !widget.handleSystemBack,
       onPopInvokedWithResult: (didPop, _) {
@@ -1595,9 +1595,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                       content: _siteStep(),
                     ),
                     Step(
-                      title: Text(
-                        !compactSteps && _step == 2 ? 'Observations' : '',
-                      ),
+                      title: Text(!compactSteps && _step == 2 ? 'Traits' : ''),
                       isActive: _step >= 2,
                       state: _step > 2 ? StepState.complete : StepState.indexed,
                       content: _healthStep(),

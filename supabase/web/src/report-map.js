@@ -101,7 +101,7 @@ export function reportMapPage(node, query = {}) {
         const data=await api('places.php',{query:{q:term}});
         if(!alive()||version!==searchVersion)return;
         const count=showPlaces([...local,...(data.places??[])]);
-        $('#map-search-status').textContent=count?'Choose a location below.':'No places found. Try another address or landmark.';
+        $('#map-search-status').textContent=count?`Choose a location below. ${data.attribution?`Source: ${data.attribution}.`:''}`:'No places found. Try another address or landmark.';
       } catch(error) {
         if(!alive()||version!==searchVersion)return;
         $('#map-search-status').textContent=local.length?'Address search is unavailable. You can choose a report location below.':'Search is unavailable. Try again in a moment.';

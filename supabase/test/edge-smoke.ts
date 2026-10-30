@@ -18,7 +18,7 @@ Deno.test('Deno HTTP runtime: routing, CORS, authentication, PDF and raster uplo
   try {
     const base=`http://127.0.0.1:${server.address().port}/functions/v1/api`;
     let response=await fetch(`${base}/configuration.php`);let body=await response.json();
-    if(body.backend!=='supabase'||body.barangays.length!==1)throw new Error('Configuration routing failed');
+    if(body.backend!=='supabase'||body.barangays.length<1200||!body.barangays.some((barangay:any)=>barangay.name==='Inayawan'))throw new Error('Configuration routing failed');
     response=await fetch(`${base}/me.php`);await response.text();if(response.status!==401)throw new Error('Missing auth allowed');
     response=await fetch(`${base}/me.php`,{headers:{Authorization:'Bearer valid',Origin:'https://example.test'}});body=await response.json();
     if(body.user.id!==1||response.headers.get('access-control-allow-origin')!=='https://example.test')throw new Error('Session/CORS failed');

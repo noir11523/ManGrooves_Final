@@ -76,12 +76,14 @@ export class Service extends Store {
   async clusters(user) {
     const [sites,ownReports]=await Promise.all([this.rows('clusters'),user.role==='guardian'?super.rows('reports',[['user_id','==',user.id]]):[]]);
     const visited=new Set(ownReports.map(r=>r.cluster_id));
-    return sites.filter(c => !c.location_pending && visibleSite(c,user) && (user.role!=='guardian'||c.barangay_id===user.barangay_id||Number(c.created_by)===Number(user.id)||visited.has(c.id))).map(c => ({...c, latitude: c.center_lat, longitude: c.center_lng}));
+    return sites.filter(c => !c.location_pending && visibleSite(c,user)
+      && (user.role!=='guardian'||c.barangay_id===user.barangay_id||Number(c.created_by)===Number(user.id)||visited.has(c.id)))
+      .map(c => ({...c, latitude: c.center_lat, longitude: c.center_lng}));
   }
   async form(user) {
     requireRole(user, 'guardian', 'expert');
     const [criteria, clusters, species, barangay] = await Promise.all([this.criteria(), this.clusters(user), this.species(), this.get('barangays', user.barangay_id)]);
-    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)), species, location: {barangay, max_distance_meters:null, scope:'Cebu', max_gps_accuracy_meters: 100},
+    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)&&(c.visibility!=='personal'||Number(c.verified_count)>0)), species, location: {barangay, max_distance_meters:null, scope:'Cebu', max_gps_accuracy_meters: 100},
       traits: Object.fromEntries(['root_type', 'leaf_shape', 'bark_texture'].map(k => [k, [...new Set(species.map(s => s[k]).filter(Boolean))].sort()]))};
   }
   async preview(user, input) {

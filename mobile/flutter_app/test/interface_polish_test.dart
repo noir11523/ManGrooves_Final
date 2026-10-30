@@ -92,9 +92,9 @@ void main() {
     (tester) async {
       await smallPhone(tester, Scaffold(body: AnalyticsScreen(api: _Api())));
       for (final entry in {
-        'Verified reports': '12',
+        'Total Verified Reports': '12',
         'Sites': '5',
-        'Needs attention': '2',
+        'Needs Attention': '2',
       }.entries) {
         final card = find.ancestor(
           of: find.text(entry.key),

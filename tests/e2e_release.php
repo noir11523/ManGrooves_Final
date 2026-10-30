@@ -546,6 +546,7 @@ try {
     record_result(
         !str_contains($dashboardPage->body, '>New report</a>')
         && strpos($dashboardPage->body, 'id="latest-heading"') < strpos($dashboardPage->body, 'id="map-heading"')
+        && str_contains($dashboardPage->body, 'Total Verified Reports')
         && str_contains($dashboardPage->body, 'reports.php?status=verified')
         && str_contains($dashboardPage->body, 'reports.php?needs_attention=1'),
         'web dashboard has report filters and a map below latest reports without a new-report button'

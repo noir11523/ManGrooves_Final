@@ -616,7 +616,7 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
       title: const Text('Privacy notice'),
       content: const SingleChildScrollView(
         child: Text(
-          'ManGROOVES saves your name, email, barangay, mobile number and address, and field reports. Reports include photos, location, checklist answers, and visit notes.\n\nYour account and reports are stored using Supabase. Guardians see their own private reports. Authorized experts and administrators can review reports. Only administrators can see an expert applicant’s ID photo.\n\nGPS is optional. You can place a map pin yourself. Address searches are sent to Photon. New field photos have personal image metadata removed before storage.\n\nYour email cannot be changed in Settings. Ask your program administrator about access, corrections, or account removal.',
+          'ManGROOVES saves your name, email, barangay, mobile number and address, and field reports. Reports include photos, location, checklist answers, and visit notes.\n\nYour account and reports are stored using Supabase. Guardians see their own private reports. Authorized experts and administrators can review reports. Only administrators can see an expert applicant’s ID photo.\n\nGPS is optional. You can place a map pin yourself. Address searches go to OpenStreetMap/Photon by default or Google Maps Geocoding when the project has that service configured. New field photos have personal image metadata removed before storage.\n\nYour email cannot be changed in Settings. Ask your program administrator about access, corrections, or account removal.',
         ),
       ),
       actions: [

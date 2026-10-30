@@ -163,7 +163,7 @@ try {
   assert.ok(!(await request('report-form.php',guardian)).clusters.some(s=>s.location_pending));
   assert.ok(!(await request('dashboard.php',admin)).clusters.some(s=>s.location_pending));
   const draft=pendingSites[0];
-  await request('sites.php',expert,{...draft,action:'approve'},422);
+  await request('sites.php',expert,{...draft,action:'approve'},409);
   const savedDraft=await request('sites.php',expert,{...draft,center_lat:10.2833,center_lng:123.8833,active:1});
   assert.equal(savedDraft.site.location_pending,false);assert.equal(savedDraft.site.active,1);
   // Isolate this catalog test from the later report clustering fixtures.
@@ -209,11 +209,14 @@ try {
   const personalSite=(await request('sites.php',expert)).sites.find(s=>s.id===saved.report.cluster_id);
   assert.equal(personalSite.visibility,'personal');assert.equal(personalSite.created_by,guardian.id);
   await request('sites.php',guardian,{...personalSite,action:'approve'},403);
-  await request('sites.php',expert,{id:personalSite.id,version:personalSite.version??'',action:'approve'});
-  assert.ok((await request('report-form.php',other)).clusters.some(s=>s.id===personalSite.id));
+  await request('sites.php',expert,{id:personalSite.id,version:personalSite.version??'',action:'approve'},409);
+  assert.ok(!(await request('report-form.php',guardian)).clusters.some(s=>s.id===personalSite.id));
+  assert.ok(!(await request('report-form.php',other)).clusters.some(s=>s.id===personalSite.id));
   await request('review.php',expert,{report_id:firstId,action:'confirm',needs_follow_up:true,follow_up_note:'Recheck the site on the next visit.'});
   const reviewedFirst=(await request(`report.php?id=${firstId}`,guardian)).report;
   assert.equal(reviewedFirst.status,'verified');assert.equal(reviewedFirst.needs_follow_up,true);
+  assert.ok((await request('report-form.php',other)).clusters.some(s=>s.id===personalSite.id));
+  assert.equal((await request('sites.php',expert)).sites.find(s=>s.id===personalSite.id).visibility,'shared');
   assert.equal(reviewedFirst.expert_feedback,'Recheck the site on the next visit.');assert.equal(reviewedFirst.follow_up_note,null);
   await request('review.php',expert,{report_id:firstId,action:'followup',needs_follow_up:true,expert_feedback:'Check the roots on the next visit.'});
   const followFeedback=(await request(`report.php?id=${firstId}`,guardian)).report;assert.equal(followFeedback.expert_feedback,'Check the roots on the next visit.');assert.equal(followFeedback.follow_up_note,null);
@@ -236,7 +239,7 @@ try {
   const unknownDetail=(await request(`report.php?id=${unknownSaved.report.report_id}`,guardian)).report;
   assert.equal(unknownDetail.count_unknown,true);assert.equal(unknownDetail.observed_alive_count,null);
   pass('unable-to-count observations are saved as unknown, never as zero');
-  pass('personal sites remain private until staff approval; creator metadata and first report number are retained');
+  pass('personal sites remain private until report verification; creator metadata and first report number are retained');
   const community = await request(`cluster.php?id=${saved.report.cluster_id}`, other); assert.equal(community.timeline[0].can_view_details, false); assert.equal(community.timeline[0].photo_url, null); pass('community timeline omits another guardian’s private photo');
   const personal = await request('analytics.php?date_from=2026-01-01&date_to=2100-01-01', other); assert.equal(personal.analytics.verification.total, 1); pass('guardian analytics is scoped to the signed-in account');
   const uncertain = await submission(guardian, {observations: {...healthy, leaf_color: [select('leaf_color', 'unknown')]}});
@@ -444,8 +447,9 @@ try {
   assert.deepEqual(numbered.map(r=>r.report.report_code).sort(),['Report #2','Report #3']);
   const another=await submission(secondUser,{checklist_versions:versions});
   assert.equal((await request('submit-report.php',secondUser,another.body,201)).report.report_code,'Report #1');
+  await request('review.php',expert,{report_id:two.report.report_id,action:'confirm'});
   const namedSite=(await request('sites.php',expert)).sites.find(s=>s.id===two.report.cluster_id);
-  await request('sites.php',expert,{id:namedSite.id,action:'approve'});
+  assert.equal(namedSite.visibility,'shared');
   const shared=await submission(secondUser,{cluster_id:namedSite.id,sitio_name:'Spoofed site label',checklist_versions:versions});
   const sharedReport=await request('submit-report.php',secondUser,shared.body,201);
   assert.equal((await request(`report.php?id=${sharedReport.report.report_id}`,secondUser)).report.sitio_name,namedSite.sitio_name);
@@ -545,11 +549,11 @@ try {
   const recordedSite=(await db.collection('clusters').doc(elsewhereSaved.report.cluster_id).get()).data();
   assert.equal(recorded.barangay_name,'Cogon Pardo');assert.equal(recordedSite.barangay_name,'Cogon Pardo');assert.notEqual(recorded.barangay_id,1);
   assert.equal((await request('me.php',guardianSession)).user.barangay_id,1);
-  assert.ok((await request('report-form.php',guardianSession)).clusters.some(c=>c.id===recordedSite.id));
+  assert.ok(!(await request('report-form.php',guardianSession)).clusters.some(c=>c.id===recordedSite.id));
   await request(`cluster.php?id=${recordedSite.id}`,guardianSession);
   const unrelated=await account(9201,'guardian');
   await request(`cluster.php?id=${recordedSite.id}`,unrelated,null,404);
-  pass('reports save the pin barangay, preserve the profile, retain the owner timeline and protect other private sites');
+  pass('unverified sites stay out of report choices while the owner keeps timeline access and other guardians stay blocked');
   await db.collection('clusters').doc(recordedSite.id).update({visibility:'shared',verified_count:1,barangay_id:1,barangay_name:'Inayawan'});
   await db.collection('reports').doc(recorded.id).update({barangay_id:1,barangay_name:'Inayawan'});
   const publicCorrected=(await request('explore.php')).clusters.find(c=>c.id===recordedSite.id);

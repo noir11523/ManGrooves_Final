@@ -21,6 +21,40 @@ export function boundaryCode(latitude,longitude) {
   return matches.length===1?matches[0].psgc:null;
 }
 const directory=cebuBarangays();
+export const philippineSearchBounds=[116.8,4.5,126.7,21.2];
+export function withinPhilippineSearchBounds(latitude,longitude) {
+  const [minLongitude,minLatitude,maxLongitude,maxLatitude]=philippineSearchBounds;
+  return Number.isFinite(latitude)&&Number.isFinite(longitude)
+    &&longitude>=minLongitude&&latitude>=minLatitude
+    &&longitude<=maxLongitude&&latitude<=maxLatitude;
+}
+
+function inBoundary(boundary,longitude,latitude) {
+  return longitude>=boundary.bbox[0]&&latitude>=boundary.bbox[1]
+    &&longitude<=boundary.bbox[2]&&latitude<=boundary.bbox[3]
+    &&boundary.polygons.some(p=>inRing(longitude,latitude,p[0])&&!p.slice(1).some(r=>inRing(longitude,latitude,r)));
+}
+
+export function barangaySearchPoint(barangay) {
+  const code=barangay?.psgc_code,boundary=boundaries.find(b=>b.psgc===code);
+  if(!boundary)return null;
+  const accepts=(latitude,longitude)=>{
+    if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||!inBoundary(boundary,longitude,latitude))return false;
+    return boundaryCode(latitude,longitude)===code;
+  };
+  const saved=[Number(barangay.center_lat),Number(barangay.center_lng)];
+  if(accepts(...saved))return {latitude:saved[0],longitude:saved[1]};
+  const [minLng,minLat,maxLng,maxLat]=boundary.bbox;
+  const middle=[(minLat+maxLat)/2,(minLng+maxLng)/2];
+  if(accepts(...middle))return {latitude:middle[0],longitude:middle[1]};
+  for(const divisions of [8,16,32,64])for(let y=0;y<divisions;y++)for(let x=0;x<divisions;x++){
+    const latitude=minLat+(y+.5)*(maxLat-minLat)/divisions;
+    const longitude=minLng+(x+.5)*(maxLng-minLng)/divisions;
+    if(accepts(latitude,longitude))return {latitude,longitude};
+  }
+  return null;
+}
+
 export function reportBarangay(latitude,longitude,rows=directory) {
   const code=boundaryCode(latitude,longitude);
   return code?rows.find(b=>b.psgc_code===code)??null:null;

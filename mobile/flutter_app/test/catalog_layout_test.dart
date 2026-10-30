@@ -184,6 +184,16 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Needs map location'), findsOneWidget);
+        expect(find.text('Add to site list'), findsNothing);
+        await tester.enterText(
+          find.byType(TextField).first,
+          'Coastal nursery boardwalk',
+        );
+        await tester.tap(find.text('Filter'));
+        await tester.pumpAndSettle();
+        expect(find.text('Awaiting report verification'), findsOneWidget);
+        await tester.tap(find.text('Reset'));
+        await tester.pumpAndSettle();
         await _capture(tester, 'sites-${width.toInt()}');
         await tester.scrollUntilVisible(
           find.text('Set map location'),

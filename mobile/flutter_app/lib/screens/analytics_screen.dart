@@ -331,10 +331,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               runSpacing: 8,
               children: [
                 for (final entry in {
-                  'Verified reports':
+                  'Total Verified Reports':
                       '${verification['verified'] ?? verification['total'] ?? 0}',
                   'Sites': '${a['monitored_clusters'] ?? sites.length}',
-                  'Needs attention': '${a['clusters_needing_attention'] ?? 0}',
+                  'Needs Attention': '${a['clusters_needing_attention'] ?? 0}',
                 }.entries)
                   SizedBox(
                     width: MediaQuery.textScalerOf(context).scale(16) > 22
@@ -515,7 +515,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
           const SizedBox(height: 12),
           Text(
-            'Needs attention',
+            'Needs Attention',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           if (priority.isEmpty)
