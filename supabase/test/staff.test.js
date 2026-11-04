@@ -6,7 +6,7 @@ test('staff creation rechecks administrator access and removes the auth account 
   const actor={uid:'admin',id:1,status:'active',role:'system_admin'};
   const deleted=[];
   const service={
-    get:async()=>({name:'Inayawan'}),rows:async()=>[],limited:async()=>{},ids:async()=>[2],ref:()=>({}),
+    get:async()=>({name:'Inayawan',province:'Cebu',city_municipality:'Cebu City'}),rows:async()=>[],limited:async()=>{},ids:async()=>[2],ref:()=>({}),
     auth:{createUser:async()=>({uid:'new-staff'}),deleteUser:async uid=>deleted.push(uid)},
     db:{runTransaction:async callback=>callback({get:async()=>({data:()=>({...actor,status:'inactive'})})})},
   };

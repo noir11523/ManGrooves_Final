@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Tagunol Street",
+    "latitude": 10.28877944,
+    "longitude": 123.87391269,
+    "source": "DOTC Cebu street reference via Transitland",
+    "source_url": "https://www.transit.land/explore/stops/s-wcb4dc40rr-nodata~tagunolstreet",
+    "point_note": "Approximate street reference decoded from the archived stop's public geohash; confirm the report pin on the map."
+  }
+]

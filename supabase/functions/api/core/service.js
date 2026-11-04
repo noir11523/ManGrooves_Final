@@ -9,9 +9,9 @@ import { analyticsForUser, badgeMetrics, reportLabel, verifiedNeedsAttention, da
 import { saveImage } from './uploads.js';
 import {startRegistration} from './registration.js';
 import {profileDetails} from './profile-fields.js';
-import {cebuBarangays} from './barangays.js';
+import {philippineBarangays,publicBarangay} from './barangays.js';
 import {reviewFeedback} from './review-feedback.js';
-import {reportBarangay,withReportGeography} from './report-geography.js';
+import {reportBarangay,withReportGeography,withinPhilippineSearchBounds} from './report-geography.js';
 
 export class Service extends Store {
   constructor(db, auth, bucket, mailer = null) { super(db); this.auth = auth; this.bucket = bucket; this.mailer = mailer; }
@@ -21,8 +21,26 @@ export class Service extends Store {
       return rows.map(row=>withReportGeography(row,barangays,collection==='clusters')).filter(row=>filters.filter(([key])=>key==='barangay_id').every(([key,op,value])=>op==='=='&&row[key]===value));
     }
     if(collection!=='barangays')return super.rows(collection,filters);
-    const rows=cebuBarangays(await super.rows('barangays'));
+    const rows=philippineBarangays(await super.rows('barangays'));
     return rows.filter(row=>filters.every(([key,op,value])=>op==='=='&&row[key]===value));
+  }
+  async findBarangay(latitude,longitude,rows=null) {
+    const local=reportBarangay(latitude,longitude,rows??undefined);
+    if(local)return local;
+    const latitudeValue=Number(latitude),longitudeValue=Number(longitude);
+    if(!withinPhilippineSearchBounds(latitudeValue,longitudeValue))return null;
+    if(typeof this.db.rpc!=='function')return null;
+    let code;
+    try {code=await this.db.rpc('app_barangay_code_at',{p_latitude:latitudeValue,p_longitude:longitudeValue});}
+    catch(error) {
+      // Older deployments still support the bundled Cebu boundaries. Missing
+      // national lookup data must never assign the account's home barangay.
+      if(['PGRST202','42883'].includes(error?.code))return null;
+      throw new AppError('Location lookup is unavailable. Please try again.',503);
+    }
+    if(!code)return null;
+    const directory=rows??await this.rows('barangays');
+    return directory.find(row=>row.psgc_code===String(code))??null;
   }
   async get(collection,id) {
     if(collection==='barangays')return (await this.rows('barangays')).find(b=>String(b.id)===String(id))??null;
@@ -83,7 +101,7 @@ export class Service extends Store {
   async form(user) {
     requireRole(user, 'guardian', 'expert');
     const [criteria, clusters, species, barangay] = await Promise.all([this.criteria(), this.clusters(user), this.species(), this.get('barangays', user.barangay_id)]);
-    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)&&(c.visibility!=='personal'||Number(c.verified_count)>0)), species, location: {barangay, max_distance_meters:null, scope:'Cebu', max_gps_accuracy_meters: 100},
+    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)&&Number(c.verified_count)>0), species, location: {barangay, max_distance_meters:null, scope:'Philippines', max_gps_accuracy_meters: 100},
       traits: Object.fromEntries(['root_type', 'leaf_shape', 'bark_texture'].map(k => [k, [...new Set(species.map(s => s[k]).filter(Boolean))].sort()]))};
   }
   async preview(user, input) {
@@ -101,11 +119,11 @@ export class Service extends Store {
     const reminders = user.role === 'guardian' ? rows.filter(r => followUpAvailable(r) && !children.has(r.id))
       .map(r => ({id: r.id, report_code: reportLabel(r), cluster_id: r.cluster_id, cluster_name: r.cluster_name,
         expert_feedback:reviewFeedback(r), follow_up_note:reviewFeedback(r), due_state:'requested'})) : [];
-    return {user: publicUser(user), stats: {...dashboardStats(rows, clusters), pending_review_reports: rows.filter(r=>r.status==='pending'&&r.user_id!==user.id).length}, latest_reports: reportList(rows).items.slice(0, 6), reminders, clusters};
+    return {user: publicUser(user), stats: {...dashboardStats(rows, clusters), pending_review_reports: rows.filter(r=>r.status==='pending'&&r.user_id!==user.id).length}, latest_reports: reportList(rows).items.slice(0, 6), reminders, clusters:clusters.filter(c=>Number(c.verified_count)>0)};
   }
   async analytics(user, query = {}, reportRows = null) {
     const [rows,clusters]=await Promise.all([reportRows??this.reports(user),this.clusters(user)]);
-    return analyticsForUser(user,rows,clusters,query);
+    return analyticsForUser(user,rows,clusters.filter(c=>Number(c.verified_count)>0),query);
   }
   async detail(user, id) {
     if(user.role!=='guardian') await this.ensureStaffNumbers();
@@ -140,7 +158,7 @@ export class Service extends Store {
       });
       user = {...user, ...update};
     }
-    return {user: publicUser(user), barangays: await this.rows('barangays'), message: input ? 'Profile updated.' : null};
+    return {user: publicUser(user), barangays: (await this.rows('barangays')).map(publicBarangay), message: input ? 'Profile updated.' : null};
   }
   audit(tx, user, action, entity_type, entity_id, details = {}) {
     tx.create(this.ref('audit_logs', randomUUID()), {user_id: user.id, actor_name: user.full_name, action, entity_type, entity_id, details, created_at: now()});
@@ -186,8 +204,8 @@ export class Service extends Store {
       throw new AppError('The checklist changed. Review your answers again before submitting.', 409);
     }
     const classification = classify(criteria, input.observations), matching = matchSpecies(catalog, input);
-    const barangay=reportBarangay(input.latitude,input.longitude,barangays);
-    if(!barangay)throw new AppError('Barangay could not be identified. Place the pin within a Cebu barangay.');
+    const barangay=await this.findBarangay(input.latitude,input.longitude,barangays);
+    if(!barangay)throw new AppError('Barangay could not be identified. Place the pin inside a mapped Philippine barangay.');
     const location = validateLocation(input, barangay);
     const requestedCluster = input.cluster_id ? integer(input.cluster_id, 'cluster') : null;
     const parentId = input.parent_report_id ? integer(input.parent_report_id, 'follow-up report') : null;
@@ -247,7 +265,7 @@ export class Service extends Store {
         const selected = requestedCluster ?? parent?.cluster_id;
         if (parent && selected !== parent.cluster_id) throw new AppError('Use the same cluster as the previous report.');
         let cluster = selected ? clusters.find(c => c.id === selected) : null;
-        if (selected && (!cluster || !usableSite(cluster,user))) throw new AppError('Choose an available site.');
+        if (selected && (!cluster || !usableSite(cluster,user) || !(Number(cluster.verified_count)>0))) throw new AppError('Choose a verified site or select New site.');
         if (cluster) { validateLocation(input, barangay, cluster); fields.sitio_name=cluster.sitio_name||cluster.name; }
         // Lock in the version used for scoring; admin edits require a fresh preview.
         for (const c of criteria) {

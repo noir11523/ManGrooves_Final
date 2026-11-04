@@ -65,7 +65,7 @@ async function submission(user, changes = {}, photo) {
 }
 try {
   const guardian = await account(1, 'guardian'), other = await account(2, 'guardian'), expert = await account(3, 'expert'), admin = await account(4, 'system_admin');
-  const config = await request('configuration.php'); assert.equal(config.backend, 'supabase'); assert.equal(config.barangays.length, 1203); pass('public cloud configuration');
+  const config = await request('configuration.php'); assert.equal(config.backend, 'supabase'); assert.equal(config.barangays.length, 42046); assert.equal(new Set(config.barangays.map(b=>b.id)).size,42046); pass('public cloud configuration');
   const publicSites=await request('explore.php');assert.equal(publicSites.summary.guardians,2);assert.equal(publicSites.summary.verified_reports,0);assert.ok(publicSites.species.length>0);
   assert.ok(publicSites.species.every(s=>Object.keys(s).every(k=>['id','scientific_name','common_name','local_name','family','iucn_code'].includes(k))));assert.equal(publicSites.users,undefined);pass('public homepage totals and species catalog do not expose private account or report records');
   const read=db.read.bind(db),collections=[];db.read=(ref,...args)=>{collections.push(ref.collection);return read(ref,...args);};
@@ -164,7 +164,7 @@ try {
   assert.ok(!(await request('dashboard.php',admin)).clusters.some(s=>s.location_pending));
   const draft=pendingSites[0];
   await request('sites.php',expert,{...draft,action:'approve'},409);
-  const savedDraft=await request('sites.php',expert,{...draft,center_lat:10.2833,center_lng:123.8833,active:1});
+  const savedDraft=await request('sites.php',expert,{...draft,center_lat:10.268,center_lng:123.873,active:1});
   assert.equal(savedDraft.site.location_pending,false);assert.equal(savedDraft.site.active,1);
   // Isolate this catalog test from the later report clustering fixtures.
   for(const site of pendingSites)await db.collection('clusters').doc(String(site.id)).delete();
@@ -212,6 +212,10 @@ try {
   await request('sites.php',expert,{id:personalSite.id,version:personalSite.version??'',action:'approve'},409);
   assert.ok(!(await request('report-form.php',guardian)).clusters.some(s=>s.id===personalSite.id));
   assert.ok(!(await request('report-form.php',other)).clusters.some(s=>s.id===personalSite.id));
+  const unverifiedSite=await submission(guardian,{cluster_id:personalSite.id});
+  await request('submit-report.php',guardian,unverifiedSite.body,422);
+  const pendingStats=(await request('dashboard.php',guardian)).stats;
+  assert.equal(pendingStats.verified_reports,0);assert.equal(pendingStats.pending_reports,1);assert.equal(pendingStats.needs_attention,0);assert.equal(pendingStats.map_clusters,0);
   await request('review.php',expert,{report_id:firstId,action:'confirm',needs_follow_up:true,follow_up_note:'Recheck the site on the next visit.'});
   const reviewedFirst=(await request(`report.php?id=${firstId}`,guardian)).report;
   assert.equal(reviewedFirst.status,'verified');assert.equal(reviewedFirst.needs_follow_up,true);
@@ -398,7 +402,7 @@ try {
   await request('sites.php',admin,{...siteInput,center_lat:''},422);
   const createdSite=(await request('sites.php',admin,siteInput)).site;
   assert.equal(createdSite.sitio_name,siteInput.sitio_name);
-  assert.ok((await request('report-form.php',guardianSession)).clusters.some(s=>s.id===createdSite.id));
+  assert.ok(!(await request('report-form.php',guardianSession)).clusters.some(s=>s.id===createdSite.id));
   await request('sites.php',admin,siteInput,409);
   const archivedSite=(await request('sites.php',admin,{...createdSite,active:0})).site;
   assert.equal(archivedSite.active,0);
@@ -406,7 +410,7 @@ try {
   assert.ok((await request('sites.php',admin)).sites.some(s=>s.id===createdSite.id));
   await request('sites.php',admin,{...createdSite,name:'Outdated edit'},409);
   await request('sites.php',admin,{...archivedSite,active:1,name:'Restored nursery'});
-  assert.ok((await request('report-form.php',guardianSession)).clusters.some(s=>s.name==='Restored nursery'));
+  assert.ok(!(await request('report-form.php',guardianSession)).clusters.some(s=>s.name==='Restored nursery'));
   pass('site management enforces administrator access, valid pins, unique active names, concurrent edits and reversible archiving');
   const historicalSite=(await request('sites.php',admin)).sites.find(s=>s.id===saved.report.cluster_id);
   const historicalReport=await request(`report.php?id=${firstId}`,guardianSession);

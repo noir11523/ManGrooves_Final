@@ -1,14 +1,16 @@
 import test,{before,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {createServer} from 'node:http';
+import {createServer,get as httpGet} from 'node:http';
+import {gunzipSync} from 'node:zlib';
 import {spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {readFile,readdir} from 'node:fs/promises';
 import {JSDOM} from '../../supabase/node_modules/jsdom/lib/api.js';
+import {philippineBarangays,publicBarangay} from '../../supabase/functions/api/core/barangays.js';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
-let php,mock,origin,logs='',disabled=false,expired=false;
+let php,mock,origin,logs='',disabled=false,expired=false,largeDirectory=false;
 const calls=[];
 const users={guardian:{id:1,uid:'g',role:'guardian',first_name:'Clement',last_name:'Guardian',full_name:'Clement Guardian',email:'guardian@example.test',status:'active'},expert:{id:2,uid:'e',role:'expert',first_name:'Test',full_name:'Test Expert',email:'expert@example.test',status:'active'},admin:{id:3,uid:'a',role:'system_admin',first_name:'Test',full_name:'Test Admin',email:'admin@example.test',status:'active'}};
 const listen=server=>new Promise(resolve=>server.listen(0,'127.0.0.1',()=>resolve(server.address().port)));
@@ -24,12 +26,13 @@ before(async()=>{
     const endpoint=new URL(req.url,'http://localhost').pathname.split('/').at(-1),role=req.headers.authorization?.replace('Bearer user-','');
     calls.push({endpoint,region:req.headers['x-region']});
     if(endpoint==='explore.php')return send({ok:true,clusters:[],summary:{verified_reports:12,clusters:3,species:5,guardians:7}});
-    if(endpoint==='configuration.php')return send({ok:true,barangays:[{id:1,name:'Coastal site'}]});
+    if(endpoint==='configuration.php')return send({ok:true,barangays:largeDirectory?philippineBarangays().map(publicBarangay):[{id:1,name:'Coastal site'}]});
     if(endpoint==='complete-registration.php')return send({ok:req.headers.authorization==='Bearer proof',pending_approval:true});
     if(endpoint==='register.php')return send({ok:true,message:'Check your email.'});
     if(role==='pending'||disabled)return send({ok:false,message:'Your account is waiting for admin approval.'},403);
     if(!users[role])return send({ok:false,message:'Sign in again.'},401);
     if(endpoint==='me.php')return send({ok:true,user:users[role]});
+    if(endpoint==='profile.php'&&largeDirectory)return send({ok:true,user:users[role],barangays:philippineBarangays().map(publicBarangay)});
     if(endpoint==='notifications.php')return send({ok:true,unread:2,items:[]});
     if(endpoint==='dashboard.php')return send({ok:true,user:users[role],stats:{total_reports:1,verified_reports:1},latest_reports:[{id:10,report_code:'Report #10',status:'verified',cluster_name:'Coast',display_health:'Healthy',submitted_at:'2026-10-03'}],reminders:role==='guardian'?[{id:10,cluster_id:1,cluster_name:'Coast',follow_up_note:'Check the roots on your next visit.'}]:[],clusters:[]});
     if(endpoint==='logout.php'||endpoint==='account-security.php')return send({ok:true});
@@ -85,6 +88,37 @@ test('private JSON reads use one authoritative API call and still reject disable
   disabled=true;
   try { assert.equal((await b.request('/cloud-api.php?route=reports.php')).res.status,403); }
   finally { disabled=false; }
+});
+
+test('full address directory fits hosting limits and decodes unchanged for registration and profile',async()=>{
+  const {b}=await login();largeDirectory=true;
+  try {
+    for(const route of ['configuration.php','profile.php']) {
+      const {res,body}=await new Promise((resolve,reject)=>{
+        httpGet(origin+'/cloud-api.php?route='+route,{headers:{Cookie:b.cookie,'Accept-Encoding':'gzip'}},res=>{
+          const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('error',reject);
+          res.on('end',()=>resolve({res,body:Buffer.concat(chunks)}));
+        }).on('error',reject);
+      });
+      assert.equal(res.statusCode,200);assert.equal(res.headers['content-encoding'],'gzip');
+      assert.equal(Number(res.headers['content-length']),body.length);
+      assert.match(res.headers.vary,/Accept-Encoding/);assert.match(res.headers['cache-control'],/no-store/);
+      const text=gunzipSync(body).toString('utf8'),data=JSON.parse(text);
+      assert.equal(data.barangays.length,42046);assert.deepEqual(data.barangays,philippineBarangays().map(publicBarangay));
+      assert.ok(Buffer.byteLength(text)>4500000,'fixture must reproduce the production response limit');
+      assert.ok(body.length*4/3<4500000,'compressed response including runtime base64 fits');
+    }
+  } finally {largeDirectory=false;}
+});
+
+test('address response respects clients that explicitly decline gzip',async()=>{
+  const b=await browser();largeDirectory=true;
+  try {
+    for(const encoding of ['identity','gzip;q=0, *;q=1']) {
+      const {res,data}=await b.request('/cloud-api.php?route=configuration.php',null,{headers:{'Accept-Encoding':encoding}});
+      assert.equal(res.status,200);assert.equal(res.headers.get('content-encoding'),null);assert.equal(data.barangays.length,42046);
+    }
+  } finally {largeDirectory=false;}
 });
 test('the PHP dashboard renders explicit follow-up requests and image restoration reaches the API',async()=>{
   const {b}=await login();const dashboard=await b.request('/dashboard.php');

@@ -40,19 +40,27 @@ class ResidentialAddressFields extends StatefulWidget {
 }
 
 class _ResidentialAddressFieldsState extends State<ResidentialAddressFields> {
+  String? _province;
   String? _city;
   String cityOf(Map b) => '${b['city_municipality'] ?? 'Cebu City'}';
-  void syncCity() {
+  String provinceOf(Map b) => '${b['province'] ?? 'Cebu'}';
+  void syncAddress() {
     final b = widget.barangays
         .where((b) => b['id'] == widget.barangayId)
         .firstOrNull;
-    if (b != null) _city = cityOf(b);
+    if (b != null) {
+      _province = provinceOf(b);
+      _city = cityOf(b);
+    } else if (_province == null) {
+      final provinces = widget.barangays.map(provinceOf).toSet();
+      if (provinces.length == 1) _province = provinces.single;
+    }
   }
 
   @override
   void initState() {
     super.initState();
-    syncCity();
+    syncAddress();
   }
 
   @override
@@ -60,14 +68,22 @@ class _ResidentialAddressFieldsState extends State<ResidentialAddressFields> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.barangayId != widget.barangayId ||
         oldWidget.barangays != widget.barangays) {
-      syncCity();
+      syncAddress();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final cities = widget.barangays.map(cityOf).toSet().toList()..sort();
-    final rows = widget.barangays.where((b) => cityOf(b) == _city).toList();
+    final provinces = widget.barangays.map(provinceOf).toSet().toList()..sort();
+    final cities = widget.barangays
+        .where((b) => provinceOf(b) == _province)
+        .map(cityOf)
+        .toSet()
+        .toList()
+      ..sort();
+    final rows = widget.barangays
+        .where((b) => provinceOf(b) == _province && cityOf(b) == _city)
+        .toList();
     Widget text(
       TextEditingController controller,
       String label,
@@ -114,7 +130,27 @@ class _ResidentialAddressFieldsState extends State<ResidentialAddressFields> {
           hint: 'For example: Purok 3',
         ),
         DropdownButtonFormField<String>(
-          key: ValueKey('city-$_city'),
+          key: ValueKey('province-$_province'),
+          initialValue: provinces.contains(_province) ? _province : null,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Province / region'),
+          items: provinces
+              .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+              .toList(),
+          validator: (v) => v == null ? 'Choose your province or region.' : null,
+          onChanged: widget.enabled
+              ? (v) {
+                  setState(() {
+                    _province = v;
+                    _city = null;
+                  });
+                  widget.onBarangayChanged(null);
+                }
+              : null,
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          key: ValueKey('city-$_province-$_city'),
           initialValue: cities.contains(_city) ? _city : null,
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'City / municipality'),
@@ -123,7 +159,7 @@ class _ResidentialAddressFieldsState extends State<ResidentialAddressFields> {
               .toList(),
           validator: (v) =>
               v == null ? 'Choose your city or municipality.' : null,
-          onChanged: widget.enabled
+          onChanged: widget.enabled && _province != null
               ? (v) {
                   setState(() => _city = v);
                   widget.onBarangayChanged(null);
@@ -135,10 +171,8 @@ class _ResidentialAddressFieldsState extends State<ResidentialAddressFields> {
           items: rows,
           value: widget.barangayId,
           onChanged: widget.onBarangayChanged,
-          enabled: widget.enabled && _city != null,
+          enabled: widget.enabled && _province != null && _city != null,
         ),
-        const SizedBox(height: 16),
-        const TextFormFieldProvince(),
         const SizedBox(height: 16),
         TextFormField(
           controller: widget.zip,
@@ -159,13 +193,4 @@ class _ResidentialAddressFieldsState extends State<ResidentialAddressFields> {
       ],
     );
   }
-}
-
-class TextFormFieldProvince extends StatelessWidget {
-  const TextFormFieldProvince({super.key});
-  @override
-  Widget build(BuildContext context) => const InputDecorator(
-    decoration: InputDecoration(labelText: 'Province'),
-    child: Text('Cebu'),
-  );
 }

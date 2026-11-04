@@ -31,7 +31,7 @@ export function reportList(rows, query = {}) {
 export function dashboardStats(rows, clusters) {
   return {total_reports: rows.filter(r=>r.status==='verified').length, verified_reports: rows.filter(r => r.status === 'verified').length,
     pending_reports: rows.filter(r => r.status === 'pending').length, rejected_reports: rows.filter(r => r.status === 'rejected').length,
-    needs_attention: rows.filter(verifiedNeedsAttention).length, map_clusters: clusters.length,
+    needs_attention: rows.filter(verifiedNeedsAttention).length, map_clusters: clusters.filter(c=>Number(c.verified_count)>0).length,
     species: new Set(rows.filter(r => r.status === 'verified' && r.final_species_id).map(r => r.final_species_id)).size};
 }
 export {analyticsForUser} from './monitoring-analytics.js';

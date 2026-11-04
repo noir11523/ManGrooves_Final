@@ -249,12 +249,12 @@ test('GPS refresh uses the final fix and replaces the prior pin name',async()=>{
  const dispose=await ui.reportWizard($('#page'),{});
  try {
   $('#gps').click();gps({coords:{latitude:10.272,longitude:123.866,accuracy:83},timestamp:Date.now()});
-  assert.match($('#place-search').value,/Pinned location/);await new Promise(r=>setTimeout(r,280));
+  assert.equal($('#place-search').value,'');assert.match($('#selected-address').textContent,/Pinned location/);await new Promise(r=>setTimeout(r,280));
   gps({coords:{latitude:10.273,longitude:123.866,accuracy:8},timestamp:Date.now()});await new Promise(r=>setTimeout(r,280));
   const last=lookups.at(-1);assert.equal(last.query.latitude,10.273);
   last.resolve({places:[{label:'Cogon Pardo, Cebu City'}],barangay:{name:'Cogon Pardo',city_municipality:'Cebu City'}});await tick();
   for(const lookup of lookups.slice(0,-1))lookup.resolve({places:[{label:'Outdated address'}]});await tick();
-  assert.equal($('#place-search').value,'Cogon Pardo, Cebu City');assert.match($('#report-barangay').textContent,/Cogon Pardo/);
+  assert.equal($('#selected-address').textContent,'Cogon Pardo, Cebu City');assert.equal($('#place-search').value,'');assert.match($('#report-barangay').textContent,/Cogon Pardo/);
   assert.equal(Number(ui.reportDraft.fields.latitude),10.273);assert.equal(ui.reportDraft.fields.location_source,'gps');assert.equal($('#gps').disabled,false);
  }finally{dispose();ui.reportDraft.reset();}
 });
@@ -487,6 +487,8 @@ test('report draft restores fields, photo, checklist and step after reload, isol
     assert.equal(ui.reportDraft.step,2);assert.equal(ui.reportDraft.photo.name,'saved.jpg');assert.equal(ui.reportDraft.photo.size,17);
     assert.equal(ui.reportDraft.fields.guardian_remarks,'Remember this visit');
     assert.ok($('[name=obs_leaf_color]:checked'));
+    assert.equal($('.observation-categories'),null);assert.equal($('.category-progress'),null);
+    assert.equal($('#previous').textContent,'Previous');assert.equal($('#next').textContent,'Next');
     dispose();ui.reportDraft.reset();
     dispose = await ui.reportWizard($('#page'),{}, {id:'draft-b'});
     assert.equal(ui.reportDraft.photo,null);assert.equal($('[name=sitio_name]').value,'');
@@ -505,7 +507,7 @@ test('report draft restores fields, photo, checklist and step after reload, isol
   } finally { dispose();ui.reportDraft.reset();window.localStorage.clear();clearTimeout(ui.toast.timer); }
 });
 
-test('location search is specific, sets the exact map pin, and typing another place clears that pin', async () => {
+test('location search sets the exact map pin and unfinished searches cannot rename it', async () => {
   globalThis.testApi=async(path,{query}={})=>{
     if(path==='report-form.php')return {criteria:reference.criteria,clusters:[],species:reference.species,
       traits:Object.fromEntries(['root_type','leaf_shape','bark_texture'].map(k=>[k,[reference.species[0][k]]])),location:{barangay:reference.barangays[0]}};
@@ -529,9 +531,9 @@ test('location search is specific, sets the exact map pin, and typing another pl
     await ui.reportDraft.flush();dispose();ui.reportDraft.reset();dispose=await ui.reportWizard($('#page'),{}, {id:'place-user'});
     assert.equal(ui.reportDraft.step,1);assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
     const restoredInput=$('#place-search');restoredInput.value='Different landmark';restoredInput.dispatchEvent(new Event('input',{bubbles:true}));
-    assert.equal(ui.reportDraft.fields.location_source,'');assert.equal(ui.reportDraft.fields.latitude,'');
-    await new Promise(r=>setTimeout(r,750));await submit();assert.equal(ui.reportDraft.step,1);
-    assert.match($('.error').textContent,/tap the map/);
+    assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(Number(ui.reportDraft.fields.latitude),10.3012345);
+    assert.equal(ui.reportDraft.fields.sitio_name,'Pier 3, Basak Pardo, Cebu City, Cebu');
+    await new Promise(r=>setTimeout(r,750));await submit();assert.equal(ui.reportDraft.step,2);
   } finally {dispose();ui.reportDraft.reset();window.localStorage.clear();clearTimeout(ui.toast.timer);}
 });
 

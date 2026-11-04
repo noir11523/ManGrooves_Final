@@ -18,6 +18,7 @@ import {deleteUser} from './delete-user.js';
 import {createStaff} from './staff.js';
 import {manageSites} from './sites.js';
 import {manageSpecies} from './species.js';
+import {publicBarangay} from './barangays.js';
 
 /** @param {{db:any, auth:any, bucket:any, projectId:string, mailer?:{send:Function}|null}} options */
 export function createApi({db, auth, bucket, projectId, mailer = null}) {
@@ -59,7 +60,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
       }
       if (route === 'configuration.php' && req.method === 'GET') {
         return send(res, {api_id: 'org.mangrooves.mobile-api', api_version: 2, backend: 'supabase', project_id: projectId,
-          app_name: 'ManGROOVES', barangays: await service.rows('barangays'), upload_max_mb: 5, max_gps_accuracy_meters: 100});
+          app_name: 'ManGROOVES', barangays: (await service.rows('barangays')).map(publicBarangay), upload_max_mb: 5, max_gps_accuracy_meters: 100});
       }
       if (route === 'explore.php' && req.method === 'GET') {
         // Database adapters can return safe aggregates without reading private payloads.
@@ -174,7 +175,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
         }
         case 'clusters.php': {
           only('GET'); const q = String(req.query.q ?? '').trim().toLowerCase();
-          return send(res, {clusters: (await service.clusters(user)).filter(c => (!req.query.health || c.latest_health === req.query.health)
+          return send(res, {clusters: (await service.clusters(user)).filter(c => Number(c.verified_count)>0 && (!req.query.health || c.latest_health === req.query.health)
             && (!q || `${c.name} ${c.barangay_name} ${c.cluster_code}`.toLowerCase().includes(q)))});
         }
         case 'cluster.php': {
@@ -258,8 +259,8 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
           if (get) {
             const [users,barangays,badges,awards,applications,reports]=await Promise.all(['users','barangays','badges','user_badges','expert_applications','reports'].map(name=>service.rows(name)));
             const existing=auth.existingUserIds?new Set(await auth.existingUserIds(users.map(u=>u.uid))):null;
-            const {rows,summary}=userDirectory(users.filter(u=>(!existing||existing.has(u.uid))&&u.status!=='deleting'),barangays,badges,awards,applications,req.query,reports);
-            return send(res,{...paginate(rows.map(u=>({...u,can_delete:u.id!==user.id})),req.query.page),barangays,summary});
+            const {rows,summary,barangay_options}=userDirectory(users.filter(u=>(!existing||existing.has(u.uid))&&u.status!=='deleting'),barangays,badges,awards,applications,req.query,reports);
+            return send(res,{...paginate(rows.map(u=>({...u,can_delete:u.id!==user.id})),req.query.page),barangays:barangays.map(publicBarangay),barangay_options,summary});
           }
           const {input,files}=await readInput(req);
           if(input.action==='create_staff')return send(res,await createStaff(service,user,input,files),201);

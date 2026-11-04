@@ -56,6 +56,12 @@ for(const route of ['/index.php','/login.php','/register.php','/privacy.php','/a
   const response=await fetch(url+route);if(!response.ok)throw new Error(`Published page check failed: ${route} (${response.status})`);
   if(route.endsWith('.php')&&!(await response.text()).includes('csrf-token'))throw new Error(`PHP did not render correctly: ${route}`);
 }
+for(const route of ['configuration.php','explore.php']){
+  const response=await fetch(`${url}/cloud-api.php?route=${route}`);
+  if(!response.ok)throw new Error(`Published API check failed: ${route} (${response.status})`);
+  const body=await response.json();
+  if(body.ok!==true||!Array.isArray(route==='configuration.php'?body.barangays:body.clusters))throw new Error(`Published API returned invalid data: ${route}`);
+}
 const apkResponse=await fetch(url+'/downloads/ManGROOVES-Supabase.apk',{method:'HEAD'});
 if(!apkResponse.ok||!apkResponse.headers.get('content-type')?.includes('android.package-archive')||!apkResponse.headers.get('content-disposition')?.includes('attachment'))throw new Error('The Android APK download is not available.');
 const publishedHash=await fetch(url+'/downloads/ManGROOVES-Supabase.apk.sha256');

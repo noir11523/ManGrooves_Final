@@ -38,7 +38,7 @@ test('profile city changes reset barangay and optional address parts keep their 
  const user={id:1,role:'guardian',full_name:'Test User',barangay_id:1,house_unit:'Unit 3B',zip_code:'6000',address_line:'Original address'};
  globalThis.testApi=async path=>path==='me.php'?{user}:{user,barangays:[{id:1,name:'Poblacion',city_municipality:'Cebu City'},{id:2,name:'Poblacion',city_municipality:'Danao City'}]};
  await globalThis.restoreTestAccount({id:'user'});await tick();
- assert.equal($('[name=house_unit]').required,false);assert.equal($('[name=street_sitio]').required,false);assert.equal($('[name=zip_code]').required,false);assert.equal($('[name=province_display]').value,'Cebu');assert.equal($('[name=country]'),null);
+ assert.equal($('[name=house_unit]').required,false);assert.equal($('[name=street_sitio]').required,false);assert.equal($('[name=zip_code]').required,false);assert.equal($('[data-address-province]').value,'Cebu');assert.equal($('[name=country]'),null);
  const city=$('[data-address-city]');city.value='Danao City';city.dispatchEvent(new Event('change'));
  assert.equal($('[name=barangay_id]').value,'');assert.equal($('datalist').children.length,1);assert.match($('datalist option').value,/Danao City/);
  const barangay=$('[data-barangay-search]');barangay.value='Poblacion — Cebu City';barangay.dispatchEvent(new Event('input'));assert.equal(barangay.checkValidity(),false);

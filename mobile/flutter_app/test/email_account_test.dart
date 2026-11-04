@@ -92,7 +92,9 @@ Finder field(String label) => find.byWidgetPredicate(
   (w) => w is TextField && w.decoration?.labelText == label,
 );
 Future<void> tap(WidgetTester tester, Finder finder) async {
+  await tester.pumpAndSettle();
   await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
   await tester.tap(finder);
   await tester.pumpAndSettle();
 }

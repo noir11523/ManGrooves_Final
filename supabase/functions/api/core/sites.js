@@ -18,6 +18,8 @@ export async function manageSites(service,user,input) {
   });
   const barangayId=integer(input.barangay_id,'barangay'),barangay=await service.get('barangays',barangayId);
   if (!barangay) throw new AppError('Choose an available barangay.');
+  const pointBarangay=await service.findBarangay(input.center_lat,input.center_lng);
+  if(!pointBarangay||pointBarangay.id!==barangayId)throw new AppError('Place the site pin inside the selected barangay.');
   const location=validateLocation({latitude:input.center_lat,longitude:input.center_lng,location_source:'manual'},barangay);
   const name=text(input.name,'the site name',120),sitio_name=text(input.sitio_name||name,'the location name',120);
   const radius=integer(input.radius_meters??100,'site radius',25,5000);

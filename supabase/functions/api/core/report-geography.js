@@ -1,5 +1,7 @@
-import boundaries from '../data/cebu-boundaries.json' with {type:'json'};
+import boundaryData from '../data/cebu-boundaries.json' with {type:'json'};
+import {decodeReferenceData} from './reference-data.js';
 import {cebuBarangays} from './barangays.js';
+const boundaries=decodeReferenceData(boundaryData);
 
 // Reference polygons, never a resident's address or the closest barangay center.
 function inRing(x,y,ring) {
@@ -37,7 +39,10 @@ function inBoundary(boundary,longitude,latitude) {
 
 export function barangaySearchPoint(barangay) {
   const code=barangay?.psgc_code,boundary=boundaries.find(b=>b.psgc===code);
-  if(!boundary)return null;
+  if(!boundary) {
+    const latitude=Number(barangay?.center_lat),longitude=Number(barangay?.center_lng);
+    return withinPhilippineSearchBounds(latitude,longitude)?{latitude,longitude}:null;
+  }
   const accepts=(latitude,longitude)=>{
     if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||!inBoundary(boundary,longitude,latitude))return false;
     return boundaryCode(latitude,longitude)===code;
@@ -61,6 +66,9 @@ export function reportBarangay(latitude,longitude,rows=directory) {
 }
 export function withReportGeography(row,rows=directory,site=false) {
   if(!row||row.location_pending)return row;
-  const barangay=reportBarangay(site?row.center_lat:row.latitude,site?row.center_lng:row.longitude,rows);
-  return {...row,barangay_id:barangay?.id??null,barangay_name:barangay?.name??'Unresolved location',city_municipality:barangay?.city_municipality??null};
+  const geometryBarangay=reportBarangay(site?row.center_lat:row.latitude,site?row.center_lng:row.longitude,rows);
+  const savedBarangay=rows.find(b=>String(b.id)===String(row.barangay_id));
+  const barangay=geometryBarangay??savedBarangay;
+  return {...row,barangay_id:barangay?.id??row.barangay_id??null,barangay_name:barangay?.name??row.barangay_name??'Unresolved location',
+    city_municipality:barangay?.city_municipality??row.city_municipality??null,province:barangay?.province??row.province??null};
 }

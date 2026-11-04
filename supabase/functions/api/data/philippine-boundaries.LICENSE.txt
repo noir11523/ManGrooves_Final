@@ -1,0 +1,8 @@
+The boundary geometry in philippine-boundaries.json.gz is derived from the
+2023-4q low-resolution collection at:
+https://github.com/faeldon/philippines-json-maps/tree/2023-4q/2023/geojson/municities/lowres
+
+The source collection is distributed under the MIT License. Copyright (c)
+James Faeldon. The original license is included in cebu-boundaries.LICENSE.txt.
+The collection derives from NAMRIA/PSA reference boundaries distributed
+through OCHA COD-AB. These are reference boundaries, not a new legal survey.

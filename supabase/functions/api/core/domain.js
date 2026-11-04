@@ -99,7 +99,8 @@ export function validateLocation(input, barangay, cluster = null) {
     return Number(value);
   };
   const latitude = coordinate(input.latitude, 90, 'latitude'), longitude = coordinate(input.longitude, 180, 'longitude');
-  if (!barangay || distanceMeters(latitude, longitude, barangay.center_lat, barangay.center_lng) > (barangay.monitoring_radius_meters??5000)) throw new AppError('This pin is outside the selected barangay area. Check the location.');
+  if (latitude<4.5||latitude>21.2||longitude<116.8||longitude>126.7) throw new AppError('Place the pin within the Philippines.');
+  if (!barangay) throw new AppError('Choose a location inside a Philippine barangay.');
   if (!['gps', 'manual'].includes(input.location_source)) throw new AppError('Use GPS or place the pin on the map.');
   let accuracy = null;
   if (input.location_source === 'gps') {

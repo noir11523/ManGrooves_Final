@@ -62,7 +62,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       try {
         final data = await widget.api!.cloudRequest(
           'places.php',
-          query: {'q': value.trim()},
+          query: {'q': value.trim(),
+            'bias_latitude': '${(_selected ?? widget.initialCenter).latitude}',
+            'bias_longitude': '${(_selected ?? widget.initialCenter).longitude}',
+          },
         );
         if (!mounted || version != _searchVersion) return;
         setState(() {

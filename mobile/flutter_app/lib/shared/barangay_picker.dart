@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 String barangayLabel(Map row) => [
   row['name'],
   row['city_municipality'],
-].where((v) => v != null && '$v'.isNotEmpty).join(' — ');
+  row['province'],
+].where((v) => v != null && '$v'.isNotEmpty).join(', ');
 String? validateMobile(String? value) {
   final phone = (value ?? '').replaceAll(RegExp(r'[\s().-]'), '');
   return RegExp(r'^(09\d{9}|\+?639\d{9})$').hasMatch(phone)
@@ -126,7 +127,7 @@ class _BarangaySheetState extends State<_BarangaySheet> {
             ),
             Padding(
               padding: const EdgeInsets.all(8),
-              child: Text('${rows.length} barangays in Cebu'),
+              child: Text('${rows.length} barangays'),
             ),
             Expanded(
               child: rows.isEmpty
@@ -143,7 +144,7 @@ class _BarangaySheetState extends State<_BarangaySheet> {
                         return ListTile(
                           title: Text('${b['name']}'),
                           subtitle: Text(
-                            '${b['city_municipality'] ?? 'Cebu City'}, Cebu',
+                            '${b['city_municipality'] ?? 'Cebu City'}, ${b['province'] ?? 'Cebu'}',
                           ),
                           selected: b['id'] == widget.value,
                           trailing: b['id'] == widget.value

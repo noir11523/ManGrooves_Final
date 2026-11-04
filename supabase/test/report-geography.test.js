@@ -3,6 +3,28 @@ import assert from 'node:assert/strict';
 import {reportBarangay,withReportGeography,boundaryCode} from '../functions/api/core/report-geography.js';
 import {searchPlaces} from '../functions/api/core/places.js';
 import {cebuBarangays} from '../functions/api/core/barangays.js';
+import {Service} from '../functions/api/core/service.js';
+import {readFile} from 'node:fs/promises';
+import {encodeReferenceData,decodeReferenceData} from '../functions/api/core/reference-data.js';
+
+test('compressed Cebu geometry preserves every coordinate and fits the deployment bundle',async()=>{
+  const source=await readFile(new URL('../functions/api/data/cebu-boundaries.json',import.meta.url),'utf8');
+  const shapes=decodeReferenceData(JSON.parse(source));
+  assert.equal(shapes.length,1203);
+  assert.deepEqual(decodeReferenceData(encodeReferenceData(shapes)),shapes);
+  assert.ok(Buffer.byteLength(source)<1.5*1024*1024);
+});
+
+test('missing national lookup never replaces a pin with the resident barangay or breaks Cebu lookup',async()=>{
+  let calls=0;
+  const service=new Service({rpc:async()=>{calls++;throw {code:'PGRST202'};}});
+  assert.equal((await service.findBarangay(10.273,123.866)).name,'Cogon Pardo');
+  assert.equal(calls,0);
+  assert.equal(await service.findBarangay(14.6,120.98),null);
+  assert.equal(calls,1);
+  service.db.rpc=async()=>{throw {code:'08006'};};
+  await assert.rejects(service.findBarangay(14.6,120.98),error=>error.status===503&&/Location lookup/.test(error.message));
+});
 
 test('report pins use their containing barangay and municipality, not profile or closest center',()=>{
   assert.equal(reportBarangay(10.273,123.866).name,'Cogon Pardo');

@@ -43,7 +43,7 @@ void main() {
           .where((b) => barangayLabel(b).toLowerCase().contains('poblacion'))
           .length;
       expect(matches, greaterThan(1));
-      expect(find.text('$matches barangays in Cebu'), findsOneWidget);
+      expect(find.text('$matches barangays'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Poblacion Argao');
       await tester.pumpAndSettle();
       expect(find.text('Argao, Cebu'), findsOneWidget);

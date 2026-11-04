@@ -29,5 +29,6 @@ export function userDirectory(users,barangays,badges,awards,applications,query={
   else if(query.role)rows=rows.filter(u=>u.role===query.role&&!['pending_approval','rejected'].includes(u.status)&&(query.status||u.status==='active'));
   if(query.badge_tier)rows=rows.filter(u=>query.badge_tier==='earned'?u.badges.length>0:u.badge_tier===query.badge_tier);
   rows.sort((a,b)=>a.full_name.localeCompare(b.full_name)||a.id-b.id);
-  return {rows,summary};
+  const usedBarangays=new Set(users.map(user=>user.barangay_id).filter(value=>value!=null));
+  return {rows,summary,barangay_options:barangays.filter(row=>usedBarangays.has(row.id)).map(row=>({id:row.id,name:row.name,city_municipality:row.city_municipality,province:row.province}))};
 }

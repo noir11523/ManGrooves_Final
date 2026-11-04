@@ -204,7 +204,31 @@ function json_response(array $payload, int $status = 200): never
 {
     send_http_status($status);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    // Large address directories must fit the hosting response limit. Browsers
+    // transparently decode gzip; clients declining it retain the same JSON API.
+    if (defined('MANGROOVES_CLOUD') && strlen($json) >= 65536 && function_exists('gzencode')) {
+        header('Vary: Accept-Encoding', false);
+        $encodings = [];
+        foreach (explode(',', strtolower($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '')) as $entry) {
+            $parts = array_map('trim', explode(';', $entry));
+            $quality = 1.0;
+            foreach (array_slice($parts, 1) as $parameter) {
+                if (str_starts_with($parameter, 'q=')) $quality = (float) substr($parameter, 2);
+            }
+            $encodings[$parts[0]] = $quality;
+        }
+        if (($encodings['gzip'] ?? $encodings['*'] ?? 0) > 0) {
+            $compressed = gzencode($json, 6);
+            if ($compressed !== false) {
+                header('Content-Encoding: gzip');
+                header('Content-Length: ' . strlen($compressed));
+                echo $compressed;
+                exit;
+            }
+        }
+    }
+    echo $json;
     exit;
 }
 

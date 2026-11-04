@@ -85,7 +85,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_data == null) {
       return _Retry(message: _error!, onRetry: _load);
     }
-    final user = Map<String, dynamic>.from(_data!['user'] as Map);
     final stats = Map<String, dynamic>.from(_data!['stats'] as Map);
     final latest = (_data!['latest_reports'] as List? ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
@@ -129,17 +128,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisExtent: 185,
               children: [
                 _StatCard(
-                  'Verified reports',
-                  stats['total_reports'],
+                  'Total Verified Reports',
+                  stats['verified_reports'] ?? stats['total_reports'],
                   Icons.assignment_outlined,
                   () => _openReports(status: 'verified'),
                 ),
                 _StatCard(
                   'Pending',
-                  user['role'] == 'guardian'
-                      ? stats['pending_reports']
-                      : stats['pending_review_reports'] ??
-                            stats['pending_reports'],
+                  stats['pending_reports'],
                   Icons.hourglass_top,
                   () => _openReports(status: 'pending'),
                 ),
@@ -272,7 +268,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     color: switch (label) {
-      'Verified reports' => const Color(0xFFE6F0DD),
+      'Total Verified Reports' => const Color(0xFFE6F0DD),
       'Pending' => const Color(0xFFFFF3D2),
       'Rejected' || 'Needs attention' => const Color(0xFFF9E6DF),
       'Monitored clusters' => const Color(0xFFDDEDE8),

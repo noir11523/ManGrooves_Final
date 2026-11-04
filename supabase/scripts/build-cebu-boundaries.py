@@ -1,6 +1,8 @@
 """Build the pinned 2023-4q Cebu reference boundaries; preserve source geometry."""
 import concurrent.futures
 import json
+import gzip
+import base64
 import subprocess
 from pathlib import Path
 
@@ -30,5 +32,6 @@ for barangay in directory:
     shapes.append({'psgc': barangay['psgc_code'], 'bbox': [min(xs), min(ys), max(xs), max(ys)], 'polygons': polygons})
 assert len(shapes) == 1203
 target = data / 'cebu-boundaries.json'
-target.write_text(json.dumps(shapes, separators=(',', ':')) + '\n', encoding='utf-8')
+packed = gzip.compress(json.dumps(shapes, separators=(',', ':')).encode('utf-8'), compresslevel=9, mtime=0)
+target.write_text(json.dumps({'encoding': 'gzip-base64', 'data': base64.b64encode(packed).decode('ascii')}, separators=(',', ':')) + '\n', encoding='utf-8')
 print(f'{len(shapes)} Cebu barangay boundaries, {target.stat().st_size:,} bytes')

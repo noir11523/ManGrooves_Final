@@ -367,7 +367,57 @@ bool observationSelected(WidgetTester tester, String code, int id) => tester
     .selected!;
 
 Future<void> chooseCategory(WidgetTester tester, String label) async {
-  await tap(tester, find.widgetWithText(ChoiceChip, label));
+  final form = await _Api().reportForm();
+  final criteria = (form['criteria'] as List).cast<Map<String, dynamic>>();
+  final categories = [
+    ...criteria.map((criterion) => '${criterion['name']}'),
+    'Klase sa Gamot (Root Type)',
+    'Porma sa Dahon (Leaf Shape)',
+    'Hitsura sa Panit sa Punoan (Bark Texture)',
+  ];
+  final target = categories.indexOf(label);
+  expect(target, isNonNegative, reason: 'Unknown observation category: $label');
+
+  int currentCategory() => categories.indexWhere(
+    (category) => find.text(category).evaluate().isNotEmpty,
+  );
+
+  while (currentCategory() != target) {
+    final current = currentCategory();
+    expect(current, isNonNegative, reason: 'No active observation category.');
+    if (current > target) {
+      await tap(tester, find.text('Previous'));
+      continue;
+    }
+
+    if (current < criteria.length) {
+      final criterion = criteria[current];
+      final code = '${criterion['code']}';
+      final options = (criterion['options'] as List).cast<Map>();
+      final selected = options.any(
+        (option) => observationSelected(
+          tester,
+          code,
+          option['id'] as int,
+        ),
+      );
+      if (!selected) {
+        await tap(
+          tester,
+          find.byKey(ValueKey('observation-$code-${options.first['id']}')),
+        );
+      }
+    } else {
+      final traitValues = (form['traits'] as Map).values.toList();
+      final values = traitValues[current - criteria.length] as List;
+      final first = '${values.first}';
+      final choice = find.byKey(ValueKey('choice-circle-$first'));
+      if (tester.widget<IconButton>(choice).isSelected != true) {
+        await tap(tester, choice);
+      }
+    }
+    await tap(tester, find.text('Next'));
+  }
 }
 
 Future<void> openLocation(WidgetTester tester) async {
@@ -408,8 +458,8 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
       expect(api.lookups.length, 1);
-      await tester.ensureVisible(field('Sitio or location name'));
-      await tester.enterText(field('Sitio or location name'), 'Pier');
+      await tester.ensureVisible(field('Search places'));
+      await tester.enterText(field('Search places'), 'Pier');
       await tester.pump(const Duration(milliseconds: 750));
       await tester.pump();
       await tap(tester, find.text('Pier 3, Cebu City'));
@@ -422,10 +472,7 @@ void main() {
       });
       await tester.pump();
       expect(
-        tester
-            .widget<TextField>(field('Sitio or location name'))
-            .controller!
-            .text,
+        tester.widget<Text>(find.byKey(const ValueKey('selected-address'))).data,
         'Pier 3, Cebu City',
       );
       api.lookups[1].complete({
@@ -444,10 +491,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(api.lookups.length, 3);
       expect(
-        tester
-            .widget<TextField>(field('Sitio or location name'))
-            .controller!
-            .text,
+        tester.widget<Text>(find.byKey(const ValueKey('selected-address'))).data,
         contains('Pinned location'),
       );
       api.lookups[2].complete({
@@ -459,10 +503,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(
-        tester
-            .widget<TextField>(field('Sitio or location name'))
-            .controller!
-            .text,
+        tester.widget<Text>(find.byKey(const ValueKey('selected-address'))).data,
         'Cogon Pardo, Cebu City',
       );
       expect(find.text('Barangay: Cogon Pardo, Cebu City'), findsOneWidget);
@@ -642,10 +683,7 @@ void main() {
       await tester.pumpAndSettle();
       await openLocation(tester);
       expect(
-        tester
-            .widget<TextField>(field('Sitio or location name'))
-            .controller!
-            .text,
+        tester.widget<Text>(find.byKey(const ValueKey('selected-address'))).data,
         'Nursery boardwalk',
       );
       expect(find.text('Previous report'), findsNothing);
@@ -803,8 +841,8 @@ void main() {
         find.byKey(const ValueKey('report-location-summary')),
         findsNothing,
       );
-      await tester.ensureVisible(field('Sitio or location name'));
-      await tester.enterText(field('Sitio or location name'), 'Pier');
+      await tester.ensureVisible(field('Search places'));
+      await tester.enterText(field('Search places'), 'Pier');
       await tester.pump(const Duration(milliseconds: 750));
       await tester.pump();
       await tap(tester, find.text('Pier 3, Cebu City'));
@@ -831,11 +869,11 @@ void main() {
       await open();
       await tester.pumpAndSettle();
       expect(find.textContaining('Manual pin: 10.301'), findsOneWidget);
-      await tester.enterText(field('Sitio or location name'), 'New landmark');
+      await tester.enterText(field('Search places'), 'New landmark');
       await tester.pump();
       expect(
         find.byKey(const ValueKey('report-location-summary')),
-        findsNothing,
+        findsOneWidget,
       );
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
@@ -959,7 +997,7 @@ void main() {
       expect(find.text('Previous report'), findsOneWidget);
       expect(find.text('This is a follow-up'), findsNothing);
       expect(
-        tester.widget<TextField>(field('Sitio or location name')).readOnly,
+        tester.widget<TextField>(field('Search places')).readOnly,
         isTrue,
       );
       await tester.enterText(field('Living mangroves observed'), '12');
@@ -984,7 +1022,11 @@ void main() {
       final greenCircle = find.byKey(const ValueKey('choice-circle-Green'));
       await tap(tester, greenCircle);
       expect(observationSelected(tester, 'leaf_color', 1), false);
-      await tap(tester, find.text('Next category'));
+      expect(find.byType(ChoiceChip), findsNothing);
+      expect(find.textContaining('Category '), findsNothing);
+      expect(find.text('Previous'), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget);
+      await tap(tester, find.text('Next'));
       expect(
         find.textContaining('Choose an answer for Leaf color'),
         findsOneWidget,
@@ -1053,11 +1095,7 @@ void main() {
         expect(tester.widget<IconButton>(circle).isSelected, false);
         await tap(
           tester,
-          find.text(
-            choice.key.contains('Bark Texture')
-                ? 'Review report'
-                : 'Next category',
-          ),
+          find.text('Next'),
         );
         expect(
           find.text(
@@ -1078,14 +1116,14 @@ void main() {
         await tap(tester, circle);
       }
       await tester.enterText(field('Notes (optional)'), 'First note');
-      await tap(tester, find.text('Review report'));
+      await tap(tester, find.text('Next'));
       expect(api.submissions, 0);
-      expect(find.text('Notes: First note'), findsOneWidget);
-      await tap(tester, find.text('Edit details'));
+      expect(find.text('First note'), findsOneWidget);
+      await tap(tester, find.byTooltip('Edit details'));
       await tester.enterText(field('Notes (optional)'), 'Updated note');
-      await tap(tester, find.text('Review report'));
-      expect(find.text('Notes: Updated note'), findsOneWidget);
-      expect(find.text('Notes: First note'), findsNothing);
+      await tap(tester, find.text('Next'));
+      expect(find.text('Updated note'), findsOneWidget);
+      expect(find.text('First note'), findsNothing);
       // Recreate the screen to simulate an app restart, retaining only stored data.
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
@@ -1103,8 +1141,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Notes: Updated note'), findsOneWidget);
-      expect(find.text('Manual pin'), findsOneWidget);
+      expect(find.text('Updated note'), findsOneWidget);
+      expect(find.text('Placed on map'), findsOneWidget);
       expect(find.text('Discard draft'), findsNothing);
       expect(find.text('Draft saved on this device.'), findsNothing);
       expect(

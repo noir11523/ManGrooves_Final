@@ -43,7 +43,7 @@ void main() {
       );
       expect(form.currentState!.validate(), true);
       await tester.pump();
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.tap(find.byKey(const ValueKey('city-Cebu-Cebu City')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Danao City').last);
       await tester.pumpAndSettle();
