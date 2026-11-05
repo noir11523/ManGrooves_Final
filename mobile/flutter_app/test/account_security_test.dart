@@ -137,7 +137,7 @@ void main() {
           isTrue,
         );
         expect(find.textContaining('Deactivate'), findsNothing);
-        expect(find.text('Health checklist'), findsNothing);
+        expect(find.text('Condition checklist'), findsNothing);
         await tester.ensureVisible(find.text('Change password'));
         await tester.tap(find.text('Change password'));
         await tester.pumpAndSettle();

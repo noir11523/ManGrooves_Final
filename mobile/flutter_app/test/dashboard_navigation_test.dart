@@ -137,7 +137,7 @@ void main() {
     );
   }
   testWidgets(
-    'cluster markers show health and open the selected cluster reports',
+    'cluster markers show condition and open the selected cluster reports',
     (tester) async {
       int? opened;
       await tester.pumpWidget(
@@ -227,9 +227,9 @@ void main() {
         expect(find.text(name), findsOneWidget);
         expect(find.text('MGC-1713 · Inayawan'), findsOneWidget);
         expect(find.text('Avicennia rumphiana'), findsOneWidget);
-        await tester.ensureVisible(find.text('Health history'));
+        await tester.ensureVisible(find.text('Condition history'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Health history'));
+        await tester.tap(find.text('Condition history'));
         await tester.pumpAndSettle();
         expect(api.openedCluster, 7);
         expect(find.text('Mangrove timeline'), findsOneWidget);

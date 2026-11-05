@@ -6,7 +6,7 @@
     <article class="card card-body">
         <div class="d-flex flex-wrap justify-content-between gap-2"><a class="fw-semibold" href="<?= e(url('admin/report.php?id=' . $event['report_id'])) ?>"><?= e($event['report_code']) ?></a><time><?= e(format_datetime($event['created_at'])) ?></time></div>
         <p class="mb-1"><?= e(ucfirst($event['action'])) ?> · <?= e($event['reviewer']) ?> <span class="badge <?= e(report_status_class($event['status'])) ?>"><?= e(ucfirst($event['status'])) ?></span></p>
-        <span><?= e($event['health'] ?: 'No confirmed health') ?></span>
+        <span><?= e($event['health'] ?: 'No confirmed condition') ?></span>
         <?php if ($event['comment']): ?><p class="small mb-0 mt-2"><?= nl2br(e($event['comment'])) ?></p><?php endif; ?>
     </article>
 <?php endforeach; ?>

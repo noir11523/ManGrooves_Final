@@ -12,7 +12,7 @@ export async function checklistPage(node) {
   let traitData={};
   try{traitData=await api('trait-images.php');}catch{}
   if (!node.isConnected) return;
-  node.innerHTML = `<section class="checklist-page">${head('Health checklist', 'Edit questions, photos, and choices. Existing reports keep their original answers.')}<p class="notice">Health uses leaf color, pests, and roots: 6 Healthy · 3–5 Stressed · 0–2 At Risk. All of the above uses the lowest health score. Not Sure is unscored and requires review.</p><div id="criteria"></div></section>`;
+  node.innerHTML = `<section class="checklist-page">${head('Condition checklist', 'Edit questions, photos, and choices. Existing reports keep their original answers.')}<p class="notice">Condition uses leaf color, pests, and roots: 6 Healthy · 3–5 Stressed · 0–2 At Risk. All of the above uses the lowest condition score. Not Sure is unscored and requires review.</p><div id="criteria"></div></section>`;
   const root = $('#criteria'); let temporaryId = -1;
   node=node.querySelector('.checklist-page');
   root.insertAdjacentHTML('afterend','<div id="trait-editors"></div>');
@@ -94,7 +94,7 @@ export async function checklistPage(node) {
       }
     }
     function render() {
-      wrapper.innerHTML = `<summary><strong>${esc(data.name)}</strong><span class="muted">${data.score_group === 'health' ? '0–2 health points' : 'Supporting observations'}</span></summary><form>${errorBox}<div class="row">${field('name', 'Category name', data.name, 'text', 'required maxlength="120"')}${field('question_text', 'Question', data.question_text, 'text', 'required maxlength="255"')}</div>
+      wrapper.innerHTML = `<summary><strong>${esc(data.name)}</strong><span class="muted">${data.score_group === 'health' ? '0–2 condition points' : 'Supporting observations'}</span></summary><form>${errorBox}<div class="row">${field('name', 'Category name', data.name, 'text', 'required maxlength="120"')}${field('question_text', 'Question', data.question_text, 'text', 'required maxlength="255"')}</div>
         <div class="choice-grid" style="margin-top:18px">${data.options.map(o => {
           const special = specials.includes(o.code ?? o.kind), health = data.score_group === 'health';
           return `<div class="option-editor ${o.delete ? 'removed' : ''}" data-option="${o.id}">${o.delete ? `<p>${esc(o.label)} will be removed.</p><button type="button" class="outline restore">Undo</button>` : `${o.image_path && !o.remove_image ? `<img class="guide" src="${esc(asset(o.image_path))}" alt="${esc(o.label)}">` : ''}${field('label', 'Choice', o.label, 'text', 'required maxlength="190"')}${special ? `<p><strong>Scoring:</strong> ${(o.code ?? o.kind) === 'unknown' ? 'Not scored · Expert review' : (o.code ?? o.kind) === 'none_of_the_above' ? '0 points' : health ? 'Lowest regular score' : 'Sum of regular choices'}</p>` : field('points', 'Points', o.points, 'number', `required min="${health ? 0 : -2}" max="2" step="1"`)}<label class="field"><span>Choice photo</span><input type="file" data-image="option_image_${o.id}" accept="image/jpeg,image/png,image/webp"><small>${images.has(`option_image_${o.id}`) ? esc(images.get(`option_image_${o.id}`).name) : 'Optional'}</small></label>${o.image_path ? `<label class="check"><input type="checkbox" name="remove_image" ${o.remove_image ? 'checked' : ''}>Remove photo</label>` : ''}<button type="button" class="link remove">Remove choice</button>`}</div>`;

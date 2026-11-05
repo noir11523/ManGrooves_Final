@@ -277,7 +277,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         (v) => _species = v,
                       ),
                       const SizedBox(height: 12),
-                      _choice('Latest health', _health, [
+                      _choice('Latest condition', _health, [
                         for (final h in colors.keys) {'id': h, 'name': h},
                       ], (v) => _health = v),
                       const SizedBox(height: 16),
@@ -357,7 +357,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ),
             ),
           _ChartCard(
-            title: 'Site health',
+            title: 'Site condition',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -546,7 +546,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     Text('Visit: ${c['last_monitoring_date']}'),
                     Text(
                       c['latest_health'] == 'Unknown'
-                          ? 'Confirm health'
+                          ? 'Confirm condition'
                           : c['priority'] == 'High'
                           ? 'Inspect site'
                           : 'Schedule a visit',

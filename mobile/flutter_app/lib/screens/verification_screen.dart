@@ -93,7 +93,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
           const Text(
-            'Review community observations and follow up on site health.',
+            'Review community observations and follow up on site condition.',
           ),
           Align(
             alignment: Alignment.centerLeft,
@@ -143,16 +143,16 @@ class _VerificationScreenState extends State<VerificationScreen> {
           const SizedBox(height: 12),
           Text(
             _view == 'verified_attention'
-                ? 'Verified reports with stressed, at-risk or unknown health.'
+                ? 'Verified reports with stressed, at-risk or unknown condition.'
                 : _view == 'pending'
                 ? 'Oldest pending reports appear first. Your own reports are excluded.'
                 : 'Completed reports. Your own reports are excluded.',
           ),
           ListFilters(
             hint: 'Report number, name or site',
-            filterLabel: 'Health',
+            filterLabel: 'Condition',
             options: const {
-              '': 'All health',
+              '': 'All conditions',
               'Healthy': 'Healthy',
               'Stressed': 'Stressed',
               'At Risk': 'At Risk',
@@ -306,7 +306,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
   Future<void> _review(String action) async {
     if (_busy) return;
     if (action == 'correct' && _health == null) {
-      setState(() => _error = 'Choose the final health before saving.');
+      setState(() => _error = 'Choose the final condition before saving.');
       return;
     }
     if (action == 'reject' && _feedback.text.trim().isEmpty) {
@@ -329,7 +329,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Complete review?'),
         content: Text(
-          'Are you sure you want to $verb ${_report!['report_code']}?${action == 'reject' ? '' : '\nHealth: ${action == 'confirm' ? _report!['suggested_health'] ?? 'Unknown' : _health}\nSpecies: ${displayedSpecies == null ? 'Unassigned' : widget.species.where((item) => item['id'] == displayedSpecies).map((item) => item['scientific_name']).join()}'}',
+          'Are you sure you want to $verb ${_report!['report_code']}?${action == 'reject' ? '' : '\nCondition: ${action == 'confirm' ? _report!['suggested_health'] ?? 'Unknown' : _health}\nSpecies: ${displayedSpecies == null ? 'Unassigned' : widget.species.where((item) => item['id'] == displayedSpecies).map((item) => item['scientific_name']).join()}'}',
         ),
         actions: [
           TextButton(
@@ -468,7 +468,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                   'Living mangroves: ${_report!['observed_alive_count'] ?? 'Unable to count'}',
                 ),
                 const Divider(height: 24),
-                Text('Suggested health: ${_report!['suggested_health']}'),
+                Text('Suggested condition: ${_report!['suggested_health']}'),
                 Text(
                   _report!['health_score'] == null
                       ? 'Unknown: uncertain observations still need attention.'
@@ -491,7 +491,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
         const SizedBox(height: 12),
         Card(
           child: ExpansionTile(
-            title: Text('Health checklist (${observations.length})'),
+            title: Text('Condition checklist (${observations.length})'),
             children: observations.map((criterion) {
               final options = (criterion['options'] as List? ?? const [])
                   .map(
@@ -542,14 +542,14 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                   const Padding(
                     padding: EdgeInsets.only(bottom: 16),
                     child: Text(
-                      'Uses the system health and species suggestion shown above. Unknown health remains marked for attention.',
+                      'Uses the system condition and species suggestion shown above. Unknown condition remains marked for attention.',
                     ),
                   ),
                 if (_decision == 'correct') ...[
                   DropdownButtonFormField<String>(
                     initialValue: _health,
                     decoration: const InputDecoration(
-                      labelText: 'Corrected health',
+                      labelText: 'Corrected condition',
                     ),
                     items: ['Healthy', 'Stressed', 'At Risk', 'Unknown']
                         .map(

@@ -85,7 +85,7 @@ class _ClusterTimelineScreenState extends State<ClusterTimelineScreen> {
                   for (final section
                       in widget.initialTab == 1 ? [1, 0] : [0, 1]) ...[
                     Text(
-                      section == 0 ? 'Health history' : 'Growth Timeline',
+                      section == 0 ? 'Condition history' : 'Growth Timeline',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
@@ -205,7 +205,7 @@ class VisitChart extends StatelessWidget {
     return Semantics(
       label: growth
           ? 'Living mangroves by visit. Values are listed below.'
-          : 'Health by visit. Results are listed below.',
+          : 'Condition by visit. Results are listed below.',
       child: SizedBox(
         height: 245,
         child: LineChart(
@@ -350,9 +350,9 @@ class _ClustersScreenState extends State<ClustersScreen> {
         children: [
           ListFilters(
             hint: 'Cluster name, code, or barangay',
-            filterLabel: 'Health',
+            filterLabel: 'Condition',
             options: const {
-              '': 'All health',
+              '': 'All conditions',
               'Healthy': 'Healthy',
               'Stressed': 'Stressed',
               'At Risk': 'At Risk',

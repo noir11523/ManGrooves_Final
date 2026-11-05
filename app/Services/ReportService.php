@@ -212,7 +212,7 @@ final class ReportService
 
         $rawObservations = $payload['observations'] ?? [];
         if (!is_array($rawObservations)) {
-            throw new InvalidArgumentException('The health checklist is not valid.');
+            throw new InvalidArgumentException('The condition checklist is not valid.');
         }
         $classification = $this->classifier->classify($rawObservations);
         $matching = $this->matcher->match([

@@ -1,16 +1,16 @@
 <a class="small" href="<?= e(url('dashboard.php')) ?>">Back to dashboard</a>
-<h1 class="h3 mt-2">Health checklist</h1>
+<h1 class="h3 mt-2">Condition checklist</h1>
 <p class="text-body-secondary">Add, rename, or delete choices. Edit points and photos. Saved reports keep their original scores.</p>
 <div class="card card-body mb-3">
-    <h2 class="h5">Health score: 6 points</h2>
+    <h2 class="h5">Condition score: 6 points</h2>
     <p class="mb-1">Leaf color + pests + roots. Each adds 0, 1, or 2 points.</p>
     <p class="mb-1"><strong>6 Healthy · 3–5 Stressed · 0–2 At Risk</strong></p>
-    <p class="small mb-0">Not Sure: no score; needs review. None of the above: 0. All of the above: lowest score (0) for health; total of regular choices for context and environment. Context and environment do not change the health score.</p>
+    <p class="small mb-0">Not Sure: no score; needs review. None of the above: 0. All of the above: lowest score (0) for condition; total of regular choices for context and environment. Context and environment do not change the condition score.</p>
 </div>
 <?php if ($error): ?><div class="alert alert-danger" role="alert"><?= e($error) ?></div><?php endif; ?>
 <?php foreach ($criteria as $criterion): ?>
 <details class="card mb-3" id="criterion-<?= (int) $criterion['id'] ?>" <?= is_post() && (int) ($_POST['id'] ?? 0) === $criterion['id'] ? 'open' : '' ?>>
-<summary class="card-header p-3"><strong><?= e($criterion['name']) ?></strong> <span class="badge text-bg-light ms-2"><?= $criterion['score_group'] === 'health' ? '0–2 health points' : 'Supporting observations' ?></span></summary>
+<summary class="card-header p-3"><strong><?= e($criterion['name']) ?></strong> <span class="badge text-bg-light ms-2"><?= $criterion['score_group'] === 'health' ? '0–2 condition points' : 'Supporting observations' ?></span></summary>
 <form class="card-body" data-checklist-editor method="post" enctype="multipart/form-data" data-confirm="Save added, edited, and deleted choices? Past reports stay unchanged.">
     <?= Csrf::field() ?>
     <input type="hidden" name="id" value="<?= (int) $criterion['id'] ?>"><input type="hidden" name="version" value="<?= e($criterion['version']) ?>">

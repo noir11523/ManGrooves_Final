@@ -45,7 +45,7 @@ export function analyticsForUser(user,rows,clusters,query={}) {
   const siteRows=[...selectedIds].map(id=>{
     const c=sites.get(id),r=latest.get(id),condition=healthOf(r),follow=!!r.needs_follow_up&&!resolved.has(r.id);
     const priority=condition==='At Risk'?'High':condition==='Unknown'?'Insufficient data':condition==='Stressed'||follow?'Moderate':'Routine';
-    const reason=condition==='Unknown'?'Latest verified visit has no confirmed health classification.':condition==='At Risk'?'Latest verified visit is At Risk.':condition==='Stressed'?'Latest verified visit is Stressed.':follow?'Another observation was requested and has not been submitted.':'Latest verified visit is Healthy with no outstanding follow-up request.';
+    const reason=condition==='Unknown'?'Latest verified visit has no confirmed condition classification.':condition==='At Risk'?'Latest verified visit is At Risk.':condition==='Stressed'?'Latest verified visit is Stressed.':follow?'Another observation was requested and has not been submitted.':'Latest verified visit is Healthy with no outstanding follow-up request.';
     const lat=c.center_lat??c.latitude,lng=c.center_lng??c.longitude;
     const valid=lat!=null&&lng!=null&&Number.isFinite(Number(lat))&&Number.isFinite(Number(lng))&&Math.abs(Number(lat))<=90&&Math.abs(Number(lng))<=180;
     return {id,name:c.name,barangay_name:c.barangay_name,latest_health:condition,report_id:r.id,report_code:label(r),last_monitoring_date:manilaDate(r.submitted_at),verified_at:manilaDate(r.verified_at),trend:changeOf(r),priority,reason,

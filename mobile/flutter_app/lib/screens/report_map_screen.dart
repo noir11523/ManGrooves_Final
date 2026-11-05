@@ -304,7 +304,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                '${item['status'] == 'verified' ? 'Health' : 'Suggested health'}: ${item['display_health'] ?? item['final_health'] ?? item['suggested_health'] ?? 'Not recorded'}',
+                '${item['status'] == 'verified' ? 'Condition' : 'Suggested condition'}: ${item['display_health'] ?? item['final_health'] ?? item['suggested_health'] ?? 'Not recorded'}',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 16),
@@ -428,12 +428,12 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
                   isExpanded: true,
                   key: ValueKey('map-health-$_health'),
                   initialValue: _health,
-                  decoration: const InputDecoration(labelText: 'Health'),
+                  decoration: const InputDecoration(labelText: 'Condition'),
                   items: ['', 'Healthy', 'Stressed', 'At Risk', 'Unknown']
                       .map(
                         (value) => DropdownMenuItem(
                           value: value,
-                          child: Text(value.isEmpty ? 'All health' : value),
+                          child: Text(value.isEmpty ? 'All conditions' : value),
                         ),
                       )
                       .toList(),
@@ -483,7 +483,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
               '${located.length} pins on this page · ${_data!['total'] ?? items.length} reports total · Page $page of $pages',
             ),
           const Text(
-            'Tap a pin for details. Colors show health; pending and rejected reports show the system suggestion. A blue pin marks your search.',
+            'Tap a pin for details. Colors show condition; pending and rejected reports show the system suggestion. A blue pin marks your search.',
           ),
           const SizedBox(height: 8),
           SizedBox(

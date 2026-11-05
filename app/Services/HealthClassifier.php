@@ -8,9 +8,9 @@ use InvalidArgumentException;
 use PDO;
 
 /**
- * Calculates the canonical mangrove health result from the workbook rules.
+ * Calculates the canonical mangrove condition result from the workbook rules.
  *
- * Only leaf_color, pests and roots can influence the six-point health score.
+ * Only leaf_color, pests and roots can influence the six-point condition score.
  * Context and environmental observations are returned separately so adding a
  * new checklist row can never silently change the classification thresholds.
  */
@@ -38,7 +38,7 @@ final class HealthClassifier
         $criteria = $this->criteriaWithOptions();
         $healthCriteria = array_filter($criteria, static fn (array $item): bool => in_array($item['code'], self::HEALTH_CODES, true));
         if (count($healthCriteria) !== count(self::HEALTH_CODES)) {
-            throw new InvalidArgumentException('The health checklist is incomplete. Please contact an administrator.');
+            throw new InvalidArgumentException('The condition checklist is incomplete. Please contact an administrator.');
         }
         $observations = [];
         $healthScore = 0;
@@ -112,7 +112,7 @@ final class HealthClassifier
 
                 if (in_array($code, self::HEALTH_CODES, true)) {
                     if ($criterion['selection_mode'] !== 'single' || $points < 0 || $points > 2) {
-                        throw new InvalidArgumentException('The health scoring settings need an administrator check.');
+                        throw new InvalidArgumentException('The condition scoring settings need an administrator check.');
                     }
                     $healthScore += $points;
                     $breakdown[] = ['name' => $criterion['name'], 'answer' => $option['label'], 'points' => $optionCode === 'unknown' ? null : $points, 'max_points' => 2];

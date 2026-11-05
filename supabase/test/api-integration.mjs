@@ -249,7 +249,7 @@ try {
   const uncertain = await submission(guardian, {observations: {...healthy, leaf_color: [select('leaf_color', 'unknown')]}});
   const pending = await request('submit-report.php', guardian, uncertain.body, 201); assert.equal(pending.report.status, 'pending'); pass('Not Sure requires expert review');
   const notifications = await request('notifications.php', expert); assert.ok(notifications.notifications.some(n => n.report_id === pending.report.report_id)); pass('expert receives pending report notifications');
-  await request('review.php', expert, {report_id: pending.report.report_id, action: 'correct', final_health: ''}, 422); pass('corrections require an explicit health result');
+  await request('review.php', expert, {report_id: pending.report.report_id, action: 'correct', final_health: ''}, 422); pass('corrections require an explicit condition result');
   const beforeCorrection=(await request('dashboard.php',guardian)).stats;
   await request('review.php', expert, {report_id: pending.report.report_id, action: 'correct', final_health: 'Stressed', final_species_id: 1, rarity_level: 'Common', expert_feedback: 'Check leaves at the next visit.'}); pass('expert corrects and verifies health/species');
   const afterCorrection=(await request('dashboard.php',guardian)).stats;

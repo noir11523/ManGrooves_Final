@@ -114,7 +114,7 @@ test('missing and invalid coordinates cannot create a misleading zero-coordinate
 });
 
 const site={id:7,name:'MJ Angel Store Pardo, Natalio Bacalso Avenue, Poblacion Pardo, Cebu City, Central Visayas, Philippines',cluster_code:'MGC-1713',barangay_name:'Inayawan',latitude:10.28,longitude:123.88,latest_health:'Healthy',scientific_name:'Avicennia rumphiana'};
-test('cluster pins open their details on click and link to the selected health or growth timeline',()=>{
+test('cluster pins open their details on click and link to the selected condition or growth timeline',()=>{
   for(const timelineMode of ['health','growth']){
     root.innerHTML='<div id="report-map"></div>';
     const canvas=map($('#report-map'),[site,{...site,id:8,name:'Another site',latitude:10.29}],{timelineMode});

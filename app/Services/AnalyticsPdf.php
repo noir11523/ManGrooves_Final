@@ -86,7 +86,7 @@ final class AnalyticsPdf
             $line($cluster['cluster_code'] . ' - ' . $cluster['name'], true);
             $line($cluster['barangay_name'] . ' | ' . ($cluster['scientific_name'] ?: 'Unidentified species'));
             $survival = $cluster['survival_rate'] === null ? 'N/A' : number_format((float) $cluster['survival_rate'], 1) . '%';
-            $line('Health: ' . ($cluster['final_health'] ?: $cluster['latest_health']) . ' | Survival: ' . $survival
+            $line('Condition: ' . ($cluster['final_health'] ?: $cluster['latest_health']) . ' | Survival: ' . $survival
                 . ' | Living: ' . ($cluster['observed_alive_count'] ?? 'N/A') . ' / Initial: ' . $cluster['initial_seedlings']);
             $pdf->Ln(3);
         }

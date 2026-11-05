@@ -125,6 +125,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
 
   Map<String, dynamic> _draftValues() => {
     'sitio_name': _sitio.text,
+    'place_query': _placeSearch.text,
     'selected_place_label': _selectedPlaceLabel,
     'observed_alive_count': _aliveCount.text,
     'count_unknown': _countUnknown ? '1' : '0',
@@ -160,6 +161,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         !_pickingPhoto &&
         _location == null &&
         _sitio.text.isEmpty &&
+        _placeSearch.text.isEmpty &&
         _aliveCount.text.isEmpty &&
         _remarks.text.isEmpty &&
         _clusterId == null &&
@@ -235,6 +237,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         }
       }
       _sitio.text = draft['sitio_name']?.toString() ?? '';
+      _placeSearch.text = draft['place_query']?.toString() ?? _sitio.text;
       _selectedPlaceLabel = draft['selected_place_label'] as String?;
       _aliveCount.text = draft['observed_alive_count']?.toString() ?? '';
       _remarks.text = draft['guardian_remarks']?.toString() ?? '';
@@ -410,6 +413,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         );
       }
       if (!_parentsFailed) _error = null;
+      if (_placeSearch.text.isEmpty) _placeSearch.text = _sitio.text;
       if (mounted) unawaited(_tryAutoCapture());
       if (_step == 3) await _fetchPreview();
     } catch (error) {
@@ -468,15 +472,27 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
 
   Future<void> _selectCluster(int? clusterId) async {
     _cancelGps();
+    _placeTimer?.cancel();
+    _placeRequest++;
     _parentRequest++;
     setState(() {
       _reportBarangay = null;
+      _placeSuggestions = [];
+      _placeMessage = null;
       _followup = false;
       _loadingParents = false;
       _parentsFailed = false;
       _clusterId = clusterId;
       _parentReportId = null;
       _previousReports = [];
+      if (clusterId == null) {
+        _location = null;
+        _sitio.clear();
+        _placeSearch.clear();
+        _selectedPlaceLabel = null;
+        _countUnknown = false;
+        _locationMessage = 'Search a barangay or landmark, or place a pin.';
+      }
       for (final site in _clusters) {
         if (site['id'] != clusterId) continue;
         final point = _coordinates(site);
@@ -486,6 +502,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             longitude: point.longitude,
           );
           _sitio.text = '${site['sitio_name'] ?? site['name'] ?? ''}';
+          _placeSearch.text = _sitio.text;
           _selectedPlaceLabel = null;
           _locationMessage = 'Site selected. Check the pin before continuing.';
           _locationNeedsRetry = false;
@@ -639,6 +656,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _sitio.text =
             'Pinned location (${captured.latitude.toStringAsFixed(5)}, ${captured.longitude.toStringAsFixed(5)})';
       }
+      _placeSearch.text = _sitio.text;
       _selectedPlaceLabel = null;
       _approximatePosition = null;
       _areaCenter = null;
@@ -677,6 +695,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     if (!widget.active ||
         _form == null ||
         _location != null ||
+        _placeSearch.text.trim().isNotEmpty ||
         _autoCaptureTried ||
         _gettingLocation) {
       return;
@@ -922,6 +941,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _sitio.text = '${selected['sitio_name'] ?? selected['name']}';
       }
     }
+    _placeSearch.text = _sitio.text;
     await _fillNearbyAddress(location, replace: location.name == null);
     await _saveDraft();
   }
@@ -968,6 +988,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       return;
     }
     final requestedName = _sitio.text;
+    final requestedQuery = _placeSearch.text;
     if (mounted) {
       setState(() {
         _reportBarangay = null;
@@ -996,6 +1017,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         final name = '${places.first['label']}';
         if (replace && _clusterId == null && _sitio.text == requestedName) {
           _sitio.text = name.length > 120 ? name.substring(0, 120) : name;
+          if (_placeSearch.text == requestedQuery) {
+            _placeSearch.text = _sitio.text;
+          }
         }
         setState(() => _placeMessage = null);
         await _saveDraft();
@@ -1028,7 +1052,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       try {
         final response = await widget.api.cloudRequest(
           'places.php',
-          query: {'q': value.trim(),
+          query: {
+            'q': value.trim(),
             if (_location != null) 'bias_latitude': '${_location!.latitude}',
             if (_location != null) 'bias_longitude': '${_location!.longitude}',
           },
@@ -1045,7 +1070,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       } catch (_) {
         if (mounted && request == _placeRequest) {
           setState(
-            () => _placeMessage = 'Search unavailable. You can still place a pin.',
+            () => _placeMessage =
+                'Search unavailable. You can still place a pin.',
           );
         }
       }
@@ -1063,9 +1089,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         longitude.abs() > 180) {
       return;
     }
-    final point = ReportLocation.manual(latitude: latitude, longitude: longitude);
+    final point = ReportLocation.manual(
+      latitude: latitude,
+      longitude: longitude,
+    );
     if (_outsideFollowUpSite(point)) {
-      setState(() => _placeMessage = 'Keep this follow-up pin inside its requested site.');
+      setState(
+        () => _placeMessage =
+            'Keep this follow-up pin inside its requested site.',
+      );
       return;
     }
     _cancelGps();
@@ -1094,6 +1126,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           ? label.substring(0, 120)
           : label;
       _sitio.text = _selectedPlaceLabel!;
+      _placeSearch.text = label;
       _placeSuggestions = [];
       _placeMessage = 'Location selected. Use Adjust pin to check its spot.';
       _error = null;
@@ -1642,10 +1675,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                             onPressed: _busy || _previewBusy
                                 ? null
                                 : _nextCategory,
-                            child: Text(
-                              'Next',
-                              textAlign: TextAlign.center,
-                            ),
+                            child: Text('Next', textAlign: TextAlign.center),
                           ),
                         ),
                       ],
@@ -1811,6 +1841,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           ],
         ),
       ),
+      _siteSelector(),
+      const SizedBox(height: 12),
+      if (_clusterId == null) ..._placeFields(showBarangay: false),
+      const SizedBox(height: 16),
       FilledButton(
         onPressed: _pickingPhoto
             ? null
@@ -1841,6 +1875,80 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       ),
     ],
   );
+
+  Widget _siteSelector() => DropdownButtonFormField<int>(
+    key: ValueKey('cluster-$_clusterId'),
+    initialValue: _clusters.any((s) => s['id'] == _clusterId)
+        ? _clusterId
+        : null,
+    onChanged: _parentReportId != null ? null : _selectCluster,
+    decoration: const InputDecoration(labelText: 'Site'),
+    isExpanded: true,
+    itemHeight: null,
+    menuMaxHeight: 320,
+    items: [
+      const DropdownMenuItem<int>(value: null, child: Text('New site')),
+      ..._clusters.map(
+        (cluster) => DropdownMenuItem<int>(
+          value: cluster['id'] as int,
+          child: Text(
+            cluster['name']?.toString() ?? cluster['cluster_code'].toString(),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    ],
+  );
+
+  List<Widget> _placeFields({bool showBarangay = true}) => [
+    TextFormField(
+      key: const ValueKey('place-search'),
+      controller: _placeSearch,
+      readOnly: _parentReportId != null,
+      onChanged: _searchLocationName,
+      decoration: const InputDecoration(
+        labelText: 'Search a barangay or landmark',
+        hintText: 'Barangay, street, or landmark',
+        helperText: 'Choose a result to move your pin.',
+        helperMaxLines: 2,
+      ),
+    ),
+    if (_placeMessage != null)
+      Text(_placeMessage!, style: Theme.of(context).textTheme.bodySmall),
+    if (showBarangay && _reportBarangay != null)
+      Text(_reportBarangay!, key: const ValueKey('report-barangay')),
+    ..._placeSuggestions.map(
+      (place) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Material(
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () => _selectPlace(place),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  const Icon(Icons.place_outlined),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${place['label']}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Icon(Icons.north_east, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ];
 
   Widget _siteStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1894,89 +2002,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 ),
               ),
             const SizedBox(height: 12),
-            TextFormField(
-              key: const ValueKey('place-search'),
-              controller: _placeSearch,
-              readOnly: _parentReportId != null,
-              onChanged: _searchLocationName,
-              decoration: const InputDecoration(
-                labelText: 'Search places',
-                hintText: 'Barangay, street, or landmark',
-                helperText: 'Choose a result to move your pin.',
-                helperMaxLines: 2,
-              ),
-            ),
-            if (_location != null && _sitio.text.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(_sitio.text, key: const ValueKey('selected-address')),
-              ),
-            if (_placeMessage != null)
-              Text(
-                _placeMessage!,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            if (_reportBarangay != null)
-              Text(_reportBarangay!, key: const ValueKey('report-barangay')),
-            ..._placeSuggestions.map(
-              (place) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Material(
-                  color: Theme.of(context).colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    onTap: () => _selectPlace(place),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.place_outlined),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              '${place['label']}',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const Icon(Icons.north_east, size: 18),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            _siteSelector(),
             const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              key: ValueKey('cluster-$_clusterId'),
-              initialValue: _clusters.any((s) => s['id'] == _clusterId)
-                  ? _clusterId
-                  : null,
-              onChanged: _parentReportId != null ? null : _selectCluster,
-              decoration: const InputDecoration(labelText: 'Site'),
-              isExpanded: true,
-              itemHeight: null,
-              menuMaxHeight: 320,
-              items: [
-                const DropdownMenuItem<int>(
-                  value: null,
-                  child: Text('New site'),
-                ),
-                ..._clusters.map(
-                  (cluster) => DropdownMenuItem<int>(
-                    value: cluster['id'] as int,
-                    child: Text(
-                      cluster['name']?.toString() ??
-                          cluster['cluster_code'].toString(),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            ..._placeFields(),
             if (_parentReportId != null)
               const Text('This follow-up stays linked to its requested site.'),
             if (_loadingParents) const LinearProgressIndicator(),
@@ -2186,9 +2214,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 Expanded(
                   child: Text(
                     title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
                 IconButton(
@@ -2299,7 +2326,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _reviewCard('Site and location', 1, [
           _reviewValue(
             'Site name',
-            cluster ?? (_sitio.text.trim().isEmpty ? 'New site' : _sitio.text.trim()),
+            cluster ??
+                (_sitio.text.trim().isEmpty ? 'New site' : _sitio.text.trim()),
           ),
           if (cluster == null)
             _reviewValue('Site status', 'New site · Pending verification'),
@@ -2309,7 +2337,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               siteLocation.trim() != cluster)
             _reviewValue('Location name', siteLocation.trim()),
           if (_reportBarangay != null)
-            _reviewValue('Barangay', _reportBarangay!.replaceFirst('Barangay: ', '')),
+            _reviewValue(
+              'Barangay',
+              _reportBarangay!.replaceFirst('Barangay: ', ''),
+            ),
           if (_location != null) ...[
             _reviewValue(
               'Map pin',
@@ -2643,7 +2674,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     final health = _preview?['classification'] as Map?;
     final species = (_preview?['species'] as Map?)?['best'] as Map?;
     return _Section(
-      title: 'Health check',
+      title: 'Condition check',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

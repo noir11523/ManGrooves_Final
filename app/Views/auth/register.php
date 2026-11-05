@@ -7,7 +7,7 @@
                     <p class="eyebrow text-white-50">Community guardians</p>
                     <h1>Your local knowledge can guide meaningful action.</h1>
                     <ul class="auth-benefits">
-                        <li><i class="bi bi-check2-circle" aria-hidden="true"></i> Guided visual health checks</li>
+                        <li><i class="bi bi-check2-circle" aria-hidden="true"></i> Guided visual condition checks</li>
                         <li><i class="bi bi-check2-circle" aria-hidden="true"></i> Feedback from CCENRO experts</li>
                         <li><i class="bi bi-check2-circle" aria-hidden="true"></i> Progress tracking and recognition badges</li>
                     </ul>

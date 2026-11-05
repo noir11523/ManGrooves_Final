@@ -113,7 +113,7 @@ class ClusterHealthMap extends StatelessWidget {
                     Navigator.pop(sheet);
                     onOpenTimeline!(int.parse('${cluster['id']}'), 0);
                   },
-                  child: const Text('Health history'),
+                  child: const Text('Condition history'),
                 ),
               if (canOpenSite?.call(cluster) != false)
                 OutlinedButton(

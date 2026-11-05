@@ -6,7 +6,7 @@ export function navigationItems(role) {
       ['reports',guardian?'My reports':'All reports'],...(!admin?[['submit','Submit report']]:[]),['report-map','Report map'],['clusters','Mangrove timeline'],...(guardian?[['explore','Explore mangrove sites']]:[])
     ]],
     ['analytics','Analytics'],
-    ...(!guardian?[['Mangrove Data',[['species','Species & sites'],...(admin?[['checklist','Health checklist']]:[])]]]:[]),
+    ...(!guardian?[['Mangrove Data',[['species','Species & sites'],...(admin?[['checklist','Condition checklist']]:[])]]]:[]),
     ...(admin?[
       ['User Management',[['users','All users'],['expert-applications','Expert applications']]],
       ['Recognition',[['badge-settings','Badges'],['certificate-settings','Certificates']]],

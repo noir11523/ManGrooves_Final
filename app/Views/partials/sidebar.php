@@ -17,7 +17,7 @@ $navigation = [
 ];
 if (!$guardian) $navigation[] = ['Mangrove Data', '', 'bi-tree-fill', [
     ['Species & sites', 'admin/species.php', 'bi-tree'],
-    ...($admin ? [['Health checklist', 'admin/checklist.php', 'bi-list-check']] : []),
+    ...($admin ? [['Condition checklist', 'admin/checklist.php', 'bi-list-check']] : []),
 ]];
 if ($admin) $navigation = array_merge($navigation, [
     ['User Management', '', 'bi-people-fill', [['All users', 'admin/users.php', 'bi-people'], ['Expert applications', 'admin/expert-applications.php', 'bi-person-check']]],

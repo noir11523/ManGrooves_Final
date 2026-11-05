@@ -13,7 +13,7 @@ export function writeMonitoringReport(pdf,a,generatedAt) {
   pdf.text(`Survival rate: Insufficient data. ${a.survival_reason}`);
   heading('Latest verified cluster conditions');
   pdf.table(['Condition','Monitoring sites','Share of sites'],Object.entries(a.latest_health).map(([h,n])=>[h,n,`${a.monitored_clusters?(n/a.monitored_clusters*100).toFixed(1):'0'}%`]));
-  heading('Monthly health observations');
+  heading('Monthly condition observations');
   pdf.table(['Month','Healthy','Stressed','At Risk','Unknown','Visits'],a.growth.map(m=>[m.month_label,...['Healthy','Stressed','At Risk','Unknown'].map(h=>m.health?.[h]??'-'),m.verified_reports||'-']));
   pdf.text('A dash means no observations were recorded; it is not a zero living-mangrove count.');
   heading('Follow-up monitoring');

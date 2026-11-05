@@ -45,7 +45,7 @@ export function publicUser(user) {
 }
 export function classify(criteria, selections) {
   if (!selections || typeof selections !== 'object' || Array.isArray(selections)) throw new AppError('Choose your checklist answers.');
-  if (HEALTH_CODES.some(code => !criteria.some(c => c.code === code))) throw new AppError('The health checklist needs an administrator check.', 503);
+  if (HEALTH_CODES.some(code => !criteria.some(c => c.code === code))) throw new AppError('The condition checklist needs an administrator check.', 503);
   let health = 0, context = 0, environment = 0, unknown = false;
   const observations = [], breakdown = [], selectedCodes = {};
   for (const criterion of criteria) {
@@ -71,7 +71,7 @@ export function classify(criteria, selections) {
         }
       } else selectedCodes[code].push(option.code);
       if (isHealth) {
-        if (criterion.selection_mode !== 'single' || points < 0 || points > 2) throw new AppError('Health scoring needs an administrator check.', 503);
+        if (criterion.selection_mode !== 'single' || points < 0 || points > 2) throw new AppError('Condition scoring needs an administrator check.', 503);
         health += points;
         breakdown.push({name: criterion.name, answer: option.label, points: option.code === 'unknown' ? null : points, max_points: 2});
       } else if (criterion.score_group === 'environment') environment += points;
@@ -172,7 +172,7 @@ export function updateCriterion(current, input, nextOptionId) {
   if (current.options.some(o => !seen.has(o.id))) throw new AppError('A choice is missing. Reload the complete checklist.');
   const normal = options.filter(o => !SPECIAL_CODES.includes(o.code));
   if (!normal.length || options.length > 30) throw new AppError('Keep at least one regular choice and at most 30 choices.');
-  if (HEALTH_CODES.includes(current.code) && (!normal.some(o => o.points === 0) || !normal.some(o => o.points === 2))) throw new AppError('Keep a 0-point and a 2-point choice in each health check.');
+  if (HEALTH_CODES.includes(current.code) && (!normal.some(o => o.points === 0) || !normal.some(o => o.points === 2))) throw new AppError('Keep a 0-point and a 2-point choice in each condition check.');
   return {...current, name, question_text, options, archived_options: archived.filter(o => !codes.has(o.code)),
     guide_image: input.remove_guide ? null : current.guide_image, version: randomUUID()};
 }

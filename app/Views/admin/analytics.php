@@ -76,7 +76,7 @@ $clientData = [
 </div>
 
 <div class="row g-4 mb-4">
-    <div class="col-lg-4"><div class="card h-100"><div class="card-header"><h2 class="h5 mb-0">Health distribution</h2></div><div class="card-body"><canvas id="health-chart" aria-label="Health distribution chart"></canvas></div></div></div>
+    <div class="col-lg-4"><div class="card h-100"><div class="card-header"><h2 class="h5 mb-0">Condition distribution</h2></div><div class="card-body"><canvas id="health-chart" aria-label="Condition distribution chart"></canvas></div></div></div>
     <div class="col-lg-8"><div class="card h-100"><div class="card-header"><h2 class="h5 mb-0"><?= $canViewSurvival ? 'Survival and verified-report trend' : 'Verified-report trend' ?></h2></div><div class="card-body"><canvas id="growth-chart" aria-label="<?= $canViewSurvival ? 'Monthly survival and verified report trend chart' : 'Monthly verified report trend chart' ?>"></canvas></div></div></div>
 </div>
 
@@ -94,7 +94,7 @@ $clientData = [
     <div class="card-body">
         <div class="row g-4">
             <div class="col-lg-5">
-                <img class="img-fluid rounded border" src="<?= e(url('generated/analytics/health-distribution.png?v=' . rawurlencode($staticChartVersion))) ?>" alt="Generated pie chart of verified mangrove health distribution" loading="lazy">
+                <img class="img-fluid rounded border" src="<?= e(url('generated/analytics/health-distribution.png?v=' . rawurlencode($staticChartVersion))) ?>" alt="Generated pie chart of verified mangrove condition distribution" loading="lazy">
             </div>
             <div class="col-lg-7">
                 <img class="img-fluid rounded border" src="<?= e(url('generated/analytics/survival-trend.png?v=' . rawurlencode($staticChartVersion))) ?>" alt="Generated line chart of verified survival trends over time" loading="lazy">
@@ -108,7 +108,7 @@ $clientData = [
 
 <?php if ($canViewSurvival): ?><div class="card mb-4">
     <div class="card-header"><h2 class="h5 mb-0">Cluster survival</h2></div>
-    <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Cluster</th><th>Barangay</th><th>Species</th><th>Current health</th><th class="text-end">Initial</th><th class="text-end">Latest alive</th><th class="text-end">Survival</th></tr></thead><tbody>
+    <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Cluster</th><th>Barangay</th><th>Species</th><th>Current condition</th><th class="text-end">Initial</th><th class="text-end">Latest alive</th><th class="text-end">Survival</th></tr></thead><tbody>
     <?php foreach ($analytics['clusters'] as $cluster): ?><tr><td><a href="<?= e(url($clusterPath . $cluster['id'])) ?>"><?= e($cluster['cluster_code']) ?></a><div class="small text-muted"><?= e($cluster['name']) ?></div></td><td><?= e($cluster['barangay_name']) ?></td><td><?= e($cluster['common_name'] ?: ($cluster['scientific_name'] ?: 'Unassigned')) ?></td><td><span class="badge <?= e(health_class($cluster['final_health'] ?: $cluster['latest_health'])) ?>"><?= e($cluster['final_health'] ?: $cluster['latest_health']) ?></span></td><td class="text-end"><?= number_format((int) $cluster['initial_seedlings']) ?></td><td class="text-end"><?= $cluster['observed_alive_count'] === null ? '—' : number_format((int) $cluster['observed_alive_count']) ?></td><td class="text-end"><strong><?= $cluster['survival_rate'] === null ? 'N/A' : e(number_format((float) $cluster['survival_rate'], 1) . '%') ?></strong></td></tr><?php endforeach; ?>
     <?php if ($analytics['clusters'] === []): ?><tr><td colspan="7" class="text-center text-muted py-4">No clusters match these filters.</td></tr><?php endif; ?>
     </tbody></table></div>
@@ -116,7 +116,7 @@ $clientData = [
 
 <div class="card mb-4">
     <div class="card-header"><h2 class="h5 mb-0">High-risk and attention-flagged reports</h2></div>
-    <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Report</th><th>Cluster</th><th>Barangay</th><th>Species</th><th>Health</th><th>Submitted</th></tr></thead><tbody>
+    <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Report</th><th>Cluster</th><th>Barangay</th><th>Species</th><th>Condition</th><th>Submitted</th></tr></thead><tbody>
     <?php foreach ($analytics['high_risk'] as $risk): ?><tr><td><a href="<?= e(url($reportPath . $risk['id'])) ?>"><?= e($risk['report_code']) ?></a><?php if ((int) $risk['needs_attention'] === 1): ?> <span class="badge text-bg-danger">Attention</span><?php endif; ?></td><td><?= $risk['cluster_id'] ? '<a href="' . e(url($clusterPath . $risk['cluster_id'])) . '">' . e($risk['cluster_name']) . '</a>' : 'Unassigned' ?></td><td><?= e($risk['barangay_name']) ?></td><td><?= e($risk['species_name'] ?: 'Unassigned') ?></td><td><span class="badge <?= e(health_class($risk['final_health'])) ?>"><?= e($risk['final_health']) ?></span></td><td><?= e(format_datetime($risk['submitted_at'])) ?></td></tr><?php endforeach; ?>
     <?php if ($analytics['high_risk'] === []): ?><tr><td colspan="6" class="text-center text-muted py-4">No high-risk reports in this period.</td></tr><?php endif; ?>
     </tbody></table></div>

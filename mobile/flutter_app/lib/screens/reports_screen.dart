@@ -206,9 +206,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 if (index == 0) {
                   return ListFilters(
                     hint: 'Site or report number',
-                    filterLabel: 'Health',
+                    filterLabel: 'Condition',
                     options: const {
-                      '': 'All health',
+                      '': 'All conditions',
                       'Healthy': 'Healthy',
                       'Stressed': 'Stressed',
                       'At Risk': 'At Risk',

@@ -4,11 +4,11 @@ $pageScripts = '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" in
 ?>
 <a class="small" href="<?= e(url('dashboard.php')) ?>">Back to dashboard</a>
 <h1 class="h3 mt-2">Report map</h1>
-<p class="text-body-secondary">Tap a pin or report. Pending health results are suggestions.</p>
+<p class="text-body-secondary">Tap a pin or report. Pending condition results are suggestions.</p>
 <form class="row g-2 mb-3" method="get">
 <div class="col-md-5"><input class="form-control" name="q" aria-label="Find site or report" placeholder="Find a site or report" value="<?= e($filters['q']) ?>"></div>
 <div class="col-md-3"><select class="form-select" name="status" aria-label="Report status"><option value="">All statuses</option><?php foreach (['pending', 'verified', 'rejected'] as $status): ?><option <?= $filters['status'] === $status ? 'selected' : '' ?> value="<?= e($status) ?>"><?= e(ucfirst($status)) ?></option><?php endforeach; ?></select></div>
-<div class="col-md-3"><select class="form-select" name="health" aria-label="Health"><option value="">All health</option><?php foreach (['Healthy', 'Stressed', 'At Risk', 'Unknown'] as $health): ?><option <?= $filters['health'] === $health ? 'selected' : '' ?>><?= e($health) ?></option><?php endforeach; ?></select></div><div class="col-md-1"><button class="btn btn-success">Filter</button></div>
+<div class="col-md-3"><select class="form-select" name="health" aria-label="Condition"><option value="">All conditions</option><?php foreach (['Healthy', 'Stressed', 'At Risk', 'Unknown'] as $health): ?><option <?= $filters['health'] === $health ? 'selected' : '' ?>><?= e($health) ?></option><?php endforeach; ?></select></div><div class="col-md-1"><button class="btn btn-success">Filter</button></div>
 </form>
 <p><?= (int) $results['total'] ?> reports · Page <?= (int) $results['page'] ?> of <?= (int) $results['pages'] ?></p>
 <div class="rounded border mb-3" style="height:420px" data-submitted-map aria-label="Submitted report locations"></div>

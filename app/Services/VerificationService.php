@@ -102,7 +102,7 @@ final class VerificationService
                     ? $requestedHealth
                     : (string) $report['suggested_health'];
                 if (!in_array($newHealth, self::HEALTH_VALUES, true)) {
-                    throw new InvalidArgumentException('Select a valid final health classification.');
+                    throw new InvalidArgumentException('Select a valid final condition classification.');
                 }
 
                 if ($action === 'correct') {

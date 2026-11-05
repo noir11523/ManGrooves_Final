@@ -12,14 +12,14 @@ export function reportMapPage(node, query = {}) {
       <small id="map-search-hint">Choose a place to see it on the map.</small>
       <div id="map-places" class="list" role="region" aria-label="Suggested locations"></div>
       <p id="map-search-status" class="muted" role="status"></p>
-      <form id="map-filters" class="map-report-filters"><div class="row">${field('q','Find submitted reports',query.q??'','search','maxlength="200" placeholder="Site, barangay, species or report number"')}${select('status','Review status',[['','All reports'],['verified','Verified'],['pending','Pending'],['rejected','Rejected']],query.status)}${select('health','Health',[['','All health'],...['Healthy','Stressed','At Risk','Unknown'].map(value=>[value,value])],query.health)}</div><div class="actions"><button type="submit">Apply filters</button><button type="button" class="outline" id="reset-map-filters">Reset filters</button></div></form>
+      <form id="map-filters" class="map-report-filters"><div class="row">${field('q','Find submitted reports',query.q??'','search','maxlength="200" placeholder="Site, barangay, species or report number"')}${select('status','Review status',[['','All reports'],['verified','Verified'],['pending','Pending'],['rejected','Rejected']],query.status)}${select('health','Condition',[['','All conditions'],...['Healthy','Stressed','At Risk','Unknown'].map(value=>[value,value])],query.health)}</div><div class="actions"><button type="submit">Apply filters</button><button type="button" class="outline" id="reset-map-filters">Reset filters</button></div></form>
     </div>
     <div id="map-report-error" class="notice" role="alert" hidden><span></span> <button type="button" class="outline">Try again</button></div>
     <div class="map-toolbar"><p id="map-count" class="muted" role="status">Loading reports...</p></div>
     <div id="report-map" class="map large report-map-canvas" aria-label="Report locations"></div>
     <div id="map-tile-error" class="notice" role="status" hidden>Some map tiles could not load. <button type="button" class="outline">Reload map</button></div>
     <div class="legend"><span style="--c:#3f7f43">Healthy</span><span style="--c:#cf961d">Stressed</span><span style="--c:#c6513c">At Risk</span><span style="--c:#788778">Unknown</span></div>
-    <p class="muted">Hover over a pin for a summary. Tap or click for details. Colors show health; pending and rejected reports show the system suggestion. A blue pin marks your place search.</p>
+    <p class="muted">Hover over a pin for a summary. Tap or click for details. Colors show condition; pending and rejected reports show the system suggestion. A blue pin marks your place search.</p>
     <p id="map-empty" class="muted"></p>
     <details class="map-results"><summary id="map-results-label">Report list</summary><div id="map-report-list" class="list"></div><button type="button" class="outline" id="more-map-reports" hidden>Show more reports</button></details>
   </section>`;

@@ -206,7 +206,10 @@ export async function reportWizard(node, query, user = null) {
       <div class="row count-row">${field('observed_alive_count', 'Living mangroves counted', draft.fields.observed_alive_count, 'number', 'required min="0" max="1000000" step="1"')}</div>
       <label class="field"><span>Notes (optional)</span><textarea name="guardian_remarks" maxlength="5000">${esc(draft.fields.guardian_remarks)}</textarea></label>`;
     const locationField=node.querySelector('[name=sitio_name]').closest('.field');
-    const siteRow=locationField.closest('.row');locationField.remove();siteRow.classList.remove('row');
+    const siteRow=locationField.closest('.row');siteRow.classList.remove('row');
+    locationField.innerHTML=`<span>Search a barangay or landmark</span><input id="place-search" name="place_query" type="search" autocomplete="off" maxlength="150" placeholder="Enter a barangay, street, or landmark" value="${esc(draft.fields.place_query??draft.fields.sitio_name??'')}"><small>Choose a result, then check the pin in Location.</small>`;
+    locationField.insertAdjacentHTML('afterend','<div id="place-results" class="list" role="status"></div>');
+    locationField.hidden=Boolean(draft.fields.cluster_id);
     const locationName=document.createElement('input');locationName.type='hidden';locationName.name='sitio_name';locationName.value=draft.fields.sitio_name;
     siteRow.after(locationName);
     $('#photo-preview').insertAdjacentHTML('afterend','<div class="field report-photo-picker"><span>Close-up</span><small>Show the leaves, roots, or damage clearly.</small><input type="file" name="closeup_photo" accept="image/jpeg,image/png,image/webp" hidden><div class="actions"><button type="button" class="outline" id="closeup-camera">Camera</button><button type="button" class="outline" id="closeup-gallery">Gallery</button></div><img id="closeup-preview" class="preview-photo" alt="Your close-up photo" hidden></div>');
@@ -292,6 +295,7 @@ export async function reportWizard(node, query, user = null) {
     $('#followup').onchange = () => followups().catch(e => toast(friendly(e)));
     $('[name=cluster_id]').onchange = () => {
       draft.fields.parent_report_id='';draft.fields.cluster_id=$('[name=cluster_id]').value;updateCount();
+      locationField.hidden=Boolean(draft.fields.cluster_id);
       const site=data.clusters.find(c=>String(c.id)===$('[name=cluster_id]').value);
       if(site){
         stopGps();searchGeneration++;clearTimeout(searchTimer);
@@ -303,6 +307,8 @@ export async function reportWizard(node, query, user = null) {
         Object.assign(draft.fields,{sitio_name:'',latitude:'',longitude:'',location_source:'',location_accuracy:'',location_selection:'',selected_place_label:''});
         changed();
       }
+      draft.fields.place_query=placeInput.value;$('#place-search').value=placeInput.value;
+      $('#place-results').replaceChildren();
       followups().catch(e=>toast(friendly(e)));
     };
     if (draft.fields.cluster_id) {
@@ -314,11 +320,39 @@ export async function reportWizard(node, query, user = null) {
       }
       await followups();
     } else if (draft.fields.parent_report_id) await followups();
+    bindPlaceSearch($('#place-search'),$('#place-results'),place=>{
+      $('[name=cluster_id]').value='';placeInput.value=place.label.slice(0,120);
+      Object.assign(draft.fields,{cluster_id:'',parent_report_id:'',count_unknown:'',sitio_name:placeInput.value,place_query:place.label,
+        latitude:place.latitude,longitude:place.longitude,location_source:'manual',location_accuracy:'',location_selection:'search',selected_place_label:placeInput.value,report_barangay:''});
+      draft.followup=false;updateCount();changed();
+    });
+  }
+  function bindPlaceSearch(input,target,onSelect,bias=()=>({lat:Number(draft.fields.latitude)||Number(data.location.barangay?.center_lat)||10.3157,lng:Number(draft.fields.longitude)||Number(data.location.barangay?.center_lng)||123.8854})) {
+    input.oninput=()=>{
+      clearTimeout(searchTimer);const generation=++searchGeneration,q=input.value.trim();
+      stopGps();draft.fields.place_query=input.value;changed();
+      target.replaceChildren();if(q.length<3||input.readOnly)return;
+      searchTimer=setTimeout(async()=>{
+        target.textContent='Finding places…';
+        try{
+          const center=bias();
+          const {places,attribution}=await api('places.php',{query:{q,bias_latitude:center.lat,bias_longitude:center.lng}});
+          if(generation!==searchGeneration||!target.isConnected)return;
+          target.innerHTML=places.length?`${places.map((p,i)=>`<button type="button" class="place-result" data-index="${i}"><strong>${esc(p.name||p.label.split(',')[0])}</strong><small>${esc(p.address||p.label)}</small></button>`).join('')}<small class="muted place-attribution">Source: ${esc(attribution||'OpenStreetMap / Photon')}</small>`:'No places found. Try another spelling or place a pin in Location.';
+          target.querySelectorAll('button').forEach(button=>button.onclick=()=>{
+            const place=places[Number(button.dataset.index)];++searchGeneration;clearTimeout(searchTimer);stopGps();
+            if(onSelect(place)===false)return;
+            input.value=place.label;draft.fields.place_query=place.label;target.replaceChildren();changed();
+          });
+        }catch(error){if(generation===searchGeneration&&target.isConnected)target.textContent=friendly(error);}
+      },350);
+    };
   }
   function locationStep() {
     $('#step-body').innerHTML = `<h2>Where is the mangrove?</h2><p id="location-status" class="muted" role="status">${draft.fields.location_source ? 'Your selected pin is saved.' : 'Finding your location… Allow access if asked.'}</p><label class="field"><span>Find an address or landmark</span><input id="place-search" type="search" autocomplete="off" placeholder="Type a place name"><small>Choose a result, then check the pin.</small></label><div id="place-results" class="list" role="status"></div><div id="location-map" class="map large"></div><input type="hidden" name="latitude" value="${esc(draft.fields.latitude??'')}"><input type="hidden" name="longitude" value="${esc(draft.fields.longitude??'')}">`;
     const locationInput = $('#place-search');
-    locationInput.closest('.field').querySelector('span').textContent='Search a barangay, place, or landmark';
+    locationInput.name='place_query';
+    locationInput.closest('.field').querySelector('span').textContent='Search a barangay or landmark';
     locationInput.closest('.field').querySelector('small').textContent='Choose a result to place your pin, then check it on the map.';
     locationInput.placeholder='Try a barangay or landmark';
     locationInput.readOnly=Boolean(draft.fields.parent_report_id);
@@ -339,8 +373,9 @@ export async function reportWizard(node, query, user = null) {
       const center = canvas.getCenter();
       stopGps(); if(choose(center.lat, center.lng, 'manual', null)) $('#location-status').textContent = 'Pin placed. Check the spot before continuing.';
     });
-    locationInput.value = '';
+    locationInput.value = draft.fields.place_query??draft.fields.sitio_name??'';
     if (draft.fields.location_source) $('#location-status').textContent = 'Check your pin below.';
+    else if (locationInput.value.trim()) $('#location-status').textContent = 'Choose a search result or place a pin below.';
     canvas = map($('#location-map'), [], {onClick: event => { stopGps(); if(choose(event.latlng.lat, event.latlng.lng, 'manual', null)) $('#location-status').textContent = 'Pin placed. Check the spot before continuing.'; }});
     const currentCanvas = canvas;
     const b = data.location.barangay;
@@ -354,6 +389,7 @@ export async function reportWizard(node, query, user = null) {
       locationInput.setAttribute('aria-busy','true');
       $('#nearby-address').textContent='Finding the address…';
       const requestedName=draft.fields.sitio_name;
+      const requestedQuery=locationInput.value;
       try {
         const result = await api('places.php', {query: {latitude: lat, longitude: lng}});
       if (stopped || draft.step !== 1 || canvas !== currentCanvas || generation !== addressGeneration || Math.abs(Number(draft.fields.latitude) - Number(lat)) > 0.0000001 || Math.abs(Number(draft.fields.longitude) - Number(lng)) > 0.0000001) return;
@@ -363,13 +399,13 @@ export async function reportWizard(node, query, user = null) {
         void persist();
         if (!label) {$('#nearby-address').textContent='No address found. Your pin is saved.';return;}
         if (replaceName && !draft.fields.cluster_id && draft.fields.sitio_name===requestedName) { draft.fields.sitio_name = label.slice(0,120); void persist(); }
-        $('#selected-address').textContent=draft.fields.sitio_name;
+        if(locationInput.value===requestedQuery && requestedQuery===requestedName && replaceName){locationInput.value=draft.fields.sitio_name;draft.fields.place_query=locationInput.value;void persist();}
         $('#nearby-address').textContent = '';
       } catch { if(generation===addressGeneration && canvas===currentCanvas) $('#nearby-address').textContent='Address unavailable. Your pin is saved.'; }
       finally {if(generation===addressGeneration && canvas===currentCanvas)locationInput.removeAttribute('aria-busy');}
     }
     $('#location-status').insertAdjacentHTML('afterend', '<small id="nearby-address" class="muted"></small>');
-    locationInput.closest('.field').insertAdjacentHTML('afterend',`<p id="selected-address" role="status">${esc(draft.fields.sitio_name||'')}</p><p id="report-barangay" role="status"></p>`);
+    locationInput.closest('.field').insertAdjacentHTML('afterend','<p id="report-barangay" role="status"></p>');
     function choose(lat, lng, source, accuracy, restoring = false) {
       const selectedSite=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
       if(!restoring && draft.fields.parent_report_id && (!selectedSite || canvas.distance([lat,lng],[selectedSite.center_lat,selectedSite.center_lng])>Number(selectedSite.radius_meters||75))){
@@ -396,7 +432,7 @@ export async function reportWizard(node, query, user = null) {
         locationInput.readOnly=Boolean(draft.fields.parent_report_id);
         if(draft.fields.cluster_id){draft.fields.sitio_name=site.sitio_name||site.name;}
         else {draft.fields.sitio_name=`Pinned location (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)})`;}
-        locationInput.value='';$('#selected-address').textContent=draft.fields.sitio_name;
+        locationInput.value=draft.fields.sitio_name;draft.fields.place_query=locationInput.value;
         draft.fields.report_barangay='';$('#report-barangay').textContent='Finding barangay…';
         ++addressGeneration;clearTimeout(addressTimer);++searchGeneration;clearTimeout(searchTimer);$('#place-results').replaceChildren();
         changed();
@@ -406,26 +442,13 @@ export async function reportWizard(node, query, user = null) {
       return true;
     }
     if (draft.fields.location_source) { choose(Number(draft.fields.latitude), Number(draft.fields.longitude), draft.fields.location_source, draft.fields.location_accuracy, true); canvas.setView([draft.fields.latitude, draft.fields.longitude], 18); void address(Number(draft.fields.latitude),Number(draft.fields.longitude),false); }
-    $('#place-search').oninput=()=>{
-      clearTimeout(searchTimer);const generation=++searchGeneration,q=$('#place-search').value.trim(),target=$('#place-results');
-      stopGps();
-      target.textContent='';if(q.length<3)return;
-      searchTimer=setTimeout(async()=>{target.textContent='Finding places...';try{
-        const center=canvas.getCenter();
-        const {places,attribution}=await api('places.php',{query:{q,bias_latitude:center.lat,bias_longitude:center.lng}});if(generation!==searchGeneration||!target.isConnected)return;
-        target.innerHTML=places.length?`${places.map((p,i)=>`<button type="button" class="place-result" data-index="${i}"><strong>${esc(p.name||p.label.split(',')[0])}</strong><small>${esc(p.address||p.label)}</small></button>`).join('')}<small class="muted place-attribution">Source: ${esc(attribution||'OpenStreetMap / Photon')}</small>`:'No places found. Try another spelling or tap the map.';
-        target.querySelectorAll('button').forEach(button=>button.onclick=()=>{
-          const p=places[Number(button.dataset.index)];
-          ++searchGeneration;clearTimeout(searchTimer);stopGps();
-          if(!draft.fields.parent_report_id){Object.assign(draft.fields,{cluster_id:'',count_unknown:''});draft.followup=false;}
-          if(!choose(p.latitude,p.longitude,'manual',null))return;
-          if(!draft.fields.cluster_id)draft.fields.sitio_name=p.label.slice(0,120);
-          Object.assign(draft.fields,{location_selection:'search',selected_place_label:draft.fields.sitio_name});
-          void persist();canvas.setView([p.latitude,p.longitude],18);target.innerHTML='';
-          locationInput.value='';$('#selected-address').textContent=draft.fields.sitio_name;$('#location-status').textContent='Check your pin below.';
-        });
-      }catch(e){if(generation===searchGeneration&&target.isConnected)target.textContent=friendly(e);}},350);
-    };
+    bindPlaceSearch(locationInput,$('#place-results'),p=>{
+      if(!draft.fields.parent_report_id){Object.assign(draft.fields,{cluster_id:'',count_unknown:''});draft.followup=false;}
+      if(!choose(p.latitude,p.longitude,'manual',null))return false;
+      if(!draft.fields.cluster_id)draft.fields.sitio_name=p.label.slice(0,120);
+      Object.assign(draft.fields,{location_selection:'search',selected_place_label:draft.fields.sitio_name});
+      canvas.setView([p.latitude,p.longitude],18);$('#location-status').textContent='Check your pin below.';
+    },()=>canvas.getCenter());
     const circle = (latitude, longitude, accuracy) => {
         if (!accuracyCircle) accuracyCircle = L.circle([latitude, longitude], {radius: accuracy, color: '#5180bb', fillOpacity: .12}).addTo(canvas);
         else accuracyCircle.setLatLng([latitude, longitude]).setRadius(accuracy);
@@ -472,7 +495,7 @@ export async function reportWizard(node, query, user = null) {
       tracker.start();
     }
     gpsButton.onclick = startLocation;
-    if (!draft.fields.location_source) startLocation();
+    if (!draft.fields.location_source && !locationInput.value.trim()) startLocation();
   }
 
   function checklist() {
@@ -481,7 +504,7 @@ export async function reportWizard(node, query, user = null) {
     const sighting=data.criteria.find(c=>c.code==='bio_indicators')?.options.find(o=>
       (draft.observations.bio_indicators??[]).includes(o.id)&&!['unknown','none_of_the_above'].includes(o.code));
     if(sighting)resolveAnimalChoices(data.criteria,draft.observations,'bio_indicators',sighting.code);
-    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Tap a photo to enlarge it, then select your answer. Pick Not Sure if you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Health score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
+    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Tap a photo to enlarge it, then select your answer. Pick Not Sure if you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Condition score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
     $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. Photos show examples; compare them with what you see at the site.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${label}</legend><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}>${data.trait_images?.[key]?.[value]?`<img src="${esc(asset(data.trait_images[key][value]))}" alt="">`:''}<span>${esc(traitLabels[value]||value)}</span></label>`).join('')}</div></fieldset>`).join('')}`);
     const headings=$$('#step-body h2');headings[0].textContent='Traits and site conditions';headings[1].textContent='Mangrove identification traits';
     const body=$('#step-body'), groups=[...body.querySelectorAll('fieldset.choice-group')];
@@ -538,7 +561,7 @@ export async function reportWizard(node, query, user = null) {
   }
   function summary() {
     const c = draft.preview?.classification, species = draft.preview?.species?.best;
-    $('#step-body').innerHTML = `<h2>Review your report</h2><p>Check everything below. You can still make changes.</p><section class="summary-card report-review"><h3>Details <button type="button" class="link edit" data-step="0">Edit</button></h3><div class="review-photos"><figure><img id="summary-photo" class="inline-photo" alt="Site overview"><figcaption>Site overview</figcaption></figure><figure><img id="summary-closeup" class="inline-photo" alt="Close-up"><figcaption>Close-up</figcaption></figure></div><dl class="summary"><dt>Location name</dt><dd>${esc(draft.fields.sitio_name)}</dd><dt>Living mangroves</dt><dd>${draft.fields.count_unknown==='1'?'Unable to count':esc(draft.fields.observed_alive_count)}</dd><dt>Species name</dt><dd>${speciesNames(species)}</dd><dt>Notes</dt><dd>${esc(draft.fields.guardian_remarks || 'None')}</dd>${draft.fields.parent_report_id ? `<dt>Follow-up</dt><dd>${esc(draft.fields.parent_report_code || 'Previous visit')}</dd>` : ''}</dl></section><section class="summary-card"><h3>Location <button type="button" class="link edit" data-step="1">Edit</button></h3><p>${esc(draft.fields.latitude)}, ${esc(draft.fields.longitude)} · ${draft.fields.location_source === 'gps' ? `Device location (about ${Math.round(Number(draft.fields.location_accuracy))} m)` : 'Manual pin'}</p></section><section class="summary-card"><h3>Observations <button type="button" class="link edit" data-step="2">Edit</button></h3>${pill(c?.status ?? 'Unknown')}<p>${c?.health_score == null ? 'An expert will review the uncertain answers.' : `${c.health_score} / 6 health points. An expert will review this report.`}</p>${data.criteria.map(criterion => `<p><strong>${esc(criterion.name)}:</strong> ${criterion.options.filter(o => draft.observations[criterion.code]?.includes(o.id)).map(o => esc(o.label)).join(', ') || 'None selected'}</p>`).join('')}</section><label class="check"><input type="checkbox" id="field-confirm" required><span>This photo, location, and observations describe my field visit.</span></label>`;
+    $('#step-body').innerHTML = `<h2>Review your report</h2><p>Check everything below. You can still make changes.</p><section class="summary-card report-review"><h3>Details <button type="button" class="link edit" data-step="0">Edit</button></h3><div class="review-photos"><figure><img id="summary-photo" class="inline-photo" alt="Site overview"><figcaption>Site overview</figcaption></figure><figure><img id="summary-closeup" class="inline-photo" alt="Close-up"><figcaption>Close-up</figcaption></figure></div><dl class="summary"><dt>Location name</dt><dd>${esc(draft.fields.sitio_name)}</dd><dt>Living mangroves</dt><dd>${draft.fields.count_unknown==='1'?'Unable to count':esc(draft.fields.observed_alive_count)}</dd><dt>Species name</dt><dd>${speciesNames(species)}</dd><dt>Notes</dt><dd>${esc(draft.fields.guardian_remarks || 'None')}</dd>${draft.fields.parent_report_id ? `<dt>Follow-up</dt><dd>${esc(draft.fields.parent_report_code || 'Previous visit')}</dd>` : ''}</dl></section><section class="summary-card"><h3>Location <button type="button" class="link edit" data-step="1">Edit</button></h3><p>${esc(draft.fields.latitude)}, ${esc(draft.fields.longitude)} · ${draft.fields.location_source === 'gps' ? `Device location (about ${Math.round(Number(draft.fields.location_accuracy))} m)` : 'Manual pin'}</p></section><section class="summary-card"><h3>Observations <button type="button" class="link edit" data-step="2">Edit</button></h3>${pill(c?.status ?? 'Unknown')}<p>${c?.health_score == null ? 'An expert will review the uncertain answers.' : `${c.health_score} / 6 condition points. An expert will review this report.`}</p>${data.criteria.map(criterion => `<p><strong>${esc(criterion.name)}:</strong> ${criterion.options.filter(o => draft.observations[criterion.code]?.includes(o.id)).map(o => esc(o.label)).join(', ') || 'None selected'}</p>`).join('')}</section><label class="check"><input type="checkbox" id="field-confirm" required><span>This photo, location, and observations describe my field visit.</span></label>`;
     if (draft.photo) { if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = URL.createObjectURL(draft.photo); $('#summary-photo').src = photoUrl; }
     if(draft.closeupPhoto){if(closeupUrl)URL.revokeObjectURL(closeupUrl);closeupUrl=URL.createObjectURL(draft.closeupPhoto);$('#summary-closeup').src=closeupUrl;}
     extraUrls.forEach(URL.revokeObjectURL);extraUrls=draft.extraPhotos.map(p=>URL.createObjectURL(p));

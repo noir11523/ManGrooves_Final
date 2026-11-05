@@ -84,7 +84,7 @@ class _HomeShellState extends State<HomeShell> {
       if (!_guardian && widget.api.supportsCloudAccounts)
         'Mangrove Data': {
           'species': 'Species & sites',
-          if (admin) 'checklist': 'Health checklist',
+          if (admin) 'checklist': 'Condition checklist',
         },
       if (admin && widget.api.supportsCloudAccounts)
         'User Management': {

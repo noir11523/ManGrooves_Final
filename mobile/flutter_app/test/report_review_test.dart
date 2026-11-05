@@ -395,11 +395,7 @@ Future<void> chooseCategory(WidgetTester tester, String label) async {
       final code = '${criterion['code']}';
       final options = (criterion['options'] as List).cast<Map>();
       final selected = options.any(
-        (option) => observationSelected(
-          tester,
-          code,
-          option['id'] as int,
-        ),
+        (option) => observationSelected(tester, code, option['id'] as int),
       );
       if (!selected) {
         await tap(
@@ -426,6 +422,63 @@ Future<void> openLocation(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'New site search stays synchronized across Details, Location and Back',
+    (tester) async {
+      final originalGps = GeolocatorPlatform.instance;
+      GeolocatorPlatform.instance = _DeniedGps();
+      addTearDown(() => GeolocatorPlatform.instance = originalGps);
+      final api = _AddressApi(), drafts = _Drafts();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftOwner: 'new-site-sync',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final input = field('Search a barangay or landmark');
+      await tester.ensureVisible(input);
+      await tester.enterText(input, 'Pier');
+      await tester.pump(const Duration(milliseconds: 750));
+      await openLocation(tester);
+      expect(tester.widget<TextField>(input).controller!.text, 'Pier');
+      await tap(tester, find.text('Pier 3, Cebu City'));
+      api.lookups.single.complete({
+        'places': [
+          {'label': 'Pier address'},
+        ],
+        'barangay': {'name': 'Parian', 'city_municipality': 'Cebu City'},
+      });
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(input).controller!.text,
+        'Pier 3, Cebu City',
+      );
+      expect(find.text('Barangay: Parian, Cebu City'), findsOneWidget);
+      expect(find.byKey(const ValueKey('selected-address')), findsNothing);
+      tester.widget<Stepper>(find.byType(Stepper)).onStepTapped!(0);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(input).controller!.text,
+        'Pier 3, Cebu City',
+      );
+      final saved = drafts.saved.entries
+          .where((e) => !e.key.endsWith(':closeup'))
+          .single
+          .value;
+      expect(saved['place_query'], 'Pier 3, Cebu City');
+      expect((saved['location'] as Map)['latitude'], '10.30123450');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
   testWidgets(
     'GPS retry replaces the previous location name and stale addresses cannot win',
     (tester) async {
@@ -458,8 +511,8 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
       expect(api.lookups.length, 1);
-      await tester.ensureVisible(field('Search places'));
-      await tester.enterText(field('Search places'), 'Pier');
+      await tester.ensureVisible(field('Search a barangay or landmark'));
+      await tester.enterText(field('Search a barangay or landmark'), 'Pier');
       await tester.pump(const Duration(milliseconds: 750));
       await tester.pump();
       await tap(tester, find.text('Pier 3, Cebu City'));
@@ -472,7 +525,10 @@ void main() {
       });
       await tester.pump();
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('selected-address'))).data,
+        tester
+            .widget<TextField>(field('Search a barangay or landmark'))
+            .controller!
+            .text,
         'Pier 3, Cebu City',
       );
       api.lookups[1].complete({
@@ -491,7 +547,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(api.lookups.length, 3);
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('selected-address'))).data,
+        tester
+            .widget<TextField>(field('Search a barangay or landmark'))
+            .controller!
+            .text,
         contains('Pinned location'),
       );
       api.lookups[2].complete({
@@ -503,7 +562,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('selected-address'))).data,
+        tester
+            .widget<TextField>(field('Search a barangay or landmark'))
+            .controller!
+            .text,
         'Cogon Pardo, Cebu City',
       );
       expect(find.text('Barangay: Cogon Pardo, Cebu City'), findsOneWidget);
@@ -683,7 +745,10 @@ void main() {
       await tester.pumpAndSettle();
       await openLocation(tester);
       expect(
-        tester.widget<Text>(find.byKey(const ValueKey('selected-address'))).data,
+        tester
+            .widget<TextField>(field('Search a barangay or landmark'))
+            .controller!
+            .text,
         'Nursery boardwalk',
       );
       expect(find.text('Previous report'), findsNothing);
@@ -841,8 +906,8 @@ void main() {
         find.byKey(const ValueKey('report-location-summary')),
         findsNothing,
       );
-      await tester.ensureVisible(field('Search places'));
-      await tester.enterText(field('Search places'), 'Pier');
+      await tester.ensureVisible(field('Search a barangay or landmark'));
+      await tester.enterText(field('Search a barangay or landmark'), 'Pier');
       await tester.pump(const Duration(milliseconds: 750));
       await tester.pump();
       await tap(tester, find.text('Pier 3, Cebu City'));
@@ -869,7 +934,10 @@ void main() {
       await open();
       await tester.pumpAndSettle();
       expect(find.textContaining('Manual pin: 10.301'), findsOneWidget);
-      await tester.enterText(field('Search places'), 'New landmark');
+      await tester.enterText(
+        field('Search a barangay or landmark'),
+        'New landmark',
+      );
       await tester.pump();
       expect(
         find.byKey(const ValueKey('report-location-summary')),
@@ -997,7 +1065,9 @@ void main() {
       expect(find.text('Previous report'), findsOneWidget);
       expect(find.text('This is a follow-up'), findsNothing);
       expect(
-        tester.widget<TextField>(field('Search places')).readOnly,
+        tester
+            .widget<TextField>(field('Search a barangay or landmark'))
+            .readOnly,
         isTrue,
       );
       await tester.enterText(field('Living mangroves observed'), '12');
@@ -1093,10 +1163,7 @@ void main() {
         expect(tester.widget<IconButton>(circle).isSelected, true);
         await tap(tester, circle);
         expect(tester.widget<IconButton>(circle).isSelected, false);
-        await tap(
-          tester,
-          find.text('Next'),
-        );
+        await tap(tester, find.text('Next'));
         expect(
           find.text(
             'Choose ${choice.key.split('(').last.replaceAll(')', '')}.',

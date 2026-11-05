@@ -34,13 +34,13 @@ export function reportTable(items, {guardian = false, verification = false} = {}
     const parsed = new Date(/(?:Z|[+-]\d\d:\d\d)$/.test(value) ? value : (value.length===10?value+'T00:00:00':value.replace(' ','T'))+'+08:00');
     return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
   };
-  const headers = verification ? ['Report','Submitted by / location','Assessment','Submitted','Status','Action'] : ['Report',...(!guardian?['Submitted by']:[]),'Site','Health','Status','Submitted','Action'];
+  const headers = verification ? ['Report','Submitted by / location','Assessment','Submitted','Status','Action'] : ['Report',...(!guardian?['Submitted by']:[]),'Site','Condition','Status','Submitted','Action'];
   return `<section class="report-table-card"><div class="table-wrap"><table class="report-table"><caption class="sr-only">${verification?'Verification reports':guardian?'Your reports':'Community reports'}</caption><thead><tr>${headers.map(label=>`<th scope="col">${label}</th>`).join('')}</tr></thead><tbody>${items.map(r=>{
     const site=r.cluster_name||r.sitio_name||r.barangay_name||'New site',species=speciesNames(r);
     const cell=(label,html)=>`<td data-label="${esc(label)}">${html}</td>`;
     const report=cell('Report',`<strong>${esc(r.report_code)}</strong>`);
     const person=cell(verification?'Submitted by / location':'Submitted by',`${esc(r.guardian_name||'Community member')}${verification?`<small>${esc(site)}${r.barangay_name&&r.barangay_name!==site?` · ${esc(r.barangay_name)}`:''}</small>`:''}`);
-    const health=cell(verification?'Assessment':'Health',`${pill(r.display_health||r.final_health||r.suggested_health||'Unknown')}${verification?`<small>${species}</small>`:''}`);
+    const health=cell(verification?'Assessment':'Condition',`${pill(r.display_health||r.final_health||r.suggested_health||'Unknown')}${verification?`<small>${species}</small>`:''}`);
     const submitted=cell('Submitted',esc(date(r.submitted_at))),status=cell('Status',pill(r.status)+(r.status==='verified'&&r.needs_attention?'<small>Needs attention</small>':'')+(r.needs_follow_up?`<small>${r.active_child_id?'Follow-up submitted':'Follow-up needed'}</small>`:''));
     const action=cell('Action',`<a class="button ${(verification&&r.status==='pending'||r.can_review)?'':'outline'}" href="#report/${r.id}${verification||r.can_review||r.can_manage_follow_up?'?review=1':''}" aria-label="${(verification&&r.status==='pending'||r.can_review)?'Review':'View'} ${esc(r.report_code)}">${(verification&&r.status==='pending'||r.can_review)?'Review':'View'}</a>${guardian&&r.can_follow_up?` <a class="button outline" href="#submit?parent=${r.id}&cluster=${r.cluster_id}">Submit follow-up</a>`:''}`);
     return `<tr>${verification?report+person+health+submitted+status+action:report+(!guardian?person:'')+cell('Site',`${esc(site)}<small>${species}</small>`)+health+status+submitted+action}</tr>`;
@@ -82,7 +82,7 @@ export function mapMarkers(canvas, items, {timelineMode = 'health', fit = true, 
     const title = document.createElement('strong'); title.textContent = item.name ?? item.report_code ?? 'Mangrove site';
     const location = document.createElement('div'); location.textContent = [item.name?item.cluster_code:item.cluster_name||item.sitio_name,item.barangay_name,item.city_municipality].filter(Boolean).join(' · ');
     const suggested = item.status && item.status !== 'verified';
-    const label = document.createElement('p'); label.className='map-pin-health'; label.textContent = `${suggested?'Suggested health':'Health'}: ${health ?? 'Not recorded'}`; label.style.color = healthColor(health);
+    const label = document.createElement('p'); label.className='map-pin-health'; label.textContent = `${suggested?'Suggested condition':'Condition'}: ${health ?? 'Not recorded'}`; label.style.color = healthColor(health);
     const species = document.createElement('div');
     if ([item.local_name,item.species_local_name,item.common_name,item.species_common_name,item.scientific_name,item.species_name].some(Boolean)) species.innerHTML = speciesNames(item);
     const link = document.createElement('a'); link.textContent = item.name ? (canOpenTimeline?'View mangrove timeline':'Sign in to view timeline') : 'View report'; link.href = item.name ? (canOpenTimeline?`#cluster/${item.id}?tab=${timelineMode}`:'#login') : `#report/${item.id}`;

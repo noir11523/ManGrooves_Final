@@ -32,9 +32,9 @@ $isGuardian = $user['role'] === 'guardian';
             </select>
         </div>
         <div class="col-sm-5 col-lg-2">
-            <label class="form-label" for="health">Health</label>
+            <label class="form-label" for="health">Condition</label>
             <select class="form-select" id="health" name="health">
-                <option value="">All health</option>
+                <option value="">All conditions</option>
                 <?php foreach (['Healthy', 'Stressed', 'At Risk', 'Unknown'] as $value): ?><option value="<?= e($value) ?>" <?= $filters['health'] === $value ? 'selected' : '' ?>><?= e($value) ?></option><?php endforeach; ?>
             </select>
         </div>
@@ -48,7 +48,7 @@ $isGuardian = $user['role'] === 'guardian';
 <div class="card border-0 shadow-sm" data-report-table data-detail-url="<?= e(url('api/report-detail.php')) ?>" data-open-report="<?= e($openReportId ?: '') ?>">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-            <thead><tr><th>Report</th><?php if (!$isGuardian): ?><th>Guardian</th><?php endif; ?><th>Site</th><th>Health</th><th>State</th><th>Submitted</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+            <thead><tr><th>Report</th><?php if (!$isGuardian): ?><th>Guardian</th><?php endif; ?><th>Site</th><th>Condition</th><th>State</th><th>Submitted</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
             <tbody>
                 <?php if (!$results['items']): ?><tr><td colspan="<?= $isGuardian ? 6 : 7 ?>" class="text-center text-body-secondary py-5">No reports match these filters.</td></tr><?php endif; ?>
                 <?php foreach ($results['items'] as $report): ?>

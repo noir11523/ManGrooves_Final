@@ -5,7 +5,7 @@ $counted = array_values(array_filter($historyEntries, static fn(array $item): bo
 $maxAlive = max([1, ...array_map(static fn(array $item): int => (int) $item['observed_alive_count'], $counted)]);
 ?>
 <section class="card card-body mb-4" id="health-history">
-<h2 class="h5">Health history</h2>
+<h2 class="h5">Condition history</h2>
 <div class="health-history-strip">
 <?php foreach ($historyEntries as $entry): ?>
     <div class="health-history-point"><time class="small"><?= e(format_datetime($entry['submitted_at'], 'M j, Y')) ?></time><span class="badge <?= e(health_class($entry['health'])) ?>"><?= e($entry['health']) ?></span><span class="small"><?= !empty($entry['parent_report_id']) ? 'Follow-up' : 'Visit' ?></span></div>

@@ -343,7 +343,7 @@ export class Service extends Store {
       const parentRef = previous.parent_report_id ? this.ref('reports', previous.parent_report_id) : null;
       if (parentRef) await tx.get(parentRef);
       const health = action === 'correct' ? input.final_health : previous.suggested_health ?? 'Unknown';
-      if (action !== 'reject' && ![...HEALTH_VALUES,'Unknown'].includes(health)) throw new AppError('Choose a health result for this correction.');
+      if (action !== 'reject' && ![...HEALTH_VALUES,'Unknown'].includes(health)) throw new AppError('Choose a condition result for this correction.');
       const speciesId = action === 'correct' ? (input.final_species_id ? integer(input.final_species_id, 'species') : null) : previous.suggested_species_id;
       const species = catalog.find(s => s.id === speciesId);
       if (action !== 'reject' && speciesId && !species) throw new AppError('Choose an available species.');

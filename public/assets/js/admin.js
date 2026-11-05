@@ -158,7 +158,7 @@
                 bounds.push(point);
                 var popup = '<strong>' + escapeHtml(cluster.code) + ' — ' + escapeHtml(cluster.name) + '</strong>' +
                     '<br>' + escapeHtml(cluster.barangay) +
-                    '<br>Health: ' + escapeHtml(cluster.health || 'Unknown') +
+                    '<br>Condition: ' + escapeHtml(cluster.health || 'Unknown') +
                     '<br>Species: ' + escapeHtml(cluster.species || 'Unassigned');
                 if (data.capabilities && data.capabilities.canViewSurvival) {
                     var survival = cluster.survival == null ? 'N/A' : Number(cluster.survival).toFixed(1) + '%';

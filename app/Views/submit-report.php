@@ -48,7 +48,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
             </div>
             <ol class="row list-unstyled mb-0 text-center small">
                 <li class="col fw-semibold text-success" data-step-indicator="1"><span class="badge rounded-pill text-bg-success me-1">1</span>Site</li>
-                <li class="col text-body-secondary" data-step-indicator="2"><span class="badge rounded-pill text-bg-secondary me-1">2</span>Health</li>
+                <li class="col text-body-secondary" data-step-indicator="2"><span class="badge rounded-pill text-bg-secondary me-1">2</span>Condition</li>
                 <li class="col text-body-secondary" data-step-indicator="3"><span class="badge rounded-pill text-bg-secondary me-1">3</span>Details</li>
             <li class="col text-body-secondary" data-step-indicator="4"><span class="badge rounded-pill text-bg-secondary me-1">4</span>Review</li></ol>
         </div>
@@ -153,8 +153,8 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
 
     <section data-step-panel="2" aria-labelledby="step-two-title" hidden>
         <div class="mb-3">
-            <h2 class="h4" id="step-two-title">2. Health checklist</h2>
-            <p class="text-body-secondary">Choose what you see. Leaf color, pests and roots determine the health result.</p>
+            <h2 class="h4" id="step-two-title">2. Condition checklist</h2>
+            <p class="text-body-secondary">Choose what you see. Leaf color, pests and roots determine the condition result.</p>
         </div>
         <?php foreach ($criteria as $criterion): ?>
             <?php
@@ -163,7 +163,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
                 $selected = is_array($selected) ? array_map('strval', $selected) : [(string) $selected];
                 $multiple = $criterion['selection_mode'] === 'multiple';
                 $groupLabel = match ($criterion['score_group']) {
-                    'health' => 'Health score',
+                    'health' => 'Condition score',
                     'environment' => 'Environmental observation',
                     default => 'Context only',
                 };
@@ -205,7 +205,7 @@ $selectedParent = (string) old('parent_report_id', $prefill['parent_report_id'] 
             </fieldset>
         <?php endforeach; ?>
         <div class="alert alert-light border d-flex align-items-center justify-content-between gap-3" aria-live="polite" data-health-preview>
-            <span>Choose your answers to see the health result.</span>
+            <span>Choose your answers to see the condition result.</span>
         </div>
     </section>
 

@@ -89,7 +89,7 @@
         const details = row('Roots', value('root_type')) + row('Leaves', value('leaf_shape'))
             + row('Bark', value('bark_texture')) + row('Notes', value('guardian_remarks'));
         summary.innerHTML = card(1, 'Site', `${previewObjectUrl ? `<img class="img-fluid rounded mb-3" style="max-height:180px" src="${escapeHtml(previewObjectUrl)}" alt="Report photo">` : ''}<dl class="row mb-0">${site}</dl>`)
-            + card(2, 'Health', `<dl class="row mb-0">${health}</dl>`)
+            + card(2, 'Condition', `<dl class="row mb-0">${health}</dl>`)
             + card(3, 'Details', `<dl class="row mb-0">${details}</dl>`);
     };
     summary?.addEventListener('click', event => {
@@ -632,7 +632,7 @@
                 if (request !== healthRequest) return;
                 const result = payload.classification;
                 target.className = `alert border d-flex align-items-center justify-content-between gap-3 ${result.status === 'Healthy' ? 'alert-success' : (result.status === 'Stressed' ? 'alert-warning' : 'alert-danger')}`;
-                target.innerHTML = `<span><strong>Preview: ${escapeHtml(result.status)}</strong><br><small>${result.health_score == null ? 'Not scored. Needs review.' : `Health score: ${result.health_score}/${result.health_max_score}`}<br>6 Healthy | 3-5 Stressed | 0-2 At Risk</small><br>${(result.breakdown || []).map(row => `<small>${escapeHtml(row.name)}: ${escapeHtml(row.answer)} (${row.points == null ? 'Unscored' : `${Number(row.points)}/2`})</small>`).join('<br>')}</span>`;
+                target.innerHTML = `<span><strong>Preview: ${escapeHtml(result.status)}</strong><br><small>${result.health_score == null ? 'Not scored. Needs review.' : `Condition score: ${result.health_score}/${result.health_max_score}`}<br>6 Healthy | 3-5 Stressed | 0-2 At Risk</small><br>${(result.breakdown || []).map(row => `<small>${escapeHtml(row.name)}: ${escapeHtml(row.answer)} (${row.points == null ? 'Unscored' : `${Number(row.points)}/2`})</small>`).join('<br>')}</span>`;
             } catch (error) {
                 if (request !== healthRequest) return;
                 target.className = 'alert alert-warning border';

@@ -79,7 +79,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Health checklist')),
+    appBar: AppBar(title: const Text('Condition checklist')),
     body: _criteria == null
         ? Center(
             child: _error == null
@@ -103,12 +103,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   ),
                   const Card(
                     child: ExpansionTile(
-                      title: Text('Health scoring guide'),
+                      title: Text('Condition scoring guide'),
                       children: [
                         Padding(
                           padding: EdgeInsets.all(16),
                           child: Text(
-                            '6 Healthy | 3-5 Stressed | 0-2 At Risk\n\nLeaf color, pests, and roots add 0-2 points each. Not Sure is unscored and needs review.\n\nNone: 0. All: lowest score (0) for health; total of regular choices for context and environment. Context and environment do not change health.\n\nAdd, rename, or delete choices. Past reports stay unchanged. Keep a 0-point and a 2-point choice in each health check.',
+                            '6 Healthy | 3-5 Stressed | 0-2 At Risk\n\nLeaf color, pests, and roots add 0-2 points each. Not Sure is unscored and needs review.\n\nNone: 0. All: lowest score (0) for condition; total of regular choices for context and environment. Context and environment do not change condition.\n\nAdd, rename, or delete choices. Past reports stay unchanged. Keep a 0-point and a 2-point choice in each condition check.',
                           ),
                         ),
                       ],
@@ -127,7 +127,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         ),
                         subtitle: Text(
                           criterion['score_group'] == 'health'
-                              ? 'Health: 0-2 points'
+                              ? 'Condition: 0-2 points'
                               : 'Supporting observations',
                         ),
                         trailing: const Icon(Icons.edit_outlined),

@@ -249,13 +249,19 @@ test('GPS refresh uses the final fix and replaces the prior pin name',async()=>{
  const dispose=await ui.reportWizard($('#page'),{});
  try {
   $('#gps').click();gps({coords:{latitude:10.272,longitude:123.866,accuracy:83},timestamp:Date.now()});
-  assert.equal($('#place-search').value,'');assert.match($('#selected-address').textContent,/Pinned location/);await new Promise(r=>setTimeout(r,280));
+  assert.match($('#place-search').value,/Pinned location/);assert.equal($('#selected-address'),null);await new Promise(r=>setTimeout(r,280));
   gps({coords:{latitude:10.273,longitude:123.866,accuracy:8},timestamp:Date.now()});await new Promise(r=>setTimeout(r,280));
   const last=lookups.at(-1);assert.equal(last.query.latitude,10.273);
   last.resolve({places:[{label:'Cogon Pardo, Cebu City'}],barangay:{name:'Cogon Pardo',city_municipality:'Cebu City'}});await tick();
   for(const lookup of lookups.slice(0,-1))lookup.resolve({places:[{label:'Outdated address'}]});await tick();
-  assert.equal($('#selected-address').textContent,'Cogon Pardo, Cebu City');assert.equal($('#place-search').value,'');assert.match($('#report-barangay').textContent,/Cogon Pardo/);
+  assert.equal($('#place-search').value,'Cogon Pardo, Cebu City');assert.match($('#report-barangay').textContent,/Cogon Pardo/);
   assert.equal(Number(ui.reportDraft.fields.latitude),10.273);assert.equal(ui.reportDraft.fields.location_source,'gps');assert.equal($('#gps').disabled,false);
+  $('#gps').click();gps({coords:{latitude:10.274,longitude:123.866,accuracy:8},timestamp:Date.now()});
+  $('#place-search').value='Another landmark';$('#place-search').dispatchEvent(new Event('input',{bubbles:true}));
+  await new Promise(r=>setTimeout(r,280));
+  const pendingAddress=lookups.at(-1);assert.equal(pendingAddress.query.latitude,10.274);
+  pendingAddress.resolve({places:[{label:'Updated pin address'}],barangay:{name:'Cogon Pardo',city_municipality:'Cebu City'}});await tick();
+  assert.equal($('#place-search').value,'Another landmark');assert.equal(ui.reportDraft.fields.sitio_name,'Updated pin address');
  }finally{dispose();ui.reportDraft.reset();}
 });
 
@@ -434,7 +440,7 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
     $(`[name=obs_${multi.code}][value="${none.id}"]`).click();
     assert.deepEqual(ui.reportDraft.observations[multi.code], [none.id]);
     await finishCategories(); assert.equal(ui.reportDraft.step, 3);
-    assert.match($('#step-body').textContent, /6 \/ 6 health points/);
+    assert.match($('#step-body').textContent, /6 \/ 6 condition points/);
     assert.equal(document.querySelectorAll('.edit').length, 3);
     $('#field-confirm').click(); assert.ok(ui.reportDraft.preview);
     const cancelled = submit(); await tick(); assert.equal($('#confirm').open, true);
@@ -521,15 +527,19 @@ test('location search sets the exact map pin and unfinished searches cannot rena
   window.localStorage.clear();ui.reportDraft.reset();
   let dispose=await ui.reportWizard($('#page'),{}, {id:'place-user'});
   try {
-    assert.equal($('[name=sitio_name]').type,'hidden');assert.equal($('#place-search'),null);
+    assert.equal($('[name=sitio_name]').type,'hidden');assert.ok($('#place-search'));
+    const firstInput=$('#place-search');firstInput.value='Pier';firstInput.dispatchEvent(new Event('input',{bubbles:true}));
     const photo=new File(['photo'],'field.jpg',{type:'image/jpeg'});Object.defineProperty($('[name=photo]'),'files',{value:[photo]});change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[new File(['different close-up'],'closeup.jpg',{type:'image/jpeg'})]});change($('[name=closeup_photo]'));
     set('observed_alive_count','12');await submit();assert.equal(ui.reportDraft.step,1);
-    $('#manual-pin').click();const input=$('#place-search');input.value='Pier';input.dispatchEvent(new Event('input',{bubbles:true}));
+    assert.equal($('#place-search').value,'Pier');
     await new Promise(r=>setTimeout(r,750));await tick();assert.match($('#place-results').textContent,/Pier 3/);$('#place-results button').click();
     assert.equal(ui.reportDraft.fields.location_source,'manual');assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
     assert.equal($('[name=latitude]').value,'10.3012345');assert.equal($('[name=longitude]').value,'123.9012345');
     await ui.reportDraft.flush();dispose();ui.reportDraft.reset();dispose=await ui.reportWizard($('#page'),{}, {id:'place-user'});
     assert.equal(ui.reportDraft.step,1);assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
+    assert.equal($('#place-search').value,'Pier 3, Basak Pardo, Cebu City, Cebu');
+    $('#previous').click();await tick();assert.equal(ui.reportDraft.step,0);assert.equal($('#place-search').value,'Pier 3, Basak Pardo, Cebu City, Cebu');
+    await submit();assert.equal(ui.reportDraft.step,1);
     const restoredInput=$('#place-search');restoredInput.value='Different landmark';restoredInput.dispatchEvent(new Event('input',{bubbles:true}));
     assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(Number(ui.reportDraft.fields.latitude),10.3012345);
     assert.equal(ui.reportDraft.fields.sitio_name,'Pier 3, Basak Pardo, Cebu City, Cebu');

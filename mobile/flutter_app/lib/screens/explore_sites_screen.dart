@@ -150,7 +150,7 @@ class _ExploreSitesScreenState extends State<ExploreSitesScreen> {
             padding: const EdgeInsets.all(20),
             children: [
               const Text(
-                'Shared sites with verified reports. Find a species, place or health result.',
+                'Shared sites with verified reports. Find a species, place or condition result.',
               ),
               const SizedBox(height: 16),
               if (_error != null)
@@ -180,8 +180,8 @@ class _ExploreSitesScreenState extends State<ExploreSitesScreen> {
                     s['city_municipality'],
                   ].where((v) => v != null).join(', '),
               }, (v) => _place = v),
-              _filter('Health status', _health, {
-                '': 'All health',
+              _filter('Condition', _health, {
+                '': 'All conditions',
                 for (final h in ['Healthy', 'Stressed', 'At Risk', 'Unknown'])
                   h: h,
               }, (v) => _health = v),
@@ -204,7 +204,7 @@ class _ExploreSitesScreenState extends State<ExploreSitesScreen> {
                   child: Padding(
                     padding: EdgeInsets.all(20),
                     child: Text(
-                      'No matching verified sites. Try another species, location or health result. New sites appear after a report is verified and the site is shared.',
+                      'No matching verified sites. Try another species, location or condition result. New sites appear after a report is verified and the site is shared.',
                     ),
                   ),
                 ),

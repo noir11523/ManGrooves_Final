@@ -321,7 +321,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
 async function syncNotifications(service, user) {
   const dashboard = await service.dashboard(user);
   const candidates = user.role === 'guardian' ? dashboard.reminders.map(r => ({key: `followup_${r.id}`, report_id: r.id, title: 'Follow-up due', message: `Visit ${r.cluster_name ?? r.report_code} again.`}))
-    : (await service.reports(user)).filter(r => r.status === 'pending').map(r => ({key: `review_${r.id}`, report_id: r.id, title: 'Report ready for review', message: `${reportLabel(r)} needs a health and species check.`}));
+    : (await service.reports(user)).filter(r => r.status === 'pending').map(r => ({key: `review_${r.id}`, report_id: r.id, title: 'Report ready for review', message: `${reportLabel(r)} needs a condition and species check.`}));
   for (const candidate of candidates) {
     const claim = service.ref('notification_keys', `${user.id}_${candidate.key}`);
     if ((await claim.get()).exists) continue;

@@ -102,7 +102,7 @@ void main() {
       await tester.tap(find.byTooltip('Danao coast: Stressed'));
       await tester.pumpAndSettle();
       expect(find.textContaining('outside your barangay'), findsOneWidget);
-      expect(find.text('Health history'), findsNothing);
+      expect(find.text('Condition history'), findsNothing);
       await tester.tap(find.byTooltip('Close'));
       await tester.pumpAndSettle();
       tester

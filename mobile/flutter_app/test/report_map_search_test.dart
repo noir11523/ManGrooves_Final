@@ -152,7 +152,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text(name), findsOneWidget);
         expect(find.text('Pending review'), findsOneWidget);
-        expect(find.text('Suggested health: Healthy'), findsOneWidget);
+        expect(find.text('Suggested condition: Healthy'), findsOneWidget);
         await tester.ensureVisible(find.text('View report'));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);

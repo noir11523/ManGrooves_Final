@@ -59,7 +59,7 @@ $oldAction = in_array($oldAction, ['confirm', 'correct', 'reject'], true) ? $old
             <div class="card-header"><h2 class="h5 mb-0">Assessment</h2></div>
             <div class="card-body">
                 <div class="row g-3">
-                    <div class="col-6"><div class="text-muted small">Health</div><span class="badge <?= e(health_class($displayHealth)) ?>"><?= e($displayHealth) ?></span></div>
+                    <div class="col-6"><div class="text-muted small">Condition</div><span class="badge <?= e(health_class($displayHealth)) ?>"><?= e($displayHealth) ?></span></div>
                     <div class="col-6"><div class="text-muted small">System score</div><strong><?= $report['health_score'] === null ? 'Not scored. Needs review.' : (int) $report['health_score'] . ' / ' . (int) $report['health_max_score'] ?></strong></div>
                     <p class="small mb-0">6 Healthy · 3–5 Stressed · 0–2 At Risk</p>
                     <div class="col-12"><div class="text-muted small">Species</div><strong><?= e($displaySpecies) ?></strong><?php if ($displayScientific): ?><div class="small fst-italic"><?= e($displayScientific) ?></div><?php endif; ?></div>

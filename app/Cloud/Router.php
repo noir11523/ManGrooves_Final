@@ -51,7 +51,7 @@ final class CloudRouter
             '/badges.php' => ['badges', 'My badges'], '/admin/verification.php' => ['verification', 'Reports'],
             '/admin/report.php' => ['report', 'Report details'], '/admin/analytics.php' => ['analytics', 'Analytics'],
             '/admin/cluster.php' => ['cluster', 'Mangrove timeline'], '/admin/validation-history.php' => ['history', 'Reports'],
-            '/admin/checklist.php' => ['checklist', 'Health checklist'], '/admin/users.php' => ['users', 'Users'],
+            '/admin/checklist.php' => ['checklist', 'Condition checklist'], '/admin/users.php' => ['users', 'Users'],
             '/admin/species.php' => ['species', 'Species and Sites'], '/admin/badges.php' => ['badge-settings', 'Badge settings'],
             '/admin/audit.php' => ['audit', 'Audit log'], '/admin/expert-applications.php' => ['expert-applications', 'Expert applications'],
             '/admin/certificate-settings.php' => ['certificate-settings', 'Certificates'],

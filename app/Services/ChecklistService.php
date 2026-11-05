@@ -93,7 +93,7 @@ final class ChecklistService
                     throw new InvalidArgumentException('Keep at least one regular choice and no more than 30 choices.');
                 }
                 if ($health && (max($normalPoints) !== 2 || min($normalPoints) !== 0)) {
-                    throw new InvalidArgumentException('Keep at least one 0-point and one 2-point answer in each health check.');
+                    throw new InvalidArgumentException('Keep at least one 0-point and one 2-point answer in each condition check.');
                 }
                 $guide = $this->image($current['guide_image'], $input['remove_guide'] ?? false, $files['guide_image'] ?? null, $uploads, $created);
                 $pdo->prepare('UPDATE health_criteria SET name = ?, question_text = ?, guide_image = ? WHERE id = ?')->execute([$name, $question, $guide, $id]);
