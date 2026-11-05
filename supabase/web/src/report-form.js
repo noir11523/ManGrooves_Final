@@ -174,7 +174,6 @@ export async function reportWizard(node, query, user = null) {
       button.disabled = true;handlingForm=true;
       try {
         await photoWork;
-        if (draft.step === 0 && draft.fields.count_unknown==='1' && !draft.fields.cluster_id) throw new Error('Choose a saved site when you are unable to count the mangroves.');
         if (draft.step === 0 || draft.step === 3) await validateReportPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos]);
         if (draft.step === 0 && (!draft.photo || !draft.closeupPhoto)) throw new Error('Add a site overview and a close-up photo from this visit.');
         if (draft.step === 0 && $('#followup').checked && !draft.fields.parent_report_id) throw new Error('Choose the previous report for this follow-up.');
@@ -190,7 +189,7 @@ export async function reportWizard(node, query, user = null) {
         if (draft.step < 3) { draft.step++; await render(); scrollToQuestion(); return; }
         if (!(await confirm('Submit this report?', 'Check your summary first. This sends your photo, location, and answers.'))) return;
         const body = new FormData();
-        body.set('payload', JSON.stringify({...draft.fields, observations: draft.observations, checklist_versions: draft.preview?.checklist_versions, field_confirmation: '1', photo_views:'2'}));
+        body.set('payload', JSON.stringify({...draft.fields, observed_alive_count:draft.fields.count_unknown==='1'?'':draft.fields.observed_alive_count, observations: draft.observations, checklist_versions: draft.preview?.checklist_versions, field_confirmation: '1', photo_views:'2'}));
         body.set('photo', draft.photo);body.set('closeup_photo',draft.closeupPhoto);draft.extraPhotos.forEach((photo,i)=>body.set(`extra_photo_${i}`,photo));
         await flush();
         const result = await api('submit-report.php', {body});
@@ -244,7 +243,7 @@ export async function reportWizard(node, query, user = null) {
     $('#extra-photos').onchange=event=>{void addPhotos([...event.target.files]);event.target.value='';};
     const countInput=$('[name=observed_alive_count]');
     countInput.closest('.row').insertAdjacentHTML('afterend',`<div class="count-choice"><label class="count-toggle"><input id="count-unknown" type="checkbox" aria-describedby="count-hint" ${draft.fields.count_unknown==='1'?'checked':''}><span>Unable to count</span></label><p id="count-hint" role="status" hidden></p></div>`);
-    const updateCount=()=>{const unknown=$('#count-unknown').checked;draft.fields.count_unknown=unknown?'1':'0';countInput.disabled=unknown;countInput.required=!unknown;$('#count-hint').hidden=!unknown;$('#count-hint').textContent=draft.fields.cluster_id?'Count saved as unknown.':'Choose a site. Count will be unknown.';$('[name=cluster_id]').classList.toggle('needs-site',unknown&&!draft.fields.cluster_id);};
+    const updateCount=()=>{const unknown=$('#count-unknown').checked;draft.fields.count_unknown=unknown?'1':'0';countInput.disabled=unknown;countInput.required=!unknown;countInput.closest('.row').hidden=unknown;$('#count-hint').hidden=!unknown;$('#count-hint').textContent='Count not recorded.';};
     updateCount();$('#count-unknown').onchange=()=>{updateCount();changed();};
     const placeInput = $('[name=sitio_name]');
     const useCamera=async closeup=>{try{const photo=await capturePhoto();if(!photo||!node.isConnected)return;await replacePhoto(photo,closeup);}catch(error){toast(friendly(error));}};
@@ -322,7 +321,7 @@ export async function reportWizard(node, query, user = null) {
     } else if (draft.fields.parent_report_id) await followups();
     bindPlaceSearch($('#place-search'),$('#place-results'),place=>{
       $('[name=cluster_id]').value='';placeInput.value=place.label.slice(0,120);
-      Object.assign(draft.fields,{cluster_id:'',parent_report_id:'',count_unknown:'',sitio_name:placeInput.value,place_query:place.label,
+      Object.assign(draft.fields,{cluster_id:'',parent_report_id:'',sitio_name:placeInput.value,place_query:place.label,
         latitude:place.latitude,longitude:place.longitude,location_source:'manual',location_accuracy:'',location_selection:'search',selected_place_label:placeInput.value,report_barangay:''});
       draft.followup=false;updateCount();changed();
     });
@@ -427,7 +426,7 @@ export async function reportWizard(node, query, user = null) {
       if (!restoring) {
         const site=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
         if(site&&!draft.fields.parent_report_id&&(source==='gps'||canvas.distance([lat,lng],[site.center_lat,site.center_lng])>Number(site.radius_meters||75))){
-          Object.assign(draft.fields,{cluster_id:'',parent_report_id:'',count_unknown:''});draft.followup=false;
+          Object.assign(draft.fields,{cluster_id:'',parent_report_id:''});draft.followup=false;
         }
         locationInput.readOnly=Boolean(draft.fields.parent_report_id);
         if(draft.fields.cluster_id){draft.fields.sitio_name=site.sitio_name||site.name;}
@@ -443,7 +442,7 @@ export async function reportWizard(node, query, user = null) {
     }
     if (draft.fields.location_source) { choose(Number(draft.fields.latitude), Number(draft.fields.longitude), draft.fields.location_source, draft.fields.location_accuracy, true); canvas.setView([draft.fields.latitude, draft.fields.longitude], 18); void address(Number(draft.fields.latitude),Number(draft.fields.longitude),false); }
     bindPlaceSearch(locationInput,$('#place-results'),p=>{
-      if(!draft.fields.parent_report_id){Object.assign(draft.fields,{cluster_id:'',count_unknown:''});draft.followup=false;}
+      if(!draft.fields.parent_report_id){Object.assign(draft.fields,{cluster_id:''});draft.followup=false;}
       if(!choose(p.latitude,p.longitude,'manual',null))return false;
       if(!draft.fields.cluster_id)draft.fields.sitio_name=p.label.slice(0,120);
       Object.assign(draft.fields,{location_selection:'search',selected_place_label:draft.fields.sitio_name});
@@ -495,7 +494,10 @@ export async function reportWizard(node, query, user = null) {
       tracker.start();
     }
     gpsButton.onclick = startLocation;
-    if (!draft.fields.location_source && !locationInput.value.trim()) startLocation();
+    if (!draft.fields.location_source) {
+      if (locationInput.value.trim()) locationInput.oninput();
+      else startLocation();
+    }
   }
 
   function checklist() {

@@ -210,9 +210,8 @@ export class Service extends Store {
     const requestedCluster = input.cluster_id ? integer(input.cluster_id, 'cluster') : null;
     const parentId = input.parent_report_id ? integer(input.parent_report_id, 'follow-up report') : null;
     const countUnknown = input.count_unknown === true || String(input.count_unknown) === '1';
-    if (countUnknown && !requestedCluster) throw new AppError('Choose a saved site when you are unable to count the mangroves.');
     const count = countUnknown ? null : integer(input.observed_alive_count, 'living mangrove count', 0, 1000000);
-    if (!requestedCluster && !parentId && !count) throw new AppError('A new site needs at least one living mangrove.');
+    if (!countUnknown && !requestedCluster && !parentId && count === 0) throw new AppError('A new site needs at least one living mangrove.');
     const fields = {sitio_name: text(input.sitio_name ?? '', 'the location name', 120),
       guardian_remarks: text(input.guardian_remarks ?? '', 'remarks', 5000, false),
       root_type: text(input.root_type, 'the root type', 190), leaf_shape: text(input.leaf_shape, 'the leaf shape', 190),

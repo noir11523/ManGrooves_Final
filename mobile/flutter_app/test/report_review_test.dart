@@ -423,6 +423,122 @@ Future<void> openLocation(WidgetTester tester) async {
 
 void main() {
   testWidgets(
+    'a new searched site with an unknown count reaches review and submits without a saved site',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final originalGps = GeolocatorPlatform.instance;
+      GeolocatorPlatform.instance = _DeniedGps();
+      addTearDown(() => GeolocatorPlatform.instance = originalGps);
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const channel = MethodChannel('plugins.flutter.io/image_picker');
+      var picked = 0;
+      messenger.setMockMethodCallHandler(
+        channel,
+        (_) async => File(
+          '../../public/assets/img/guides/${picked++ == 0 ? 'leaf-color' : 'roots'}.png',
+        ).absolute.path,
+      );
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final api = _SearchApi(), drafts = _Drafts();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftOwner: 'new-uncounted',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tap(tester, find.text('Gallery').first, photoIO: true);
+      await tap(tester, find.text('Gallery').last, photoIO: true);
+      await tester.enterText(field('Search a barangay or landmark'), 'Pier');
+      await tester.pump(const Duration(milliseconds: 750));
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await tap(
+        tester,
+        find.widgetWithText(FilledButton, 'Continue').first,
+        photoIO: true,
+      );
+      await tester.enterText(field('Living mangroves observed'), '3');
+      await tap(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Unable to count'),
+      );
+      expect(field('Living mangroves observed'), findsNothing);
+      expect(find.text('Count not recorded.'), findsOneWidget);
+      await tap(tester, find.text('Pier 3, Cebu City'));
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.widgetWithText(CheckboxListTile, 'Unable to count'),
+            )
+            .value,
+        true,
+      );
+      await tap(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Unable to count'),
+      );
+      expect(
+        tester
+            .widget<TextField>(field('Living mangroves observed'))
+            .controller!
+            .text,
+        '3',
+      );
+      await tap(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Unable to count'),
+      );
+      await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
+      expect(find.text('3. Traits'), findsOneWidget);
+      await tap(tester, find.text('Previous'));
+      expect(find.text('2. Location'), findsOneWidget);
+      expect(field('Living mangroves observed'), findsNothing);
+      expect(
+        drafts.saved.entries
+            .where((e) => !e.key.endsWith(':closeup'))
+            .single
+            .value['count_unknown'],
+        '1',
+      );
+      await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
+      for (final answer in ['Green', 'Crabs', 'None of the above']) {
+        await chooseObservation(tester, answer);
+        await tap(tester, find.text('Next'));
+      }
+      for (final trait in ['Prop', 'Oval', 'Smooth']) {
+        await tap(tester, find.byKey(ValueKey('choice-circle-$trait')));
+        await tap(tester, find.text('Next'));
+      }
+      expect(find.text('Unable to count'), findsOneWidget);
+      await tap(tester, find.text('These details are from this visit.'));
+      await tap(tester, find.text('Submit report'), photoIO: true);
+      await tap(
+        tester,
+        find.widgetWithText(FilledButton, 'Submit'),
+        photoIO: true,
+      );
+      expect(api.submissions, 1);
+      expect(api.sent!['count_unknown'], '1');
+      expect(api.sent!['observed_alive_count'], '');
+      expect(api.sent!['cluster_id'], isNull);
+      expect(api.sent!['sitio_name'], 'Pier 3, Cebu City');
+      expect(api.sent!['latitude'], '10.30123450');
+      expect(drafts.saved, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'New site search stays synchronized across Details, Location and Back',
     (tester) async {
       final originalGps = GeolocatorPlatform.instance;
@@ -624,12 +740,9 @@ void main() {
       );
       expect(find.text('Add both photos before continuing.'), findsOneWidget);
       await openLocation(tester);
-      expect(find.text('Choose a site. Count will be unknown.'), findsNothing);
+      expect(find.text('Count not recorded.'), findsNothing);
       await tap(tester, find.text('Unable to count'));
-      expect(
-        find.text('Choose a site. Count will be unknown.'),
-        findsOneWidget,
-      );
+      expect(find.text('Count not recorded.'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       expect(tester.takeException(), isNull);
@@ -795,10 +908,7 @@ void main() {
         tester,
         find.widgetWithText(CheckboxListTile, 'Unable to count'),
       );
-      expect(
-        tester.widget<TextField>(field('Living mangroves observed')).enabled,
-        false,
-      );
+      expect(field('Living mangroves observed'), findsNothing);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(find.text('1. Photos'), findsOneWidget);

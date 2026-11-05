@@ -27,7 +27,6 @@
 .count-choice .count-toggle { display:flex; align-items:center; gap:8px; cursor:pointer; min-height:28px; font-size:16px; font-weight:650; margin:0; }
 .count-choice input[type=checkbox] { flex:0 0 20px; width:20px; height:20px; min-height:0; padding:0; margin:0; accent-color:#2e602e; }
 .count-choice p { margin:4px 0 0 28px; font-size:14px; line-height:1.4; }
-.field select.needs-site { border:2px solid #947026; background:#fffbea; }
 .follow-up-card { margin-top:20px; background:#edf3e7; }
 .report-table [data-label=Action] .button { margin:3px; white-space:normal; }
 .trait-image-editors { margin:20px 0; }

@@ -490,7 +490,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _sitio.clear();
         _placeSearch.clear();
         _selectedPlaceLabel = null;
-        _countUnknown = false;
         _locationMessage = 'Search a barangay or landmark, or place a pin.';
       }
       for (final site in _clusters) {
@@ -641,7 +640,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       final siteCenter = _coordinates(selectedSite);
       if (_parentReportId == null && siteCenter != null) {
         _clusterId = null;
-        _countUnknown = false;
         _parentReportId = null;
         _previousReports = [];
         _followup = false;
@@ -925,7 +923,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             const Distance().as(LengthUnit.Meter, center, location.point) >
                 ((site['radius_meters'] as num?)?.toDouble() ?? 75)) {
           _clusterId = null;
-          _countUnknown = false;
           _parentReportId = null;
           _previousReports = [];
           _followup = false;
@@ -1107,7 +1104,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     setState(() {
       if (_parentReportId == null) {
         _clusterId = null;
-        _countUnknown = false;
         _previousReports = [];
         _followup = false;
         _parentRequest++;
@@ -1168,12 +1164,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
     if (_sitio.text.trim().isEmpty) {
       setState(() => _error = 'Choose a place or set your pin.');
-      return;
-    }
-    if (_countUnknown && _clusterId == null) {
-      setState(
-        () => _error = 'Choose a saved site when you are unable to count.',
-      );
       return;
     }
     if (!_countUnknown &&
@@ -1359,7 +1349,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         'root_type': _rootType!,
         'leaf_shape': _leafShape!,
         'bark_texture': _barkTexture!,
-        'observed_alive_count': _aliveCount.text,
+        'observed_alive_count': _countUnknown ? '' : _aliveCount.text,
         'count_unknown': _countUnknown ? '1' : '0',
         'submission_token': _submissionToken,
         'field_confirmation': '1',
@@ -2084,37 +2074,33 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 subtitle: _countUnknown
-                    ? Text(
-                        _clusterId == null
-                            ? 'Choose a site. Count will be unknown.'
-                            : 'Count saved as unknown.',
-                        style: const TextStyle(fontSize: 14),
+                    ? const Text(
+                        'Count not recorded.',
+                        style: TextStyle(fontSize: 14),
                       )
                     : null,
               ),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _aliveCount,
-              enabled: !_countUnknown,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Living mangroves observed',
+            if (!_countUnknown)
+              TextFormField(
+                controller: _aliveCount,
+                enabled: !_countUnknown,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Living mangroves observed',
+                ),
+                validator: (value) {
+                  final number = int.tryParse(value ?? '');
+                  if (number == null || number < 0) {
+                    return 'Enter a whole number of living mangroves.';
+                  }
+                  if (_clusterId == null && number < 1) {
+                    return 'A new site needs at least one living mangrove.';
+                  }
+                  return null;
+                },
               ),
-              validator: (value) {
-                if (_countUnknown) {
-                  return _clusterId == null ? 'Choose a saved site.' : null;
-                }
-                final number = int.tryParse(value ?? '');
-                if (number == null || number < 0) {
-                  return 'Enter a whole number of living mangroves.';
-                }
-                if (_clusterId == null && number < 1) {
-                  return 'A new site needs at least one living mangrove.';
-                }
-                return null;
-              },
-            ),
           ],
         ),
       ),

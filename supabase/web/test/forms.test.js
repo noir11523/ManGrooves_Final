@@ -76,7 +76,7 @@ test('species editor uses local-first names and deletion requires confirmation, 
   $('#admin-editor').close();
 });
 
-test('compact photos reject renamed copies and unknown counts require a saved site',async()=>{
+test('compact photos reject renamed copies and a new site accepts an unknown count',async()=>{
  globalThis.testApi=async path=>path==='report-form.php'?{criteria:[],clusters:[{id:10,name:'Nursery',sitio_name:'Boardwalk',center_lat:10.2833,center_lng:123.8833}],location:{}}:{places:[]};
  ui.reportDraft.reset();const dispose=await ui.reportWizard($('#page'),{},{id:'photo-ui-'+Date.now()});
  const waitFor=async check=>{for(let i=0;i<100&&!check();i++)await new Promise(r=>setTimeout(r,10));assert.ok(check());};
@@ -92,10 +92,12 @@ test('compact photos reject renamed copies and unknown counts require a saved si
   choose('#extra-photos',[photo('close-up contents','extra.jpg')]);await waitFor(()=>$('#report-form .error').textContent.includes('already added'));
   assert.equal(ui.reportDraft.extraPhotos.length,0);
   assert.equal($('#count-hint').hidden,true);$('#count-unknown').click();
-  assert.equal($('#count-hint').hidden,false);assert.match($('#count-hint').textContent,/Choose a site/);
-  assert.equal($('[name=observed_alive_count]').disabled,true);await submit();assert.equal(ui.reportDraft.step,0);
-  set('cluster_id','10');await tick();assert.equal($('#count-hint').textContent,'Count saved as unknown.');
+  assert.equal($('#count-hint').hidden,false);assert.equal($('#count-hint').textContent,'Count not recorded.');
+  assert.equal($('[name=observed_alive_count]').disabled,true);assert.equal($('.count-row').hidden,true);
+  assert.equal($('[name=cluster_id]').value,'');
   await submit();assert.equal(ui.reportDraft.step,1);
+  $('#previous').click();await tick();set('cluster_id','10');await tick();
+  assert.equal($('#count-unknown').checked,true);await submit();assert.equal(ui.reportDraft.step,1);
  }finally{dispose();ui.reportDraft.reset();}
 });
 
@@ -513,10 +515,13 @@ test('report draft restores fields, photo, checklist and step after reload, isol
   } finally { dispose();ui.reportDraft.reset();window.localStorage.clear();clearTimeout(ui.toast.timer); }
 });
 
-test('location search sets the exact map pin and unfinished searches cannot rename it', async () => {
-  globalThis.testApi=async(path,{query}={})=>{
+test('uncounted new-site search survives Back, pin edits and drafts through final submission', async () => {
+  const submissions=[];
+  globalThis.testApi=async(path,{query,body}={})=>{
     if(path==='report-form.php')return {criteria:reference.criteria,clusters:[],species:reference.species,
       traits:Object.fromEntries(['root_type','leaf_shape','bark_texture'].map(k=>[k,[reference.species[0][k]]])),location:{barangay:reference.barangays[0]}};
+    if(path==='report-preview.php')return {classification:classify(reference.criteria,body.observations),species:{best:reference.species[0]},checklist_versions:body.checklist_versions};
+    if(path==='submit-report.php'){submissions.push(JSON.parse(body.get('payload')));return {report:{report_id:987},message:'Report submitted.'};}
     assert.equal(path,'places.php');
     if(query?.q==='Pier'){
       assert.ok(Number.isFinite(query.bias_latitude));assert.ok(Number.isFinite(query.bias_longitude));
@@ -530,20 +535,32 @@ test('location search sets the exact map pin and unfinished searches cannot rena
     assert.equal($('[name=sitio_name]').type,'hidden');assert.ok($('#place-search'));
     const firstInput=$('#place-search');firstInput.value='Pier';firstInput.dispatchEvent(new Event('input',{bubbles:true}));
     const photo=new File(['photo'],'field.jpg',{type:'image/jpeg'});Object.defineProperty($('[name=photo]'),'files',{value:[photo]});change($('[name=photo]'));Object.defineProperty($('[name=closeup_photo]'),'files',{value:[new File(['different close-up'],'closeup.jpg',{type:'image/jpeg'})]});change($('[name=closeup_photo]'));
-    set('observed_alive_count','12');await submit();assert.equal(ui.reportDraft.step,1);
+    set('observed_alive_count','3');$('#count-unknown').click();
+    assert.equal($('.count-row').hidden,true);await submit();assert.equal(ui.reportDraft.step,1);
     assert.equal($('#place-search').value,'Pier');
+    await submit();assert.equal(ui.reportDraft.step,1);assert.match($('.error').textContent,/set your pin/);
     await new Promise(r=>setTimeout(r,750));await tick();assert.match($('#place-results').textContent,/Pier 3/);$('#place-results button').click();
     assert.equal(ui.reportDraft.fields.location_source,'manual');assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
     assert.equal($('[name=latitude]').value,'10.3012345');assert.equal($('[name=longitude]').value,'123.9012345');
+    assert.equal(ui.reportDraft.fields.count_unknown,'1');
     await ui.reportDraft.flush();dispose();ui.reportDraft.reset();dispose=await ui.reportWizard($('#page'),{}, {id:'place-user'});
     assert.equal(ui.reportDraft.step,1);assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
     assert.equal($('#place-search').value,'Pier 3, Basak Pardo, Cebu City, Cebu');
     $('#previous').click();await tick();assert.equal(ui.reportDraft.step,0);assert.equal($('#place-search').value,'Pier 3, Basak Pardo, Cebu City, Cebu');
+    assert.equal($('#count-unknown').checked,true);$('#count-unknown').click();
+    assert.equal($('.count-row').hidden,false);assert.equal($('[name=observed_alive_count]').value,'3');$('#count-unknown').click();
     await submit();assert.equal(ui.reportDraft.step,1);
     const restoredInput=$('#place-search');restoredInput.value='Different landmark';restoredInput.dispatchEvent(new Event('input',{bubbles:true}));
     assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(Number(ui.reportDraft.fields.latitude),10.3012345);
     assert.equal(ui.reportDraft.fields.sitio_name,'Pier 3, Basak Pardo, Cebu City, Cebu');
-    await new Promise(r=>setTimeout(r,750));await submit();assert.equal(ui.reportDraft.step,2);
+    await new Promise(r=>setTimeout(r,750));
+    testMap.events.click({latlng:{lat:10.29,lng:123.9}});assert.equal(ui.reportDraft.fields.count_unknown,'1');
+    await submit();assert.equal(ui.reportDraft.step,2);
+    for(const key of ['root_type','leaf_shape','bark_texture'])$(`[name=${key}]`).click();
+    await finishCategories();assert.equal(ui.reportDraft.step,3);assert.match($('.report-review').textContent,/Unable to count/);
+    $('#field-confirm').click();const sending=submit();await tick();closeConfirm('confirm');await sending;
+    assert.equal(submissions.length,1);assert.equal(submissions[0].cluster_id,'');assert.equal(submissions[0].count_unknown,'1');
+    assert.equal(submissions[0].observed_alive_count,'');assert.equal(Number(submissions[0].latitude),10.29);
   } finally {dispose();ui.reportDraft.reset();window.localStorage.clear();clearTimeout(ui.toast.timer);}
 });
 

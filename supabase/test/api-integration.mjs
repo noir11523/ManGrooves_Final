@@ -194,8 +194,8 @@ try {
   await request('report-preview.php', guardian, {observations: healthy, checklist_versions: {}}, 409); pass('preview cannot score unseen checklist changes');
   const stale = await submission(guardian, {checklist_versions: {}}); await request('submit-report.php', guardian, stale.body, 409); pass('stale checklist submission rejected');
   const invalidGps = await submission(guardian, {location_accuracy: 180}); await request('submit-report.php', guardian, invalidGps.body, 422); pass('approximate GPS cannot silently become a precise report pin');
-  const uncountedWithoutSite = await submission(guardian, {count_unknown: '1', observed_alive_count: ''});
-  await request('submit-report.php', guardian, uncountedWithoutSite.body, 422); pass('an unknown mangrove count requires a saved site');
+  const emptyCount = await submission(guardian, {observed_alive_count: ''});
+  await request('submit-report.php', guardian, emptyCount.body, 422); pass('a missing count requires an explicit unable-to-count choice');
   const first = await submission(guardian), saved = await request('submit-report.php', guardian, first.body, 201), firstId = saved.report.report_id;
   assert.equal(saved.report.status, 'pending'); assert.ok(saved.report.cluster_id); pass('every new report enters staff review and a new site stays personal');
   const repeat = await submission(guardian, {}, first.bytes), repeated = await request('submit-report.php', guardian, repeat.body, 201);
@@ -564,6 +564,27 @@ try {
   assert.equal(publicCorrected.barangay_name,'Cogon Pardo');assert.notEqual(publicCorrected.barangay_id,1);
   assert.equal((await request(`report.php?id=${recorded.id}`,guardianSession)).report.barangay_name,'Cogon Pardo');
   pass('legacy incorrect report and site barangays resolve from coordinates in Explore and details');
+  const uncountedNewSite=await submission(guardianSession,{count_unknown:'1',observed_alive_count:'3',sitio_name:'New shoreline',checklist_versions:versions});
+  const uncounted=await request('submit-report.php',guardianSession,uncountedNewSite.body,201);
+  assert.equal(uncounted.report.status,'pending');
+  const uncountedDetail=(await request(`report.php?id=${uncounted.report.report_id}`,guardianSession)).report;
+  assert.equal(uncountedDetail.count_unknown,true);assert.equal(uncountedDetail.observed_alive_count,null);
+  const uncountedSite=(await db.collection('clusters').doc(uncounted.report.cluster_id).get()).data();
+  assert.equal(uncountedSite.initial_seedlings,null);assert.equal(uncountedSite.verified_count,0);
+  assert.ok(!(await request('report-form.php',guardianSession)).clusters.some(c=>c.id===uncountedSite.id));
+  assert.ok(!(await request('explore.php')).clusters.some(c=>c.id===uncountedSite.id));
+  pass('new-site submission accepts an unknown count and stays pending without inventing a zero or publishing its site');
+  await request('review.php',expert,{report_id:uncounted.report.report_id,action:'confirm'});
+  assert.ok((await request('report-form.php',guardianSession)).clusters.some(c=>c.id===uncountedSite.id));
+  const countHistory=(await request(`cluster.php?id=${uncountedSite.id}`,guardianSession)).timeline;
+  assert.equal(countHistory.length,1);assert.equal(countHistory[0].observed_alive_count,null);
+  const nextCount=await submission(guardianSession,{cluster_id:uncountedSite.id,observed_alive_count:5,checklist_versions:versions});
+  const nextCountSaved=await request('submit-report.php',guardianSession,nextCount.body,201);
+  await request('review.php',expert,{report_id:nextCountSaved.report.report_id,action:'confirm'});
+  const updatedHistory=(await request(`cluster.php?id=${uncountedSite.id}`,guardianSession)).timeline;
+  assert.equal(updatedHistory.find(r=>r.id===uncounted.report.report_id).observed_alive_count,null);
+  assert.equal(updatedHistory.find(r=>r.id===nextCountSaved.report.report_id).observed_alive_count,5);
+  pass('verification publishes an uncounted site and later counts leave the earlier timeline value unknown');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();
