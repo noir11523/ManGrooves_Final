@@ -124,10 +124,11 @@
   .admin-editor-form > .actions > button { flex:1; min-width:0; }
 }
 
-/* One clear primary total, followed by supporting summaries. */
+/* Keep the centered total the same size as the supporting summary cards. */
 .dashboard-overview { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .analytics-overview { grid-template-columns:repeat(2,minmax(0,1fr)); }
-.stats .verified-total { grid-column:1 / -1; text-align:center; background:#eaf3e5; border-color:#b9cfb1; padding:24px 18px; }
-.stats .verified-total strong { color:var(--green); font-size:clamp(2.4rem,5vw,3.2rem); line-height:1.2; }
-.stats .verified-total span { color:var(--green); font-size:1rem; font-weight:650; }
-@media(max-width:1000px) { .dashboard-overview { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.stats .verified-total { grid-column:1 / -1; justify-self:center; width:calc((100% - 16px) / 2); text-align:center; background:#eaf3e5; border-color:#b9cfb1; }
+.dashboard-overview .verified-total { width:calc((100% - 48px) / 4); }
+.stats .verified-total strong,.stats .verified-total span { color:var(--green); }
+@media(max-width:1000px) { .dashboard-overview { grid-template-columns:repeat(2,minmax(0,1fr)); }.dashboard-overview .verified-total { width:calc((100% - 16px) / 2); } }
+@media(max-width:700px) { .stats .verified-total { width:calc((100% - 10px) / 2); }.analytics-overview .verified-total { width:calc((100% - 8px) / 2); } }

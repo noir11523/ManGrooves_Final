@@ -121,9 +121,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            VerifiedTotalCard(
-              value: stats['verified_reports'] ?? stats['total_reports'] ?? 0,
-              onTap: () => _openReports(status: 'verified'),
+            LayoutBuilder(
+              builder: (context, size) => VerifiedTotalCard(
+                value: stats['verified_reports'] ?? stats['total_reports'] ?? 0,
+                onTap: () => _openReports(status: 'verified'),
+                columns: MediaQuery.textScalerOf(context).scale(16) > 24
+                    ? 1
+                    : size.maxWidth >= 800
+                    ? 4
+                    : 2,
+                spacing: 12,
+              ),
             ),
             const SizedBox(height: 12),
             LayoutBuilder(
