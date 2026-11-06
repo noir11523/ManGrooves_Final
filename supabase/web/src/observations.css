@@ -28,7 +28,7 @@
 .count-choice input[type=checkbox] { flex:0 0 20px; width:20px; height:20px; min-height:0; padding:0; margin:0; accent-color:#2e602e; }
 .count-choice p { margin:4px 0 0 28px; font-size:14px; line-height:1.4; }
 .follow-up-card { margin-top:20px; background:#edf3e7; }
-.report-table [data-label=Action] .button { margin:3px; white-space:normal; }
+.report-table [data-label=Action] .button { margin:3px; min-width:max-content; white-space:nowrap; overflow-wrap:normal; }
 .trait-image-editors { margin:20px 0; }
 .trait-image-editor { display:grid; gap:12px; margin:16px 0; padding:16px; border:1px solid #d4decf; border-radius:12px; }
 .trait-image-editor img { width:140px; height:100px; object-fit:contain; }
