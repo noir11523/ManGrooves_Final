@@ -2,8 +2,9 @@ export function navigationItems(role) {
   const admin=role==='system_admin',guardian=role==='guardian';
   return [
     ['dashboard','Dashboard'],
+    ...(!admin?[['submit','Submit report']]:[]),
     ['Reports & Monitoring',[
-      ['reports',guardian?'My reports':'All reports'],...(!admin?[['submit','Submit report']]:[]),['report-map','Report map'],['clusters','Mangrove timeline'],...(guardian?[['explore','Explore mangrove sites']]:[])
+      ['reports',guardian?'My reports':'All reports'],['report-map','Report map'],['clusters','Mangrove timeline'],...(guardian?[['explore','Explore mangrove sites']]:[])
     ]],
     ['analytics','Analytics'],
     ...(!guardian?[['Mangrove Data',[['species','Species & sites'],...(admin?[['checklist','Condition checklist']]:[])]]]:[]),

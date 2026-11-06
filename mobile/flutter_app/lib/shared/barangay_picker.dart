@@ -19,50 +19,77 @@ class BarangayPicker extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.enabled = true,
+    this.scopedToCity = false,
   });
   final List<Map<String, dynamic>> items;
   final int? value;
   final ValueChanged<int?> onChanged;
   final bool enabled;
+  final bool scopedToCity;
   @override
-  Widget build(BuildContext context) => FormField<int>(
-    key: ValueKey('barangay-$value'),
-    initialValue: value,
-    validator: (v) =>
-        items.any((b) => b['id'] == v) ? null : 'Choose your barangay.',
-    builder: (state) {
-      final selected = items.where((b) => b['id'] == value).firstOrNull;
-      return InkWell(
-        onTap: !enabled
-            ? null
-            : () async {
-                final picked = await showModalBottomSheet<int>(
-                  context: context,
-                  isScrollControlled: true,
-                  useSafeArea: true,
-                  builder: (_) => _BarangaySheet(items: items, value: value),
-                );
-                if (picked != null) {
-                  state.didChange(picked);
-                  onChanged(picked);
-                }
-              },
-        child: InputDecorator(
-          decoration: InputDecoration(
-            labelText: 'Barangay',
-            errorText: state.errorText,
-            enabled: enabled,
-            suffixIcon: const Icon(Icons.search),
-            helperText: 'Search by barangay or city/municipality.',
+  Widget build(BuildContext context) => scopedToCity
+      ? DropdownButtonFormField<int>(
+          key: ValueKey(
+            'barangay-$value-${items.map((b) => b['id']).join(',')}',
           ),
-          child: Text(
-            selected == null ? 'Choose your barangay' : barangayLabel(selected),
-            maxLines: 3,
-          ),
-        ),
-      );
-    },
-  );
+          initialValue: items.any((b) => b['id'] == value) ? value : null,
+          isExpanded: true,
+          menuMaxHeight: 360,
+          decoration: const InputDecoration(labelText: 'Barangay'),
+          hint: Text(enabled ? 'Choose a barangay' : 'Choose a city first'),
+          items: items
+              .map(
+                (b) => DropdownMenuItem<int>(
+                  value: b['id'] as int,
+                  child: Text('${b['name']}', overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          validator: (v) =>
+              items.any((b) => b['id'] == v) ? null : 'Choose your barangay.',
+          onChanged: enabled ? onChanged : null,
+        )
+      : FormField<int>(
+          key: ValueKey('barangay-$value'),
+          initialValue: value,
+          validator: (v) =>
+              items.any((b) => b['id'] == v) ? null : 'Choose your barangay.',
+          builder: (state) {
+            final selected = items.where((b) => b['id'] == value).firstOrNull;
+            return InkWell(
+              onTap: !enabled
+                  ? null
+                  : () async {
+                      final picked = await showModalBottomSheet<int>(
+                        context: context,
+                        isScrollControlled: true,
+                        useSafeArea: true,
+                        builder: (_) =>
+                            _BarangaySheet(items: items, value: value),
+                      );
+                      if (picked != null) {
+                        state.didChange(picked);
+                        onChanged(picked);
+                      }
+                    },
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Barangay',
+                  errorText: state.errorText,
+                  enabled: enabled,
+                  suffixIcon: const Icon(Icons.search),
+                  helperText: 'Search by barangay or city/municipality.',
+                ),
+                child: Text(
+                  selected == null
+                      ? 'Choose your barangay'
+                      : barangayLabel(selected),
+                  maxLines: 3,
+                ),
+              ),
+            );
+          },
+        );
 }
 
 class _BarangaySheet extends StatefulWidget {

@@ -1,5 +1,9 @@
 # ManGROOVES PHP website on Vercel
 
+## Navigation, address selectors and verified totals — November 6, 2026
+
+Release **2.0.0+67** puts Submit report below Dashboard, uses matching City and Barangay dropdowns, highlights Total Verified Reports, and corrects the Android and web app icon bitmaps. Analytics tracks verified conditions consistently while keeping healthy-site follow-up requests separate. See [release details and validation](RELEASE_2_0_0_67.md).
+
 ## Reporting, sites and certificates — October 7, 2026
 
 APK `2.0.0+37` uses an icon-only Submit destination with an accessible tooltip.

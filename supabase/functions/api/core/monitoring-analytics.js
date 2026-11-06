@@ -60,7 +60,7 @@ export function analyticsForUser(user,rows,clusters,query={}) {
   const growth=[];const cursor=new Date(`${from.slice(0,7)}-01T00:00:00Z`);let monthCount=0;
   while(cursor.toISOString().slice(0,7)<=to.slice(0,7)&&monthCount++<1200){const key=cursor.toISOString().slice(0,7);growth.push(months.get(key)??{month:key,month_label:cursor.toLocaleDateString('en',{month:'short',year:'numeric',timeZone:'UTC'}),verified_reports:0,health:null,survival_rate:null});cursor.setUTCMonth(cursor.getUTCMonth()+1);}
   if(monthCount>1200)throw new AppError('Choose a monitoring period of 100 years or less.');
-  const attention=siteRows.filter(c=>c.priority!=='Routine');
+  const attention=siteRows.filter(c=>c.latest_health!=='Healthy');
   const progress={followup_reports:verified.filter(r=>r.parent_report_id&&byId.get(r.parent_report_id)?.cluster_id===r.cluster_id).length,
     clusters_with_followups:new Set(verified.filter(r=>r.parent_report_id&&byId.get(r.parent_report_id)?.cluster_id===r.cluster_id&&sites.has(r.cluster_id)).map(r=>r.cluster_id)).size,
     awaiting_followup:siteRows.filter(c=>c.needs_follow_up).length,

@@ -40,9 +40,9 @@ test('profile city changes reset barangay and optional address parts keep their 
  await globalThis.restoreTestAccount({id:'user'});await tick();
  assert.equal($('[name=house_unit]').required,false);assert.equal($('[name=street_sitio]').required,false);assert.equal($('[name=zip_code]').required,false);assert.equal($('[data-address-province]').value,'Cebu');assert.equal($('[name=country]'),null);
  const city=$('[data-address-city]');city.value='Danao City';city.dispatchEvent(new Event('change'));
- assert.equal($('[name=barangay_id]').value,'');assert.equal($('datalist').children.length,1);assert.match($('datalist option').value,/Danao City/);
- const barangay=$('[data-barangay-search]');barangay.value='Poblacion — Cebu City';barangay.dispatchEvent(new Event('input'));assert.equal(barangay.checkValidity(),false);
- barangay.value=$('datalist option').value;barangay.dispatchEvent(new Event('input'));assert.equal($('[name=barangay_id]').value,'2');assert.equal(barangay.checkValidity(),true);
+ const barangay=$('[data-address-barangay]');assert.equal(barangay.tagName,'SELECT');assert.equal(barangay.value,'');assert.equal(barangay.options.length,2);
+ barangay.value='1';barangay.dispatchEvent(new Event('change'));assert.equal(barangay.checkValidity(),false);
+ barangay.value='2';barangay.dispatchEvent(new Event('change'));assert.equal($('[name=barangay_id]').value,'2');assert.equal(barangay.checkValidity(),true);
  assert.equal($('[name=house_unit]').value,'Unit 3B');assert.equal($('[name=zip_code]').value,'6000');
 });
 

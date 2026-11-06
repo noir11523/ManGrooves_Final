@@ -12,7 +12,7 @@ if (paths.length !== 3) throw new Error('Check the brand SVG paths before genera
 const output = async (name, text) => {
   const file = path.join(res, name);
   await mkdir(path.dirname(file), {recursive: true});
-  await writeFile(file, text.replace(/[ \t]+$/gm, ''));
+  await writeFile(file, Buffer.isBuffer(text) ? text : text.replace(/[ \t]+$/gm, ''));
 };
 const stroke = (d, color, width) => `<path android:pathData="${d}" android:strokeColor="${color}" android:strokeWidth="${width}" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>`;
 const vector = (monochrome = false) => `<?xml version="1.0" encoding="utf-8"?>
@@ -68,16 +68,27 @@ try {
     pending.set(++id, {resolve, reject}); socket.send(JSON.stringify({id, method, params}));
   });
   await call('Page.enable');
-  // Square, fully painted background also supports launchers that apply their own mask.
-  const html = `<html><style>html,body{margin:0;width:100%;height:100%;background:#2D5A27}svg{display:block;width:100%;height:100%}</style>${svg}</html>`;
-  await call('Page.navigate', {url: 'data:text/html;base64,' + Buffer.from(html).toString('base64')});
+  // Rasterize the whole viewBox at the target size. Viewport screenshots can
+  // crop the SVG when Chrome enforces a minimum window size.
+  const source = 'data:image/svg+xml;base64,' + Buffer.from(svg.replace('<svg ', '<svg width="512" height="512" ')).toString('base64');
+  const rasterize = async size => {
+    const response = await call('Runtime.evaluate', {awaitPromise:true, returnByValue:true, expression:`(async()=>{
+      const image=new Image();image.src=${JSON.stringify(source)};await image.decode();
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=${size};
+      const ctx=canvas.getContext('2d');ctx.fillStyle='#2D5A27';ctx.fillRect(0,0,${size},${size});ctx.drawImage(image,0,0,${size},${size});
+      const center=ctx.getImageData(Math.floor(${size}/2),Math.floor(${size}/2),1,1).data;
+      if(center[0]<180||center[1]<180||center[2]<180)throw Error('Mangrove trunk is missing from the rendered icon.');
+      return canvas.toDataURL('image/png').split(',')[1];
+    })()`});
+    if(response.exceptionDetails||!response.result?.value)throw new Error('Icon rendering failed: '+JSON.stringify(response.exceptionDetails));
+    return Buffer.from(response.result.value,'base64');
+  };
   for (const [density, size] of Object.entries({mdpi:48, hdpi:72, xhdpi:96, xxhdpi:144, xxxhdpi:192})) {
-    await call('Emulation.setDeviceMetricsOverride', {width:size, height:size, deviceScaleFactor:1, mobile:false});
-    await call('Runtime.evaluate', {expression:'new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))', awaitPromise:true});
-    const {data} = await call('Page.captureScreenshot', {format:'png', clip:{x:0,y:0,width:size,height:size,scale:1}});
-    await output(`mipmap-${density}/ic_launcher.png`, Buffer.from(data, 'base64'));
+    await output(`mipmap-${density}/ic_launcher.png`, await rasterize(size));
     console.log(`Generated ${density}: ${size} x ${size}`);
   }
+  for(const size of [180,192,512])await writeFile(path.join(root,`public/assets/img/icons/app-icon-${size}.png`),await rasterize(size));
+  await writeFile(path.join(root,'mobile/flutter_app/assets/brand/mangrooves.png'),await rasterize(192));
 } finally {
   socket?.close(); browser.kill();
 }

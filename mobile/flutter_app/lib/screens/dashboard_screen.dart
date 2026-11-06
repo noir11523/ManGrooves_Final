@@ -1,3 +1,5 @@
+import '../shared/verified_total_card.dart';
+
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -119,50 +121,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              mainAxisExtent: 185,
-              children: [
-                _StatCard(
-                  'Total Verified Reports',
-                  stats['verified_reports'] ?? stats['total_reports'],
-                  Icons.assignment_outlined,
-                  () => _openReports(status: 'verified'),
-                ),
-                _StatCard(
-                  'Pending',
-                  stats['pending_reports'],
-                  Icons.hourglass_top,
-                  () => _openReports(status: 'pending'),
-                ),
-                _StatCard(
-                  'Rejected',
-                  stats['rejected_reports'],
-                  Icons.cancel_outlined,
-                  () => _openReports(status: 'rejected'),
-                ),
-                _StatCard(
-                  'Needs attention',
-                  stats['needs_attention'],
-                  Icons.warning_amber_outlined,
-                  () => _openReports(attention: true),
-                ),
-                _StatCard(
-                  'Monitored clusters',
-                  stats['map_clusters'] ?? clusters.length,
-                  Icons.hub_outlined,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => ClustersScreen(api: widget.api),
-                    ),
-                  ),
-                ),
-              ],
+            VerifiedTotalCard(
+              value: stats['verified_reports'] ?? stats['total_reports'] ?? 0,
+              onTap: () => _openReports(status: 'verified'),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, size) {
+                final columns = MediaQuery.textScalerOf(context).scale(16) > 24
+                    ? 1
+                    : size.maxWidth >= 800
+                    ? 4
+                    : 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children:
+                      [
+                            _StatCard(
+                              'Pending',
+                              stats['pending_reports'],
+                              Icons.hourglass_top,
+                              () => _openReports(status: 'pending'),
+                            ),
+                            _StatCard(
+                              'Rejected',
+                              stats['rejected_reports'],
+                              Icons.cancel_outlined,
+                              () => _openReports(status: 'rejected'),
+                            ),
+                            _StatCard(
+                              'Needs attention',
+                              stats['needs_attention'],
+                              Icons.warning_amber_outlined,
+                              () => _openReports(attention: true),
+                            ),
+                            _StatCard(
+                              'Monitored clusters',
+                              stats['map_clusters'] ?? clusters.length,
+                              Icons.hub_outlined,
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      ClustersScreen(api: widget.api),
+                                ),
+                              ),
+                            ),
+                          ]
+                          .map(
+                            (card) => SizedBox(
+                              width:
+                                  (size.maxWidth - 12 * (columns - 1)) /
+                                  columns,
+                              child: card,
+                            ),
+                          )
+                          .toList(),
+                );
+              },
             ),
             if (reminders.isNotEmpty) ...[
               const SizedBox(height: 24),
@@ -281,18 +298,19 @@ class _StatCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisSize: MainAxisSize.min,
           children: [
             CircleAvatar(
               backgroundColor: Colors.white.withValues(alpha: .7),
               child: Icon(icon, color: Theme.of(context).colorScheme.primary),
             ),
+            const SizedBox(height: 12),
             Text(
               '${value ?? 0}',
               style: Theme.of(context).textTheme.headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w800),
             ),
-            Text(label, maxLines: 3, overflow: TextOverflow.ellipsis),
+            Text(label),
           ],
         ),
       ),

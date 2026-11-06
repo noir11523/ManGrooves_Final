@@ -75,12 +75,13 @@ class _ResidentialAddressFieldsState extends State<ResidentialAddressFields> {
   @override
   Widget build(BuildContext context) {
     final provinces = widget.barangays.map(provinceOf).toSet().toList()..sort();
-    final cities = widget.barangays
-        .where((b) => provinceOf(b) == _province)
-        .map(cityOf)
-        .toSet()
-        .toList()
-      ..sort();
+    final cities =
+        widget.barangays
+            .where((b) => provinceOf(b) == _province)
+            .map(cityOf)
+            .toSet()
+            .toList()
+          ..sort();
     final rows = widget.barangays
         .where((b) => provinceOf(b) == _province && cityOf(b) == _city)
         .toList();
@@ -137,7 +138,8 @@ class _ResidentialAddressFieldsState extends State<ResidentialAddressFields> {
           items: provinces
               .map((p) => DropdownMenuItem(value: p, child: Text(p)))
               .toList(),
-          validator: (v) => v == null ? 'Choose your province or region.' : null,
+          validator: (v) =>
+              v == null ? 'Choose your province or region.' : null,
           onChanged: widget.enabled
               ? (v) {
                   setState(() {
@@ -168,6 +170,7 @@ class _ResidentialAddressFieldsState extends State<ResidentialAddressFields> {
         ),
         const SizedBox(height: 16),
         BarangayPicker(
+          scopedToCity: true,
           items: rows,
           value: widget.barangayId,
           onChanged: widget.onBarangayChanged,

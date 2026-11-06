@@ -37,7 +37,7 @@ const ui = await import(`data:text/javascript;base64,${Buffer.from(bundle.output
 const $ = selector => document.querySelector(selector);
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const change = element => element.dispatchEvent(new Event('change', {bubbles: true}));
-const set = (name, value) => { if(name==='barangay_id'&&$('[data-barangay-search]')) { if($('[data-address-city]')){const city=$('[data-address-city]');city.value=city.options[1].value;change(city);}const input=$('[data-barangay-search]');input.value=$('datalist option').value;change(input);set('phone','09171234567');set('street_sitio','Test Street');return; } const input = $(`[name=${name}]`); input.value = value; change(input); };
+const set = (name, value) => { if(name==='barangay_id'&&$('[data-address-barangay]')) { if($('[data-address-city]')){const city=$('[data-address-city]');city.value=city.options[1].value;change(city);}const input=$('[data-address-barangay]');input.value=value;change(input);set('phone','09171234567');set('street_sitio','Test Street');return; } const input = $(`[name=${name}]`); input.value = value; change(input); };
 const submit = () => { const form = $('#report-form'); return form.onsubmit({preventDefault() {}, submitter: $('#next')}); };
 const finishCategories = async () => { for(const c of reference.criteria)if(!(ui.reportDraft.observations[c.code]?.length))$(`[name=obs_${c.code}][value="${c.options.find(o=>o.code==='none_of_the_above'||o.code==='no_animals')?.id??c.options[0].id}"]`).click();for(let i=0;i<reference.criteria.length+3&&ui.reportDraft.step===2;i++)await submit(); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };
@@ -360,7 +360,9 @@ test('staff creation is available in Users and requests credentials for expert a
   assert.equal(dialog.open,true);assert.equal(form.elements.id_photo.required,true);
   form.elements.role.value='system_admin';change(form.elements.role);
   assert.equal(form.elements.id_photo.required,false);assert.equal($('#staff-credential').hidden,true);
+  const city=form.querySelector('[data-address-city]');city.value='Cebu City';change(city);
   for(const [key,value] of Object.entries({first_name:'Admin',last_name:'Staff',email:'staff@example.test',barangay_id:'1',password:'initialpass12',password_confirmation:'initialpass12'}))form.elements[key].value=value;
+  change(form.elements.barangay_id);
   await form.onsubmit({preventDefault(){},target:form,submitter:form.querySelector('button[type=submit]')});
   assert.equal(sent.action,'create_staff');assert.equal(sent.role,'system_admin');assert.equal(sent.barangay_id,'1');
 });

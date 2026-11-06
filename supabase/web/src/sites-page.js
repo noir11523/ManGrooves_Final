@@ -50,7 +50,7 @@ export async function sitesPage(node,query,refresh,head) {
     mapElement.tabIndex=0;mapElement.setAttribute('aria-label','Site map. Use arrow keys to move and Enter to place a pin.');
     mapElement.onkeydown=event=>{if(event.key==='Enter'&&event.target===mapElement){event.preventDefault();const p=canvas.getCenter();void selectPin(p.lat,p.lng);}};
     if(site.center_lat!=null){pin(site.center_lat,site.center_lng);canvas.setView([site.center_lat,site.center_lng],17);}
-    dialog.querySelector('[data-barangay-search]').addEventListener('change',()=>{
+    dialog.querySelector('[data-address-barangay]').addEventListener('change',()=>{
       const b=barangays.find(b=>String(b.id)===dialog.querySelector('[name=barangay_id]').value);if(b)canvas.setView([b.center_lat,b.center_lng],14);
     });
     dialog.querySelector('#site-search').oninput=event=>{

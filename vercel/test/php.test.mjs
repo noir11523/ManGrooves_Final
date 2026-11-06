@@ -180,6 +180,15 @@ test('all roles keep account actions in the top bar and reachable mobile navigat
     const bottom=[...doc.querySelectorAll('.mobile-bottom-nav > a')].map(a=>a.getAttribute('href'));
     if(role==='guardian')assert.equal(doc.querySelector('.mobile-bottom-nav a[href="/submit-report.php"] span').textContent,'Submit');
     if(role!=='admin')assert.equal(sidebar.querySelector('a[href="/submit-report.php"] span').textContent,'Submit report');
+    if(role!=='admin') {
+      const direct=[...sidebar.querySelectorAll('.sidebar-nav > a')].map(a=>a.getAttribute('href'));
+      assert.deepEqual(direct.slice(0,2),['/dashboard.php','/submit-report.php']);
+      assert.equal(sidebar.querySelector('details a[href="/submit-report.php"]'),null);
+    }
+    const total=doc.querySelector('.dashboard-stats > .verified-total');
+    assert.match(total.textContent,/Total Verified Reports/);
+    assert.equal(total.querySelector('a').getAttribute('href'),'/reports.php?status=verified');
+    assert.equal(doc.querySelectorAll('.dashboard-stats > div').length,5);
     const more=[...topbar.querySelector('[aria-label="Account menu"]').parentElement.querySelectorAll('a')].map(a=>a.getAttribute('href'));
     assert.equal(new Set(bottom).size,bottom.length,role);
     assert.equal(more.some(href=>bottom.includes(href)||href==='/analytics.php'),false,role);

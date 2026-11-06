@@ -11,6 +11,13 @@ test('admin menu groups existing modules once and expands only the current secti
  assert.equal(dom.window.document.querySelector('[aria-current=page]').textContent,'Expert applications');
  const routes=[...dom.window.document.querySelectorAll('a')].map(a=>a.getAttribute('href'));assert.equal(routes.length,new Set(routes).size);assert.ok(!routes.includes('#verification'));assert.ok(routes.includes('#reports'));assert.ok(routes.includes('#clusters'));
  const guardian=renderNavigation('guardian','clusters');assert.ok(!guardian.includes('#users'));assert.ok(!guardian.includes('#audit'));assert.ok(guardian.includes('#submit'));
+ for(const role of ['guardian','expert']) {
+   const menu=new JSDOM(renderNavigation(role,'submit')).window.document;
+   assert.deepEqual([...menu.body.children].slice(0,2).map(el=>el.getAttribute('href')),['#dashboard','#submit']);
+   assert.equal(menu.querySelectorAll('a[href="#submit"]').length,1);
+   assert.equal(menu.querySelector('details a[href="#submit"]'),null);
+ }
+ assert.ok(!routes.includes('#submit'));
 });
 
 test('mobile menu supports closing, keyboard focus, navigation and desktop resize', () => {

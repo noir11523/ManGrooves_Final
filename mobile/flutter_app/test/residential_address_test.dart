@@ -42,6 +42,7 @@ void main() {
         ),
       );
       expect(form.currentState!.validate(), true);
+      expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('city-Cebu-Cebu City')));
       await tester.pumpAndSettle();
@@ -53,7 +54,7 @@ void main() {
       await tester.tap(find.byType(BarangayPicker));
       await tester.pumpAndSettle();
       expect(find.text('Cebu City, Cebu'), findsNothing);
-      expect(find.text('Danao City, Cebu'), findsOneWidget);
+      expect(find.text('Poblacion'), findsOneWidget);
       await tester.tap(find.text('Poblacion').last);
       await tester.pumpAndSettle();
       expect(selected, 2);

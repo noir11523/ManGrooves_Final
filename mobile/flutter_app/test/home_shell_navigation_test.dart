@@ -119,6 +119,33 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('Report map'), findsOneWidget);
         expect(find.byTooltip('Notifications'), findsOneWidget);
+        await tester.tap(find.byTooltip('Menu'));
+        await tester.pumpAndSettle();
+        final menu = find.byType(BottomSheet);
+        final dashboard = find.descendant(
+          of: menu,
+          matching: find.text('Dashboard'),
+        );
+        final submit = find.descendant(
+          of: menu,
+          matching: find.text('Submit report'),
+        );
+        expect(dashboard, findsOneWidget);
+        if (role == 'system_admin') {
+          expect(submit, findsNothing);
+        } else {
+          expect(submit, findsOneWidget);
+          expect(
+            tester.getTopLeft(submit).dy,
+            greaterThan(tester.getTopLeft(dashboard).dy),
+          );
+          expect(
+            tester.getTopLeft(submit).dy,
+            lessThan(tester.getTopLeft(find.text('Reports & Monitoring')).dy),
+          );
+        }
+        await tester.tap(find.byTooltip('Close menu'));
+        await tester.pumpAndSettle();
         if (role == 'guardian') {
           await tester.tap(find.byTooltip('Menu'));
           await tester.pumpAndSettle();

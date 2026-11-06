@@ -101,6 +101,14 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        expect(
+          tester.getCenter(find.text('Total Verified Reports')).dx,
+          closeTo(180, 1),
+        );
+        expect(
+          tester.getBottomLeft(find.text('Total Verified Reports')).dy,
+          lessThan(tester.getTopLeft(find.text('Pending')).dy),
+        );
         await tester.tap(find.text('Total Verified Reports'));
         await tester.pumpAndSettle();
         expect(api.status, 'verified');

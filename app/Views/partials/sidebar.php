@@ -6,9 +6,9 @@ $guardian = $role === 'guardian';
 $roleLabel = $admin ? 'Administrator' : ($guardian ? 'Coastal Guardian' : 'Expert');
 $navigation = [
     ['Dashboard', 'dashboard.php', 'bi-grid-1x2-fill'],
+    ...(!$admin ? [['Submit report', 'submit-report.php', 'bi-camera-fill']] : []),
     ['Reports & Monitoring', '', 'bi-journal-text', [
         [$guardian ? 'My reports' : 'All reports', 'reports.php', 'bi-journal-text'],
-        ...(!$admin ? [['Submit report', 'submit-report.php', 'bi-camera-fill']] : []),
         ['Report map', 'report-map.php', 'bi-map'],
         ['Mangrove timeline', 'clusters.php', 'bi-clock-history'],
         ...($guardian ? [['Explore mangrove sites', 'explore.php', 'bi-tree']] : []),
@@ -62,7 +62,7 @@ $isActive = static function (string $href) use ($requestPath, $navigationQuery):
         <span class="sidebar-section-label">Overview</span>
         <?php foreach ($navigation as $index => $navigationItem): ?>
             <?php [$label, $href, $icon] = $navigationItem; ?>
-            <?php if ($index === 1): ?><span class="sidebar-section-label">Mangrove monitoring</span><?php endif; ?>
+            <?php if ($label === 'Reports & Monitoring'): ?><span class="sidebar-section-label">Mangrove monitoring</span><?php endif; ?>
             <?php if ($label === 'User Management'): ?><span class="sidebar-section-label">Administration</span><?php endif; ?>
             <?php if (isset($navigationItem[3])): ?>
                 <?php $groupActive = (bool) array_filter($navigationItem[3], static fn (array $child): bool => $isActive($child[1])); ?>

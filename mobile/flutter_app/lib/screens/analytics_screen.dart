@@ -1,3 +1,5 @@
+import '../shared/verified_total_card.dart';
+
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -325,23 +327,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
           ),
           const SizedBox(height: 12),
+          VerifiedTotalCard(
+            value: verification['verified'] ?? verification['total'] ?? 0,
+          ),
+          const SizedBox(height: 8),
           LayoutBuilder(
             builder: (context, size) => Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 for (final entry in {
-                  'Total Verified Reports':
-                      '${verification['verified'] ?? verification['total'] ?? 0}',
                   'Sites': '${a['monitored_clusters'] ?? sites.length}',
-                  'Needs Attention': '${a['clusters_needing_attention'] ?? 0}',
+                  'Sites needing attention':
+                      '${a['clusters_needing_attention'] ?? 0}',
                 }.entries)
                   SizedBox(
                     width: MediaQuery.textScalerOf(context).scale(16) > 22
                         ? size.maxWidth
-                        : MediaQuery.textScalerOf(context).scale(16) > 20
-                        ? (size.maxWidth - 8) / 2
-                        : (size.maxWidth - 16) / 3,
+                        : (size.maxWidth - 8) / 2,
                     child: metric(entry.key, entry.value),
                   ),
               ],

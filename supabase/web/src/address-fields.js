@@ -3,23 +3,21 @@ import {esc,field,select} from './ui.js';
 export const barangayName=b=>[b.name,b.city_municipality,b.province].filter(Boolean).join(', ');
 export function barangayPicker(rows,value='',{required=true,id='profile-barangay'}={}) {
   const selected=rows.find(b=>String(b.id)===String(value));
-  return `<label class="field barangay-picker"><span>Barangay</span><input type="search" data-barangay-search list="${id}-options" value="${esc(selected?barangayName(selected):'')}" ${required?'required':''} autocomplete="off" placeholder="Search barangay name" aria-describedby="${id}-help"><input type="hidden" name="barangay_id" value="${esc(selected?.id??'')}"><datalist id="${id}-options"></datalist><small id="${id}-help">Choose a barangay in the selected city or municipality.</small></label>`;
+  return select('barangay_id','Barangay',[['','Choose a barangay'],...(selected?[[selected.id,selected.name]]:[])],selected?.id??'',`${required?'required':''} id="${id}" data-address-barangay`);
 }
 export function bindBarangayPicker(root,rows) {
-  const search=root.querySelector('[data-barangay-search]'),value=root.querySelector('[name=barangay_id]');
-  if(!search||!value)return;
+  const value=root.querySelector('[data-address-barangay]');
+  if(!value)return;
   const province=root.querySelector('[data-address-province]');
   const city=root.querySelector('[data-address-city]');
   const provinceOf=b=>b.province||'Cebu';
   const cityOf=b=>b.city_municipality||'Cebu City';
   const eligible=()=>rows.filter(b=>(!province||provinceOf(b)===province.value)&&(!city||cityOf(b)===city.value));
   const update=()=>{
-    const typed=search.value.trim().toLocaleLowerCase();
-    const found=eligible().find(b=>barangayName(b).toLocaleLowerCase()===typed);
-    value.value=found?.id??'';
-    search.setCustomValidity(found||!typed&&!search.required?'':'Choose a barangay and city/municipality from the list.');
+    const found=eligible().some(b=>String(b.id)===value.value);
+    value.setCustomValidity(found||!value.value&&!value.required?'':'Choose your barangay.');
   };
-  search.addEventListener('input',update);search.addEventListener('change',update);
+  value.addEventListener('change',update);
   const refreshCities=()=>{
     if(!province||!city)return;
     const selected=city.value;
@@ -28,13 +26,15 @@ export function bindBarangayPicker(root,rows) {
     city.value=cities.includes(selected)?selected:'';
   };
   const refresh=()=>{
-    const list=root.querySelector(`#${search.getAttribute('list')}`);
-    if(list)list.innerHTML=eligible().map(b=>`<option value="${esc(barangayName(b))}"></option>`).join('');
-    search.disabled=Boolean(city&&!city.value);
+    const selected=value.value;
+    const options=eligible().sort((a,b)=>a.name.localeCompare(b.name));
+    value.innerHTML=`<option value="">${city&&!city.value?'Choose a city first':'Choose a barangay'}</option>${options.map(b=>`<option value="${b.id}">${esc(city?b.name:barangayName(b))}</option>`).join('')}`;
+    value.value=options.some(b=>String(b.id)===selected)?selected:'';
+    value.disabled=Boolean(city&&!city.value);
   };
-  province?.addEventListener('change',()=>{city.value='';search.value='';value.value='';refreshCities();refresh();update();});
+  province?.addEventListener('change',()=>{if(city)city.value='';value.value='';refreshCities();refresh();update();});
   if(city){
-    city.addEventListener('change',()=>{search.value='';value.value='';refresh();update();});
+    city.addEventListener('change',()=>{value.value='';refresh();update();});
     refreshCities();
   }
   refresh();

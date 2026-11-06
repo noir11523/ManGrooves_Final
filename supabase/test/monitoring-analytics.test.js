@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {analyticsForUser} from '../functions/api/core/monitoring-analytics.js';
+import {dashboardStats,filterReports} from '../functions/api/core/analytics.js';
 import {profileDetails} from '../functions/api/core/profile-fields.js';
 import {reviewFeedback} from '../functions/api/core/review-feedback.js';
 import {writeMonitoringReport} from '../functions/api/core/analytics-export.js';
@@ -9,6 +10,34 @@ import {PDFDocument} from 'pdf-lib';
 const admin={id:9,role:'system_admin'},query={date_from:'2026-08-01',date_to:'2026-10-21'};
 const site=id=>({id,name:`Site ${id}`,barangay_id:1,barangay_name:'Inayawan',center_lat:10.28,center_lng:123.88,initial_seedlings:10});
 const visit=(id,cluster_id,final_health,day,extra={})=>({id,cluster_id,final_health,user_id:1,status:'verified',submitted_at:`2026-${day}T00:00:00Z`,verified_at:`2026-${day}T01:00:00Z`,...extra});
+
+test('verified totals include every condition; attention excludes pending, rejected and healthy follow-up requests',()=>{
+ const rows=[
+   visit(1,1,'Healthy','10-01',{needs_follow_up:true}),
+   visit(2,2,'Stressed','10-02'),visit(3,3,'At Risk','10-03'),visit(4,4,'Unknown','10-04'),
+   visit(5,5,'At Risk','10-05',{status:'pending',verified_at:null}),
+   visit(6,6,'Unknown','10-06',{status:'rejected',verified_at:null}),
+   visit(7,7,'At Risk','10-07',{user_id:2}),
+ ];
+ const sites=rows.map(r=>({...site(r.cluster_id),verified_count:r.status==='verified'?1:0}));
+ for(const role of ['guardian','expert','system_admin']) {
+   const visible=role==='guardian'?rows.filter(r=>r.user_id===1):rows;
+   const a=analyticsForUser({role,id:1},rows,sites,query),d=dashboardStats(visible,sites);
+   assert.equal(a.verification.verified,role==='guardian'?4:5);
+   assert.equal(a.verification.verified,d.verified_reports);
+   assert.equal(a.clusters_needing_attention,d.needs_attention);
+   assert.equal(a.progress.awaiting_followup,1);
+   assert.ok(!a.priority_areas.some(c=>c.id===1));
+   assert.equal(a.verification.pending,1);assert.equal(a.verification.rejected,1);
+   assert.equal(a.growth.reduce((n,m)=>n+m.verified_reports,0),a.verification.verified);
+   assert.equal(filterReports(visible,{status:'verified'}).length,a.verification.verified);
+   assert.equal(filterReports(visible,{needs_attention:'1'}).length,a.clusters_needing_attention);
+ }
+ const filtered=analyticsForUser(admin,rows,sites,{...query,health:'Unknown'});
+ assert.deepEqual(filtered.report_ids,[4]);assert.equal(filtered.verification.verified,1);
+ const empty=analyticsForUser(admin,rows,sites,{date_from:'2026-09-01',date_to:'2026-09-30'});
+ assert.equal(empty.verification.verified,0);assert.equal(empty.clusters_needing_attention,0);
+});
 
 test('analytics counts distinct sites and selects current state before applying condition filters',()=>{
  const rows=[visit(1,1,'At Risk','08-01'),visit(2,1,'Healthy','10-01',{parent_report_id:1}),visit(3,2,'Stressed','10-02'),visit(4,2,'At Risk','10-03',{status:'pending'})];

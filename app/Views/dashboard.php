@@ -28,10 +28,10 @@ $statCards = [
 </section>
 
 <section class="dashboard-stats mb-4" aria-label="Report summary">
-    <?php foreach ($statCards as $card): ?>
-        <div>
+    <?php foreach ($statCards as $index => $card): ?>
+        <div class="<?= $index === 0 ? 'verified-total' : '' ?>">
             <a class="card h-100 border-0 shadow-sm text-decoration-none text-body" href="<?= e($card['href']) ?>">
-                <div class="card-body d-flex align-items-center gap-3">
+                <div class="card-body d-flex align-items-center gap-3 <?= $index === 0 ? 'justify-content-center text-center' : '' ?>">
                     <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-<?= e($card['tone']) ?>-subtle text-<?= e($card['tone']) ?> fs-4" style="width:3rem;height:3rem">
                         <i class="bi <?= e($card['icon']) ?>" aria-hidden="true"></i>
                     </span>

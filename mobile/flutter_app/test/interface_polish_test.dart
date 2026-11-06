@@ -94,7 +94,7 @@ void main() {
       for (final entry in {
         'Total Verified Reports': '12',
         'Sites': '5',
-        'Needs Attention': '2',
+        'Sites needing attention': '2',
       }.entries) {
         final card = find.ancestor(
           of: find.text(entry.key),

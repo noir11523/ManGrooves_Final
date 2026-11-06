@@ -73,6 +73,30 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  void _openSubmit() {
+    if (_guardian) {
+      setState(() => _index = 2);
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Submit Report')),
+          body: SubmitReportScreen(
+            api: widget.api,
+            draftOwner: '${_user['uid'] ?? _user['id']}',
+            onSubmitted: () {
+              Navigator.pop(context);
+              setState(() => _reportsVersion++);
+            },
+            onExit: () => Navigator.pop(context),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openMenu() async {
     final admin = _user['role'] == 'system_admin';
     final groups = <String, Map<String, String>>{
@@ -116,6 +140,17 @@ class _HomeShellState extends State<HomeShell> {
             Expanded(
               child: ListView(
                 children: [
+                  ListTile(
+                    leading: const Icon(Icons.dashboard_outlined),
+                    title: const Text('Dashboard'),
+                    onTap: () => Navigator.pop(context, 'dashboard'),
+                  ),
+                  if (!admin)
+                    ListTile(
+                      leading: const Icon(Icons.add_a_photo_outlined),
+                      title: const Text('Submit report'),
+                      onTap: () => Navigator.pop(context, 'submit'),
+                    ),
                   if (_guardian)
                     ListTile(
                       leading: const Icon(Icons.bar_chart),
@@ -144,6 +179,14 @@ class _HomeShellState extends State<HomeShell> {
       ),
     );
     if (choice == null || !mounted) return;
+    if (choice == 'dashboard') {
+      setState(() => _index = 0);
+      return;
+    }
+    if (choice == 'submit') {
+      _openSubmit();
+      return;
+    }
     final Widget page = switch (choice) {
       'timeline' => ClustersScreen(api: widget.api),
       'map' => ReportMapScreen(api: widget.api),
@@ -286,23 +329,7 @@ class _HomeShellState extends State<HomeShell> {
             ? FloatingActionButton.extended(
                 icon: const Icon(Icons.add_a_photo_outlined),
                 label: const Text('Submit Report'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (context) => Scaffold(
-                      appBar: AppBar(title: const Text('Submit Report')),
-                      body: SubmitReportScreen(
-                        api: widget.api,
-                        draftOwner: '${_user['uid'] ?? _user['id']}',
-                        onSubmitted: () {
-                          Navigator.pop(context);
-                          setState(() => _reportsVersion++);
-                        },
-                        onExit: () => Navigator.pop(context),
-                      ),
-                    ),
-                  ),
-                ),
+                onPressed: _openSubmit,
               )
             : null,
         bottomNavigationBar: NavigationBar(
