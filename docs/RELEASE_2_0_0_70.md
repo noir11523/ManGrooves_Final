@@ -1,0 +1,15 @@
+# ManGROOVES 2.0.0+70 — Photo checks before continuing
+
+Photo selection previously checked only duplicates within the current draft. Reuse from an earlier report was checked at final submission, leaving the user on Review with an error. Web/mobile web and the Supabase Android app now check earlier reports immediately after choosing a photo and again before leaving the photo step.
+
+- The authenticated `check-report-photos.php` endpoint uses the same metadata-free SHA-256 fingerprints as final submission. It validates content, size, duplicate views and prior use across overview, close-up and additional photos. It does not save uploaded files, reserve photos, create reports or send notifications. Responses contain only a message and affected photo positions, never another user's report details.
+- A rejected selection keeps previously accepted photos and all other draft answers. Connection failures allow retry. A restored draft is checked before continuing. Checking progress disables Continue while the request is pending.
+- Final submission retains its transaction checks for concurrent submissions. Structured photo conflicts return the wizard to Details/photos and identify the affected view while preserving location, notes and traits.
+- Retries with the same owner and submission token remain recoverable after a lost submission response. Final submission still validates the original content digest. A new visit cannot reuse the earlier visit's token automatically. Idempotent retries create only one report and one submission alert.
+- Existing notification recipient isolation, expert-registration alerts, completed-task read state, feedback/follow-up events, foreground polling and destination links were regression tested. This release does not add operating-system/background push.
+
+Validation: 158 JavaScript tests; 90 HTTP workflow checks using local PostgreSQL with explicit Auth/Storage doubles; 21 Flutter tests; Flutter analysis with no issues; Edge API type check. Headless Chrome exercised rejection, replacement and late-conflict recovery at 320, 390, 768 and 1280 pixels. Production photo/notification checks are read-only; no test reports or users are created.
+
+This is exact-content checking after metadata cleanup, not perceptual matching of cropped or recompressed images. The deployed Supabase clients always perform preflight; the archived LAN/PHP client retains its existing server behavior unless that server advertises preflight support. No database migration or data reset is required. Android users need version 2.0.0+70 for the early check; older clients retain final-submit protection. Physical Android-device testing is separate from the automated widget checks and release build.
+
+Implementation: `supabase/functions/api/core/report-photos.js`, `service.js`, `api.js`; `supabase/web/src/report-photos.js`, `report-form.js` and the web/PHP API clients; Flutter report screen, photo validation and API clients. Regression coverage is in the HTTP integration suite, web form/photo tests and Flutter report/API tests.

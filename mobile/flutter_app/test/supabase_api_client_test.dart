@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -44,6 +45,24 @@ void main() {
             );
           }
           expect(request.headers['authorization'], 'Bearer token');
+          if (request.url.path.endsWith('check-report-photos.php')) {
+            expect(request.method, 'POST');
+            expect(
+              request.headers['content-type'],
+              contains('multipart/form-data'),
+            );
+            expect(request.body, contains('photo_0'));
+            expect(request.body, contains('draft-photo-token'));
+            return http.Response(
+              jsonEncode({
+                'ok': false,
+                'message': 'This photo was used in an earlier report.',
+                'code': 'photo_already_submitted',
+                'photo_indices': [0],
+              }),
+              409,
+            );
+          }
           return http.Response(
             jsonEncode({
               'ok': true,
@@ -76,6 +95,24 @@ void main() {
             .toString(),
         'https://project-one.supabase.co/functions/v1/api/checklist-photo.php?path=checklist%2Ftest.jpg',
       );
+      final directory = await Directory.systemTemp.createTemp(
+        'mangrooves-preflight-',
+      );
+      try {
+        final photo = await File('${directory.path}/photo.jpg')
+            .writeAsBytes([1, 2, 3]);
+        await expectLater(
+          api.checkReportPhotos([photo.path], 'draft-photo-token'),
+          throwsA(
+            isA<ApiException>()
+                .having((e) => e.code, 'code', 'photo_already_submitted')
+                .having((e) => e.photoIndices, 'photo indices', [0])
+                .having((e) => e.statusCode, 'status', 409),
+          ),
+        );
+      } finally {
+        await directory.delete(recursive: true);
+      }
       await api.logout();
       expect(paths.last, '/functions/v1/api/logout.php');
       expect(api.hasToken, false);

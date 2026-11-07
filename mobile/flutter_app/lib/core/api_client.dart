@@ -9,10 +9,17 @@ import 'package:http/http.dart' as http;
 import 'api_endpoint_policy.dart';
 
 class ApiException implements Exception {
-  const ApiException(this.message, {this.statusCode});
+  const ApiException(
+    this.message, {
+    this.statusCode,
+    this.code,
+    this.photoIndices = const [],
+  });
 
   final String message;
   final int? statusCode;
+  final String? code;
+  final List<int> photoIndices;
 
   @override
   String toString() => message;
@@ -359,6 +366,35 @@ class ApiClient {
   Future<Map<String, dynamic>> reportPreview(Map<String, dynamic> input) =>
       _postJson('report-preview.php', input);
 
+  Future<void> checkReportPhotos(
+    List<String> paths,
+    String submissionToken,
+  ) async {
+    // The archived LAN/PHP API does not advertise preflight. Cloud builds
+    // override this method and always check before accepting a photo.
+    if (_configurationCache?['photo_preflight'] != true) return;
+    await _withConnectionRecovery(() async {
+      final request = http.MultipartRequest(
+        'POST',
+        _uri('check-report-photos.php'),
+      );
+      request.headers.addAll(_headers());
+      request.fields['payload'] = jsonEncode({
+        'submission_token': submissionToken,
+      });
+      for (var i = 0; i < paths.length; i++) {
+        request.files.add(
+          await http.MultipartFile.fromPath('photo_$i', paths[i]),
+        );
+      }
+      _decode(
+        await http.Response.fromStream(
+          await request.send().timeout(const Duration(seconds: 120)),
+        ),
+      );
+    });
+  }
+
   Future<Map<String, dynamic>> submitReport({
     required Map<String, String> fields,
     required Map<String, List<int>> observations,
@@ -631,6 +667,10 @@ class ApiClient {
         data['message']?.toString() ??
             'Request failed (${response.statusCode}).',
         statusCode: response.statusCode,
+        code: data['code']?.toString(),
+        photoIndices: (data['photo_indices'] as List? ?? [])
+            .whereType<int>()
+            .toList(),
       );
     }
     return data;

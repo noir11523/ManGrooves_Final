@@ -3,7 +3,7 @@ async function responseData(response, blob = false) {
   if(blob && response.ok) return response.blob();
   let result;
   try {result=await response.json();} catch {throw new Error('Could not connect. Please try again.');}
-  if(!response.ok || !result.ok) throw Object.assign(new Error(result.message??'Could not complete this request.'),{status:response.status});
+  if(!response.ok || !result.ok) throw Object.assign(new Error(result.message??'Could not complete this request.'),{status:response.status,code:result.code,photo_indices:result.photo_indices});
   if(result.csrf) document.querySelector('meta[name=csrf-token]').content=result.csrf;
   return result;
 }

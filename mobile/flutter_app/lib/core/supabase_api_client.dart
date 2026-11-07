@@ -312,6 +312,26 @@ class SupabaseApiClient extends ApiClient {
   }
 
   @override
+  Future<void> checkReportPhotos(
+    List<String> paths,
+    String submissionToken,
+  ) async {
+    final request = http.MultipartRequest(
+      'POST',
+      resolve('check-report-photos.php'),
+    );
+    request.fields['payload'] = jsonEncode({
+      'submission_token': submissionToken,
+    });
+    for (var i = 0; i < paths.length; i++) {
+      request.files.add(
+        await http.MultipartFile.fromPath('photo_$i', paths[i]),
+      );
+    }
+    await _multipart(request);
+  }
+
+  @override
   Future<Map<String, dynamic>> submitReport({
     required Map<String, String> fields,
     required Map<String, List<int>> observations,
@@ -452,6 +472,10 @@ class SupabaseApiClient extends ApiClient {
       throw ApiException(
         data['message']?.toString() ?? 'Could not complete the request.',
         statusCode: response.statusCode,
+        code: data['code']?.toString(),
+        photoIndices: (data['photo_indices'] as List? ?? [])
+            .whereType<int>()
+            .toList(),
       );
     }
     return data;

@@ -107,6 +107,19 @@ class _RetryFollowUpApi extends _SiteApi {
 
 class _Api extends ApiClient {
   bool failSubmit = false;
+  ApiException? photoFailure;
+  ApiException? submitFailure;
+  int photoChecks = 0;
+  @override
+  Future<void> checkReportPhotos(
+    List<String> paths,
+    String submissionToken,
+  ) async {
+    photoChecks++;
+    expect(submissionToken, isNotEmpty);
+    if (photoFailure != null) throw photoFailure!;
+  }
+
   int submissions = 0;
   int previews = 0;
   Map<String, String>? sent;
@@ -217,6 +230,7 @@ class _Api extends ApiClient {
   }) async {
     submissions++;
     sent = fields;
+    if (submitFailure != null) throw submitFailure!;
     if (failSubmit) {
       throw const ApiException('Connection interrupted. Try again.');
     }
@@ -342,7 +356,8 @@ Future<void> tap(
           .evaluate()
           .any((element) => (element.widget as FilledButton).onPressed == null);
       final checking =
-          find.text('Checking photos...').evaluate().isNotEmpty &&
+          (find.text('Checking photos...').evaluate().isNotEmpty ||
+              find.text('Checking photos…').evaluate().isNotEmpty) &&
           find.byType(AlertDialog).evaluate().isEmpty;
       waiting =
           picking ||
@@ -422,6 +437,147 @@ Future<void> openLocation(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'previously submitted photos fail during selection and can be replaced without losing location',
+    (tester) async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const channel = MethodChannel('plugins.flutter.io/image_picker');
+      messenger.setMockMethodCallHandler(
+        channel,
+        (_) async =>
+            File('../../public/assets/img/guides/leaf-color.png').absolute.path,
+      );
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final api = _Api()
+        ..photoFailure = const ApiException(
+          'This photo was used in an earlier report. Choose a new photo from this visit.',
+          code: 'photo_already_submitted',
+          photoIndices: [0],
+        );
+      final drafts = _Drafts();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftOwner: 'old-photo',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        field('Search a barangay or landmark'),
+        'My coastal site',
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await tap(tester, find.text('Gallery').first, photoIO: true);
+      expect(
+        find.textContaining('Site overview: This photo was used'),
+        findsOneWidget,
+      );
+      expect(tester.widget<Stepper>(find.byType(Stepper)).currentStep, 0);
+      expect(api.submissions, 0);
+      expect(api.photoChecks, 1);
+      expect(drafts.saved.values.first['photo_path'], isNull);
+      api.photoFailure = null;
+      await tap(tester, find.text('Gallery').first, photoIO: true);
+      expect(find.textContaining('earlier report'), findsNothing);
+      expect(drafts.saved.values.first['photo_path'], isNotNull);
+      expect(
+        tester
+            .widget<TextField>(field('Search a barangay or landmark'))
+            .controller!
+            .text,
+        'My coastal site',
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'late photo conflict returns review to photos and preserves the full saved draft',
+    (tester) async {
+      final api = _Api()
+        ..submitFailure = const ApiException(
+          'This photo was used in an earlier report. Choose a new photo from this visit.',
+          code: 'photo_already_submitted',
+          photoIndices: [1],
+        );
+      final drafts = _Drafts(), scope = '${api.baseUrl}:late-photo';
+      drafts.saved[scope] = {
+        'flow_version': 2,
+        'step': 3,
+        'form': await api.reportForm(),
+        'sitio_name': 'Coast',
+        'guardian_remarks': 'Keep my notes',
+        'submission_token': 'same-attempt',
+        'observed_alive_count': '4',
+        'root_type': 'Prop',
+        'leaf_shape': 'Oval',
+        'bark_texture': 'Smooth',
+        'observations': {
+          'leaf_color': [1],
+          'bio_indicators': [2],
+          'negative_signs': [5],
+        },
+        'location': {
+          'latitude': '10.2833',
+          'longitude': '123.8833',
+          'location_source': 'manual',
+        },
+        'photo_path': File('../../public/assets/img/guides/leaf-color.png')
+            .absolute
+            .path,
+      };
+      drafts.saved['$scope:closeup'] = {
+        'photo_path': File('../../public/assets/img/guides/roots.png')
+            .absolute
+            .path,
+      };
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftOwner: 'late-photo',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<Stepper>(find.byType(Stepper)).currentStep, 3);
+      await tap(tester, find.text('These details are from this visit.'));
+      await tap(tester, find.text('Submit report'), photoIO: true);
+      await tap(
+        tester,
+        find.widgetWithText(FilledButton, 'Submit'),
+        photoIO: true,
+      );
+      expect(tester.widget<Stepper>(find.byType(Stepper)).currentStep, 0);
+      expect(
+        find.textContaining('Close-up: This photo was used'),
+        findsOneWidget,
+      );
+      expect(drafts.saved[scope]!['guardian_remarks'], 'Keep my notes');
+      expect(drafts.saved[scope]!['sitio_name'], 'Coast');
+      expect(drafts.saved[scope]!['root_type'], 'Prop');
+      expect((drafts.saved[scope]!['observations'] as Map)['leaf_color'], [1]);
+      expect(drafts.saved[scope]!['photo_path'], isNotNull);
+      expect(drafts.saved['$scope:closeup']!['photo_path'], isNotNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'a new searched site with an unknown count reaches review and submits without a saved site',
     (tester) async {
@@ -730,7 +886,9 @@ void main() {
       expect(find.byType(BottomSheet), findsNothing);
       await tap(tester, find.text('Gallery').last, photoIO: true);
       expect(
-        find.text('This photo is already added. Choose a different photo.'),
+        find.text(
+          'This photo is already added to this report. Choose a different photo.',
+        ),
         findsOneWidget,
       );
       await tap(

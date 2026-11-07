@@ -63,6 +63,11 @@ async function submission(user, changes = {}, photo) {
   const body = new FormData(); body.set('payload', JSON.stringify(fields)); body.set('photo', new Blob([bytes], {type: 'image/jpeg'}), 'field.jpg');
   return {body, bytes};
 }
+async function photoCheck(user, photos, token='new-visit', expected=200) {
+  const body=new FormData();body.set('payload',JSON.stringify({submission_token:token}));
+  photos.forEach((bytes,i)=>body.set(`photo_${i}`,new Blob([bytes],{type:'image/jpeg'}),`renamed-${i}.jpg`));
+  return request('check-report-photos.php',user,body,expected);
+}
 try {
   const guardian = await account(1, 'guardian'), other = await account(2, 'guardian'), expert = await account(3, 'expert'), admin = await account(4, 'system_admin');
   const config = await request('configuration.php'); assert.equal(config.backend, 'supabase'); assert.equal(config.barangays.length, 42046); assert.equal(new Set(config.barangays.map(b=>b.id)).size,42046); pass('public cloud configuration');
@@ -435,10 +440,31 @@ try {
   pass('imported badge certificates receive a stable unguessable QR code on download without changing the earned award');
   const photoUser=await account(910,'guardian'),secondUser=await account(911,'guardian');
   const versions=Object.fromEntries((await request('report-form.php',photoUser)).criteria.map(c=>[c.id,c.version]));
-  const views=await submission(photoUser,{photo_views:'2',checklist_versions:versions});
+  const views=await submission(photoUser,{photo_views:'2',checklist_versions:versions,submission_token:'original-photo-visit'});
+  const photoState=async()=>({images:images.size,...Object.fromEntries(await Promise.all(['reports','photo_claims','clusters','notifications','audit_logs'].map(async name=>[name,JSON.stringify((await db.collection(name).get()).docs.map(d=>d.data()))])))});
+  const beforePhotoCheck=await photoState();
+  await photoCheck(photoUser,[views.bytes,fixture]);
+  await photoCheck(photoUser,[views.bytes,fixture]);
+  await photoCheck(null,[views.bytes],'new-visit',401);
+  await photoCheck(admin,[views.bytes],'new-visit',403);
+  const inReportCopy=await photoCheck(photoUser,[views.bytes,views.bytes],'new-visit',422);
+  assert.equal(inReportCopy.code,'photo_duplicate');assert.deepEqual(inReportCopy.photo_indices,[1]);
+  await photoCheck(photoUser,[Buffer.from('not an image')],'new-visit',422);
+  assert.deepEqual(await photoState(),beforePhotoCheck);
+  pass('photo selection checks are authenticated, validate content, and never create reports, storage files or notifications');
   await request('submit-report.php',photoUser,views.body,422);
   views.body.set('closeup_photo',new Blob([fixture],{type:'image/jpeg'}),'closeup.jpg');
   const two=await request('submit-report.php',photoUser,views.body,201);
+  const afterSubmission=await photoState();
+  const reusedPhoto=await photoCheck(photoUser,[views.bytes,fixture],'different-visit',409);
+  assert.equal(reusedPhoto.code,'photo_already_submitted');assert.deepEqual(reusedPhoto.photo_indices,[0,1]);
+  assert.deepEqual(Object.keys(reusedPhoto).sort(),['code','message','ok','photo_indices']);
+  await photoCheck(secondUser,[fixture],'original-photo-visit',409);
+  await photoCheck(photoUser,[views.bytes,fixture],'original-photo-visit');
+  const photoRetry=await request('submit-report.php',photoUser,views.body,201);
+  assert.equal(photoRetry.report.report_id,two.report.report_id);
+  assert.deepEqual(await photoState(),afterSubmission);
+  pass('earlier report photos fail at selection; same-attempt retry creates one report and one submission alert');
   assert.equal(two.report.report_code,'Report #1');
   const twoDetail=(await request(`report.php?id=${two.report.report_id}`,photoUser)).report;
   assert.ok(twoDetail.closeup_photo_url);assert.equal(twoDetail.closeup_photo_path,undefined);
@@ -468,6 +494,7 @@ try {
   const reused=await submission(secondUser,{checklist_versions:versions,submission_token:'new-visit'},views.bytes);
   await request('submit-report.php',secondUser,reused.body,409);
   const densityCopy=Buffer.from(views.bytes);densityCopy[13]=1;densityCopy.writeUInt16BE(600,14);densityCopy.writeUInt16BE(300,16);
+  await photoCheck(secondUser,[densityCopy],'metadata-copy',409);
   const changedMetadata=await submission(secondUser,{checklist_versions:versions,submission_token:'metadata-copy'},densityCopy);
   await request('submit-report.php',secondUser,changedMetadata.body,409);
   const oldCloseup=await submission(secondUser,{checklist_versions:versions,submission_token:'closeup-as-extra'});

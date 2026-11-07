@@ -1,4 +1,4 @@
-import {cleanImage} from './images.js';
+import {photoError, reportPhotoHashes} from './report-photos.js';
 import {withPhotoCredits, photoCredits} from './reference-photos.js';
 import {followUpAvailable, followUpState, observationHistory} from './follow-up.js';
 import {usableSite,visibleSite} from './site-access.js';
@@ -223,8 +223,7 @@ export class Service extends Store {
     if (!Array.isArray(extraPhotos) || extraPhotos.length > 4 || extraPhotos.some(p=>!Buffer.isBuffer(p))) throw new AppError('Add up to four additional photos.');
     const photos = [photo,closeupPhoto,...extraPhotos].filter(Boolean);
     if (photos.reduce((n,p)=>n+p.length,0)>12*1024*1024) throw new AppError('Keep all photos together under 12 MB.');
-    const hashes=photos.map(p=>createHash('sha256').update(cleanImage(p).bytes).digest('hex'));
-    if (new Set(hashes).size!==hashes.length) throw new AppError('Each photo must be different. Remove the duplicate photo.');
+    const hashes=reportPhotoHashes(photos);
     const submissionToken=text(input.submission_token??'', 'submission reference', 100, false);
     const closeupHash=closeupPhoto ? createHash('sha256').update(closeupPhoto).digest('hex') : null;
     const hash = createHash('sha256').update(photo).digest('hex');
@@ -247,14 +246,14 @@ export class Service extends Store {
         const claim = await tx.get(claimRef);
         if (claim.exists) return this.repeatedSubmission(claim.data(), digest, submissionToken);
         const imageClaims=[];
-        for(const hash of hashes) {
+        for(const [index,hash] of hashes.entries()) {
           const ref=this.ref('photo_claims',`image_${hash}`);
-          if((await tx.get(ref)).exists) throw new AppError('This photo was already submitted. Use new photos from this visit.',409);
+          if((await tx.get(ref)).exists) throw photoError('photo_already_submitted',[index]);
           imageClaims.push(ref);
         }
-        for(const bytes of photos) {
+        for(const [index,bytes] of photos.entries()) {
           const rawHash=createHash('sha256').update(bytes).digest('hex');
-          if((await this.transactionRows(tx,'reports',[['photo_sha256','==',rawHash]])).length) throw new AppError('This photo was already submitted. Use new photos from this visit.',409);
+          if((await this.transactionRows(tx,'reports',[['photo_sha256','==',rawHash]])).length) throw photoError('photo_already_submitted',[index]);
         }
         // Serialize cluster selection and creation so simultaneous submissions
         // at the same location cannot create duplicate clusters.
@@ -313,7 +312,7 @@ export class Service extends Store {
     } catch (error) { if (!stored) await Promise.all([upload.path,closeupUpload?.path,...extraUploads.map(p=>p.path)].filter(Boolean).map(path=>this.bucket.file(path).delete().catch(()=>{}))); throw error; }
   }
   repeatedSubmission(claim, digest, token = '') {
-    if (claim.digest !== digest || (token && token !== claim.submission_token)) throw new AppError('This photo was already submitted. Use a new photo for a new visit.', 409);
+    if (claim.digest !== digest || (token && token !== claim.submission_token)) throw photoError('photo_already_submitted',[0]);
     return {report_id: claim.report_id, report_code: claim.report_code ?? `Report #${claim.report_id}`, status: claim.status, cluster_id: claim.cluster_id, new_badges: []};
   }
   logReview(tx, report, reviewer, action, previous) {

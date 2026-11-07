@@ -28,7 +28,7 @@ const bundle = await build({stdin: {contents: 'export * from "./report-form.js";
     b.onResolve({filter: /client\.js$/}, () => ({path: 'client', namespace: 'stub'}));
     b.onResolve({filter: /^leaflet$/}, () => ({path: 'map', namespace: 'stub'}));
     b.onLoad({filter: /.*/, namespace: 'stub'}, ({path}) => ({contents: path === 'client'
-      ? 'export const api = (...args) => globalThis.testApi(...args); export const login = (...args) => globalThis.testLogin(...args); export const friendly = e => e.message; export const apiUrl = p => p;'
+      ? 'export const api = (...args) => args[0]==="check-report-photos.php" ? (globalThis.testPhotoApi?.(...args) ?? Promise.resolve({ok:true})) : globalThis.testApi(...args); export const login = (...args) => globalThis.testLogin(...args); export const friendly = e => e.message; export const apiUrl = p => p;'
       : `const layer = (point) => ({point,events:{},on(k,f){this.events[k]=f;return this},getLatLng(){return {lat:this.point[0],lng:this.point[1]}},addTo(){return this},setLatLng(p){this.point=p;return this},setRadius(){return this},getBounds(){return []},remove(){}});
          export default {map(){return globalThis.testMap={events:{},distance(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1])*111000},getCenter(){return {lat:10.29,lng:123.89}},setView(point){this.center=point;return this},fitBounds(){return this},remove(){},on(k,f){this.events[k]=f;return this}}},
          tileLayer:layer,circle:layer,marker:p=>(globalThis.testMarker=layer(p)),divIcon:o=>o};` }));
@@ -98,6 +98,46 @@ test('compact photos reject renamed copies and a new site accepts an unknown cou
   await submit();assert.equal(ui.reportDraft.step,1);
   $('#previous').click();await tick();set('cluster_id','10');await tick();
   assert.equal($('#count-unknown').checked,true);await submit();assert.equal(ui.reportDraft.step,1);
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('earlier-report photos fail in Details immediately; offline checks can retry without losing the draft',async()=>{
+ globalThis.testApi=async()=>({criteria:[],clusters:[],location:{}});
+ let failure='used',calls=0;
+ globalThis.testPhotoApi=async(path,{body})=>{
+  calls++;assert.equal(path,'check-report-photos.php');assert.ok(JSON.parse(body.get('payload')).submission_token);
+  if(failure==='used')throw Object.assign(new Error('This photo was used in an earlier report. Choose a new photo from this visit.'),{code:'photo_already_submitted',photo_indices:[0]});
+  if(failure==='offline')throw new Error('Check your connection and try again.');
+  return {ok:true};
+ };
+ ui.reportDraft.reset();const dispose=await ui.reportWizard($('#page'),{},{id:'preflight-'+Date.now()});
+ const wait=async predicate=>{for(let i=0;i<100&&!predicate();i++)await new Promise(r=>setTimeout(r,10));assert.ok(predicate());};
+ const choose=()=>{const input=$('[name=photo]');Object.defineProperty(input,'files',{configurable:true,value:[new File(['new bytes'],'photo.jpg',{type:'image/jpeg'})]});change(input);};
+ try{
+  set('guardian_remarks','Keep my notes');choose();await wait(()=>$('.error').textContent.includes('earlier report'));
+  assert.equal(ui.reportDraft.step,0);assert.equal(ui.reportDraft.photo,null);assert.match($('.error').textContent,/Site overview:/);
+  failure='offline';choose();await wait(()=>$('.error').textContent.includes('connection'));assert.equal(ui.reportDraft.photo,null);
+  failure='';choose();await wait(()=>ui.reportDraft.photo);assert.equal($('.error').textContent,'');
+  assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep my notes');assert.equal($('#next').disabled,false);assert.equal(calls,3);
+ }finally{dispose();ui.reportDraft.reset();delete globalThis.testPhotoApi;}
+});
+
+test('a late photo conflict returns Review to Details while preserving every answer',async()=>{
+ globalThis.testApi=async path=>{
+  if(path==='report-form.php')return {criteria:[],clusters:[],location:{}};
+  if(path==='submit-report.php')throw Object.assign(new Error('This photo was used in an earlier report. Choose a new photo from this visit.'),{code:'photo_already_submitted',photo_indices:[1]});
+  return {};
+ };
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{owner:undefined,dirty:true,step:3,preview:{classification:{status:'Unknown'}},
+  photo:new File(['one'],'one.jpg',{type:'image/jpeg'}),closeupPhoto:new File(['two'],'two.jpg',{type:'image/jpeg'}),
+  fields:{sitio_name:'Coast',latitude:10.28,longitude:123.88,location_source:'manual',guardian_remarks:'Keep notes',root_type:'Prop roots'},observations:{roots:[11]}});
+ const dispose=await ui.reportWizard($('#page'),{});
+ try{
+  $('#field-confirm').click();const sending=submit();await tick();closeConfirm('confirm');await sending;
+  assert.equal(ui.reportDraft.step,0);assert.match($('.error').textContent,/Close-up:/);
+  assert.equal(ui.reportDraft.fields.sitio_name,'Coast');assert.equal(ui.reportDraft.fields.latitude,10.28);
+  assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep notes');assert.deepEqual(ui.reportDraft.observations,{roots:[11]});
+  assert.equal(ui.reportDraft.photo.name,'one.jpg');assert.equal(ui.reportDraft.closeupPhoto.name,'two.jpg');
  }finally{dispose();ui.reportDraft.reset();}
 });
 

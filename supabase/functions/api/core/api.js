@@ -20,6 +20,7 @@ import {manageSites} from './sites.js';
 import {manageSpecies} from './species.js';
 import {publicBarangay} from './barangays.js';
 import {userNotifications,notificationSummary} from './notifications.js';
+import {checkReportPhotos} from './report-photos.js';
 
 /** @param {{db:any, auth:any, bucket:any, projectId:string, mailer?:{send:Function}|null}} options */
 export function createApi({db, auth, bucket, projectId, mailer = null}) {
@@ -146,6 +147,13 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
         case 'dashboard.php': only('GET'); if (user.role === 'guardian') await service.badges(user); return send(res, await service.dashboard(user));
         case 'profile.php': return send(res, await service.profile(user, post ? req.body ?? {} : null));
         case 'report-form.php': only('GET'); return send(res, await service.form(user));
+        case 'check-report-photos.php': {
+          only('POST'); requireRole(user, 'guardian', 'expert');
+          const {input,files} = await readInput(req);
+          const entries = Object.entries(files).sort(([a],[b]) => a.localeCompare(b));
+          if (entries.some(([key],i) => key !== `photo_${i}`)) throw new AppError('Choose your photos again.');
+          return send(res, await checkReportPhotos(service,user,entries.map(([,bytes])=>bytes),input.submission_token ?? ''));
+        }
         case 'report-preview.php': only('POST'); return send(res, await service.preview(user, req.body ?? {}));
         case 'submit-report.php': {
           only('POST'); requireRole(user, 'guardian', 'expert');
@@ -318,7 +326,9 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
     const status = error instanceof AppError ? error.status : error.type === 'entity.too.large' ? 413 : error.type === 'entity.parse.failed' ? 400 : 500;
     // Never log submitted credentials, photos, bearer tokens, or raw bodies.
     if (status === 500) console.error('API failure', {route: path(req), code: error.code ?? error.name});
-    res.status(status).json({ok: false, message: error instanceof AppError ? error.message : status === 413 ? 'The upload is too large.' : status === 400 ? 'Invalid form data.' : 'Could not complete the request. Try again.'});
+    const photoDetails = error instanceof AppError && ['photo_duplicate','photo_already_submitted'].includes(error.code)
+      ? {code:error.code, photo_indices:error.photo_indices} : {};
+    res.status(status).json({ok: false, ...photoDetails, message: error instanceof AppError ? error.message : status === 413 ? 'The upload is too large.' : status === 400 ? 'Invalid form data.' : 'Could not complete the request. Try again.'});
   });
   return app;
 }

@@ -117,6 +117,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   bool _draftReady = false;
   bool _clearingDraft = false;
   bool _pickingPhoto = false;
+  bool _checkingPhotos = false;
   String? _lastDraft;
   final _draftStatus = ValueNotifier<String>('');
   String? get _draftScope => widget.draftOwner == null
@@ -515,12 +516,75 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     await _saveDraft();
   }
 
+  Future<void> _checkPhotos(List<String?> paths) async {
+    final selected = paths.whereType<String>().toList();
+    await validateReportPhotos(selected);
+    try {
+      await widget.api.checkReportPhotos(selected, _submissionToken);
+    } on ApiException catch (error) {
+      final slots = paths
+          .asMap()
+          .entries
+          .where((entry) => entry.value != null)
+          .map((entry) => entry.key)
+          .toList();
+      throw ApiException(
+        error.message,
+        statusCode: error.statusCode,
+        code: error.code,
+        photoIndices: error.photoIndices
+            .where((i) => i >= 0 && i < slots.length)
+            .map((i) => slots[i])
+            .toList(),
+      );
+    }
+  }
+
+  void _showPhotoFailure(Object error) {
+    if (!mounted) return;
+    setState(() {
+      _step = 0;
+      _error = error is ApiException
+          ? (isPhotoConflict(error)
+                ? photoConflictMessage(error)
+                : error.message)
+          : 'Could not check the photos. Try again.';
+    });
+    _draftEdited();
+    _scrollToQuestion();
+  }
+
+  Future<void> _continuePhotos() async {
+    if (_pickingPhoto || _checkingPhotos) return;
+    if (_photo == null || _closeupPhoto == null) {
+      _showPhotoFailure(
+        const ApiException('Add both photos before continuing.'),
+      );
+      return;
+    }
+    setState(() => _checkingPhotos = true);
+    try {
+      await _checkPhotos([
+        _photo!.path,
+        _closeupPhoto!.path,
+        ..._extraPhotos.map((p) => p.path),
+      ]);
+      if (mounted) _editStep(1);
+    } catch (error) {
+      _showPhotoFailure(error);
+    } finally {
+      if (mounted) setState(() => _checkingPhotos = false);
+    }
+  }
+
   Future<void> _pickPhoto(
     ImageSource source, {
     bool closeup = false,
     bool extra = false,
   }) async {
-    if (_pickingPhoto || (extra && _extraPhotos.length >= 4)) return;
+    if (_pickingPhoto || _checkingPhotos || (extra && _extraPhotos.length >= 4)) {
+      return;
+    }
     _pickingExtra = extra;
     _pickingCloseup = closeup;
     setState(() => _pickingPhoto = true);
@@ -534,15 +598,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         requestFullMetadata: false,
       );
       if (image != null && mounted) {
-        await validateReportPhotos([
-          if (extra || closeup) ...[
-            if (_photo != null) _photo!.path,
-          ] else
-            image.path,
-          if (extra || !closeup) ...[
-            if (_closeupPhoto != null) _closeupPhoto!.path,
-          ] else
-            image.path,
+        setState(() => _checkingPhotos = true);
+        await _checkPhotos([
+          extra || closeup ? _photo?.path : image.path,
+          extra || !closeup ? _closeupPhoto?.path : image.path,
           ..._extraPhotos.map((p) => p.path),
           if (extra) image.path,
         ]);
@@ -560,12 +619,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       }
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = error is ApiException ? error.message : 'Camera or photo access was not available. Check app permissions.',
-        );
+        _showPhotoFailure(error);
       }
     } finally {
-      if (mounted) setState(() => _pickingPhoto = false);
+      if (mounted) {
+        setState(() {
+          _pickingPhoto = false;
+          _checkingPhotos = false;
+        });
+      }
       await _saveDraft();
     }
   }
@@ -1295,6 +1357,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     bool? approved;
     setState(() => _confirmingSubmit = true);
     try {
+      if (_photo == null || _closeupPhoto == null) {
+        throw const ApiException('Add both photos before continuing.');
+      }
       await validateReportPhotos([
         if (_photo != null) _photo!.path,
         if (_closeupPhoto != null) _closeupPhoto!.path,
@@ -1322,11 +1387,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = error is ApiException
-              ? error.message
-              : 'Could not read a photo. Choose it again.',
-        );
+        _showPhotoFailure(error);
       }
       return;
     } finally {
@@ -1389,11 +1450,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       widget.onSubmitted();
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = error is ApiException
-              ? error.message
-              : 'Report submission failed.',
-        );
+        if (isPhotoConflict(error)) {
+          _showPhotoFailure(error);
+        } else {
+          setState(
+            () => _error = error is ApiException
+                ? error.message
+                : 'Report submission failed.',
+          );
+        }
       }
     } finally {
       _clearingDraft = false;
@@ -1608,7 +1673,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                   controller: _stepScroll,
                   type: StepperType.horizontal,
                   currentStep: _step,
-                  onStepTapped: _busy
+                  onStepTapped: _busy || _checkingPhotos || _pickingPhoto
                       ? null
                       : (value) {
                           if (value < _step || value <= 1) _editStep(value);
@@ -1836,32 +1901,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (_clusterId == null) ..._placeFields(showBarangay: false),
       const SizedBox(height: 16),
       FilledButton(
-        onPressed: _pickingPhoto
-            ? null
-            : () async {
-                if (_photo == null || _closeupPhoto == null) {
-                  setState(() => _error = 'Add both photos before continuing.');
-                  return;
-                }
-                try {
-                  await validateReportPhotos([
-                    _photo!.path,
-                    _closeupPhoto!.path,
-                    ..._extraPhotos.map((photo) => photo.path),
-                  ]);
-                } on ApiException catch (e) {
-                  if (mounted) setState(() => _error = e.message);
-                  return;
-                } catch (_) {
-                  if (mounted) {
-                    setState(() => _error = 'Choose your photos again.');
-                  }
-                  return;
-                }
-                if (!mounted) return;
-                _editStep(1);
-              },
-        child: const Text('Continue'),
+        onPressed: _pickingPhoto || _checkingPhotos ? null : _continuePhotos,
+        child: Text(_checkingPhotos ? 'Checking photos…' : 'Continue'),
       ),
     ],
   );

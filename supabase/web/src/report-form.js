@@ -1,6 +1,6 @@
 import {resolveAnimalChoices} from './observation-selection.js';
 import {traitLabels,traitHeadings} from './trait-labels.js';
-import {validateReportPhotos} from './report-photos.js';
+import {validateReportPhotos,checkReportPhotos,isPhotoConflict,photoConflictMessage} from './report-photos.js';
 import {capturePhoto} from './camera.js';
 import L from 'leaflet';
 import { api, apiUrl, friendly } from './client.js';
@@ -23,6 +23,7 @@ export async function reportWizard(node, query, user = null) {
   const extraStorage=Array.from({length:4},(_,i)=>new ReportDraftStore(scope==null?null:`${apiUrl('report-form.php')}:${scope}:extra${i}`));
   const clearPhotos=async()=>{await closeupStorage.clear();await Promise.all(extraStorage.map(s=>s.clear()));};
   let extraUrls=[],photoWork=Promise.resolve();
+  const checkPhotos=photos=>checkReportPhotos(photos,api,draft.fields.submission_token);
   let draftMessage = '', saveWarning = '';
   let closeupUrl=null;
   if (scope != null || !draft.dirty || draft.owner !== scope) {
@@ -176,6 +177,7 @@ export async function reportWizard(node, query, user = null) {
         await photoWork;
         if (draft.step === 0 || draft.step === 3) await validateReportPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos]);
         if (draft.step === 0 && (!draft.photo || !draft.closeupPhoto)) throw new Error('Add a site overview and a close-up photo from this visit.');
+        if (draft.step === 0) await checkPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos]);
         if (draft.step === 0 && $('#followup').checked && !draft.fields.parent_report_id) throw new Error('Choose the previous report for this follow-up.');
         if (draft.step === 1 && !['gps', 'manual'].includes(draft.fields.location_source)) throw new Error('Search for a place or tap the map to set your pin.');
         if (draft.step === 2) {
@@ -194,7 +196,14 @@ export async function reportWizard(node, query, user = null) {
         await flush();
         const result = await api('submit-report.php', {body});
         draft.reset(); await storage.clear();await clearPhotos(); toast(result.message); location.hash = `report/${result.report.report_id ?? result.report.id}`;
-      } catch (e) { if (node.isConnected) showError(error, friendly(e)); }
+      } catch (e) {
+        if (node.isConnected && !stopped) {
+          if (isPhotoConflict(e)) {
+            draft.step=0; await render();
+            showError(node.querySelector('#report-form .error'),photoConflictMessage(e));
+          } else showError(error, friendly(e));
+        }
+      }
       finally { button.disabled = false;handlingForm=false; }
     };
   }
@@ -226,15 +235,25 @@ export async function reportWizard(node, query, user = null) {
       if (photoUrl) URL.revokeObjectURL(photoUrl);
       if (draft.photo) { photoUrl = URL.createObjectURL(draft.photo); $('#photo-preview').src = photoUrl; $('#photo-preview').hidden = false; }
     }; showPhoto();
-    const changePhotos=work=>{photoWork=photoWork.then(work).catch(error=>{const message=node.querySelector('#report-form .error');if(!stopped&&draft.step===0&&message)showError(message,friendly(error));});return photoWork;};
+    photoGrid.insertAdjacentHTML('beforebegin','<p id="photo-status" role="status" hidden></p>');
+    const changePhotos=work=>{
+      photoWork=photoWork.then(async()=>{
+        if(stopped||draft.step!==0)return;
+        const status=node.querySelector('#photo-status'),next=node.querySelector('#next'),wasDisabled=next.disabled;
+        status.textContent='Checking photos…';status.hidden=false;next.disabled=true;
+        try{await work();}
+        catch(error){const message=node.querySelector('#report-form .error');if(!stopped&&draft.step===0&&message)showError(message,isPhotoConflict(error)?photoConflictMessage(error):friendly(error));}
+        finally{status.hidden=true;next.disabled=wasDisabled;}
+      });return photoWork;
+    };
     const addPhotos=files=>changePhotos(async()=>{
         if(draft.extraPhotos.length+files.length>4)throw new Error('Add up to four additional photos.');
-        await validateReportPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos,...files]);
+        await checkPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos,...files]);
         if(stopped||draft.step!==0)return;
         draft.extraPhotos.push(...files);changed();showPhoto();$('#report-form .error').textContent='';
     });
     const replacePhoto=(photo,closeup)=>changePhotos(async()=>{
-      await validateReportPhotos([closeup?draft.photo:photo,closeup?photo:draft.closeupPhoto,...draft.extraPhotos]);
+      await checkPhotos([closeup?draft.photo:photo,closeup?photo:draft.closeupPhoto,...draft.extraPhotos]);
       if(stopped||draft.step!==0)return;
       if(closeup)draft.closeupPhoto=photo;else draft.photo=photo;
       changed();showPhoto();$('#report-form .error').textContent='';

@@ -22,9 +22,25 @@ Future<void> validateReportPhotos(List<String> paths) async {
     final bytes = await file.readAsBytes();
     if (contents.any((previous) => listEquals(previous, bytes))) {
       throw const ApiException(
-        'This photo is already added. Choose a different photo.',
+        'This photo is already added to this report. Choose a different photo.',
+        code: 'photo_duplicate',
       );
     }
     contents.add(bytes);
   }
+}
+
+bool isPhotoConflict(Object error) =>
+    error is ApiException &&
+    ['photo_duplicate', 'photo_already_submitted'].contains(error.code);
+
+String photoConflictMessage(ApiException error) {
+  final names = error.photoIndices.map(
+    (i) => i == 0
+        ? 'Site overview'
+        : i == 1
+        ? 'Close-up'
+        : 'Additional photo ${i - 1}',
+  );
+  return '${names.isEmpty ? '' : '${names.join(', ')}: '}${error.message}';
 }

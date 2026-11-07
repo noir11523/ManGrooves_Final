@@ -33,7 +33,7 @@ export async function api(path,{body,query,anonymous=false,blob=false,token}={})
   if(blob&&response.ok) return response.blob();
   let data;
   try { data=await response.json(); } catch { throw new Error('Could not reach ManGROOVES. Check your connection.'); }
-  if(!response.ok||!data.ok) throw Object.assign(new Error(data.message??'Could not complete the request.'),{status:response.status});
+  if(!response.ok||!data.ok) throw Object.assign(new Error(data.message??'Could not complete the request.'),{status:response.status,code:data.code,photo_indices:data.photo_indices});
   return data;
 }
 export async function login(email,password) { const {data,error}=await client.auth.signInWithPassword({email,password}); if(error) throw error; return data; }
