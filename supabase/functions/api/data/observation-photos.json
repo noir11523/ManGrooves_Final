@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "photos": [
     {
       "path": "img/observations/v1-yellow-green-leaves.jpg",
@@ -102,21 +102,26 @@
       "changes": "Resized"
     },
     {
-      "path": "img/observations/v1-uprooted-roots.jpg",
-      "author": "YourWorldExplorer",
-      "source": "https://commons.wikimedia.org/wiki/File:Uprooted_Mangrove_-_panoramio.jpg",
-      "license": "CC BY 3.0",
-      "license_url": "https://creativecommons.org/licenses/by/3.0",
-      "note": "An uprooted mangrove; look for loose or damaged roots at your site.",
-      "original": "File:Uprooted Mangrove - panoramio.jpg",
+      "path": "img/observations/v1-leaf-dark-spots.jpg",
+      "author": "J.M.Garg",
+      "source": "https://commons.wikimedia.org/wiki/File:Lumnitzera_racemosa,_Black_Mangrove_W_IMG_6941.jpg",
+      "license": "CC BY-SA 4.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+      "note": "Visible holes and damaged edges on Lumnitzera leaves.",
+      "original": "File:Lumnitzera racemosa, Black Mangrove W IMG 6941.jpg",
       "original_size": [
-        1280,
-        960
+        500,
+        333
       ],
-      "crop": null,
+      "crop": [
+        0,
+        0,
+        320,
+        300
+      ],
       "crop_coordinate_size": null,
-      "sha256": "72d6c79c729d1da972be9b5c919cafb781700da7e54d29804dc207be2609cd10",
-      "changes": "Resized"
+      "sha256": "55debc2115e0599c1e39bc8b89dbc7ebcfa892ba27155d595c6fefcdbf07e0e0",
+      "changes": "Cropped and resized"
     },
     {
       "path": "img/observations/v1-root-erosion.jpg",
@@ -133,23 +138,6 @@
       "crop": null,
       "crop_coordinate_size": null,
       "sha256": "66c905f21d3fd8e2d59b179d66234028aed8b5c312127e1450b5d68a58501b69",
-      "changes": "Resized"
-    },
-    {
-      "path": "img/observations/v1-dead-mangrove.jpg",
-      "author": "YourWorldExplorer",
-      "source": "https://commons.wikimedia.org/wiki/File:Old_Dead_Mangrove_w-live_one_in_rear_-_panoramio.jpg",
-      "license": "CC BY 3.0",
-      "license_url": "https://creativecommons.org/licenses/by/3.0",
-      "note": "Dead mangrove example. A photo alone cannot confirm root rot.",
-      "original": "File:Old Dead Mangrove w-live one in rear - panoramio.jpg",
-      "original_size": [
-        1280,
-        960
-      ],
-      "crop": null,
-      "crop_coordinate_size": null,
-      "sha256": "c22aebaa239b6bd10ba29e85768800892dba60c19cbe53d6e747aa27c893af95",
       "changes": "Resized"
     },
     {
@@ -336,22 +324,6 @@
       "original": "https://drive.google.com/file/d/1YSiOl9hbPt7OYWRl_917d9ehG-jMDupY/view"
     },
     {
-      "path": "img/observations/v2-drive-rhizophora_apiculata-leaf_01.jpg",
-      "kind": "photograph",
-      "source": "https://drive.google.com/file/d/11j6Q97XjVxE9VVoNbvsb5JuxNTG657VI/view",
-      "source_folder": "rhizophora_apiculata",
-      "source_file": "leaf_01.jpeg",
-      "author": "Project-supplied Drive collection",
-      "license": "Project reference — original rights retained",
-      "license_url": null,
-      "changes": "Resized and JPEG optimized; full image retained",
-      "note": "",
-      "sha256": "93a617703b76598d9e5186279b2aac642ebfdf57c65e4e1c5fc6ddf7ccda9658",
-      "width": 1024,
-      "height": 850,
-      "original": "https://drive.google.com/file/d/11j6Q97XjVxE9VVoNbvsb5JuxNTG657VI/view"
-    },
-    {
       "path": "img/observations/v2-drive-shared_characteristics-prop_roots_01.jpg",
       "kind": "photograph",
       "source": "https://drive.google.com/file/d/1zTmE5GDOXDjVxdX3eWhCLX4pC45YSInH/view",
@@ -384,22 +356,6 @@
       "original": "https://drive.google.com/file/d/1iW_I7oEK9nBSl3oFbfqeT5wdZQCDsuye/view"
     },
     {
-      "path": "img/observations/v2-drive-rhizophora_apiculata-bark_01.jpg",
-      "kind": "photograph",
-      "source": "https://drive.google.com/file/d/1pJcqmxieII_Epe5U4NSfqydEPSJ8i_CR/view",
-      "source_folder": "rhizophora_apiculata",
-      "source_file": "bark_01.jpeg",
-      "author": "Project-supplied Drive collection",
-      "license": "Project reference — original rights retained",
-      "license_url": null,
-      "changes": "Resized and JPEG optimized; full image retained",
-      "note": "",
-      "sha256": "2bc6df74ffe595cb25c7e20f2b0de3561cd820bf6b43b68486f925481f982f2c",
-      "width": 768,
-      "height": 1024,
-      "original": "https://drive.google.com/file/d/1pJcqmxieII_Epe5U4NSfqydEPSJ8i_CR/view"
-    },
-    {
       "path": "img/observations/v2-drive-nypa_fruticans-roots_01.jpg",
       "kind": "photograph",
       "source": "https://drive.google.com/file/d/1sS3bYgYkj9OJaZk3bUil9YG76IOdukNB/view",
@@ -430,22 +386,6 @@
       "width": 640,
       "height": 480,
       "original": "https://drive.google.com/file/d/1x5Zcw-XD2plBsIAxmYpcB0-03qdjj96h/view"
-    },
-    {
-      "path": "img/observations/v2-drive-rhizophora_mucronata-leaf_01.jpg",
-      "kind": "photograph",
-      "source": "https://drive.google.com/file/d/1xrLw_6Yal4Uq5ci71-QKpJXw_kpF1yxz/view",
-      "source_folder": "rhizophora_mucronata",
-      "source_file": "leaf_01.jpg",
-      "author": "Project-supplied Drive collection",
-      "license": "Project reference — original rights retained",
-      "license_url": null,
-      "changes": "Resized and JPEG optimized; full image retained",
-      "note": "",
-      "sha256": "7494268ee88a34a5fbac1b9caf02b042cf42f19b89d249e6d90ea055df311b33",
-      "width": 768,
-      "height": 1024,
-      "original": "https://drive.google.com/file/d/1xrLw_6Yal4Uq5ci71-QKpJXw_kpF1yxz/view"
     },
     {
       "path": "img/observations/v2-drive-nypa_fruticans-leaf_01.jpg",
@@ -496,20 +436,168 @@
       "original": "https://drive.google.com/file/d/1VqcUvOBJUa1n4heBTY_fxfabZc7Wr0RG/view"
     },
     {
-      "path": "img/observations/v2-drive-avicennia_rumphiana-bark_01.jpg",
-      "kind": "photograph",
       "source": "https://drive.google.com/file/d/1pY1F3dtPsslRa1TrCO2baAfRJ5U2h9No/view",
+      "original": "https://drive.google.com/file/d/1pY1F3dtPsslRa1TrCO2baAfRJ5U2h9No/view",
       "source_folder": "avicennia_rumphiana",
       "source_file": "bark_01.jpg",
       "author": "Project-supplied Drive collection",
       "license": "Project reference — original rights retained",
       "license_url": null,
+      "changes": "Cropped to show the visible feature; JPEG optimized",
+      "note": "",
+      "path": "img/observations/v3-drive-intact-bark.jpg",
+      "kind": "photograph",
+      "original_size": [
+        768,
+        1024
+      ],
+      "crop": [
+        255,
+        310,
+        425,
+        730
+      ],
+      "sha256": "87d7cf101c87c3492757d31758632940cba5ebcdd53d0ee10294da7740bbfa9b",
+      "width": 170,
+      "height": 420
+    },
+    {
+      "source": "https://drive.google.com/file/d/1pJcqmxieII_Epe5U4NSfqydEPSJ8i_CR/view",
+      "original": "https://drive.google.com/file/d/1pJcqmxieII_Epe5U4NSfqydEPSJ8i_CR/view",
+      "source_folder": "rhizophora_apiculata",
+      "source_file": "bark_01.jpeg",
+      "author": "Project-supplied Drive collection",
+      "license": "Project reference — original rights retained",
+      "license_url": null,
+      "changes": "Cropped to show the visible feature; JPEG optimized",
+      "note": "",
+      "path": "img/observations/v3-drive-rough-bark.jpg",
+      "kind": "photograph",
+      "original_size": [
+        768,
+        1024
+      ],
+      "crop": [
+        265,
+        105,
+        445,
+        620
+      ],
+      "sha256": "bcde472244f2a8ed9219a9ef18925ce454c508b7419ad2df6156e1e593203588",
+      "width": 180,
+      "height": 515
+    },
+    {
+      "source": "https://drive.google.com/file/d/1F-C0sB_24L_n13pvZre0cg0Oc3nQOOUn/view",
+      "original": "https://drive.google.com/file/d/1F-C0sB_24L_n13pvZre0cg0Oc3nQOOUn/view",
+      "source_folder": "nypa_fruticans",
+      "source_file": "tree_01.JPG",
+      "author": "Project-supplied Drive collection",
+      "license": "Project reference — original rights retained",
+      "license_url": null,
       "changes": "Resized and JPEG optimized; full image retained",
       "note": "",
-      "sha256": "0ee243c0968b3a5329f5456980ad01ba6e571575c6d0c0c5ca4468d15fe8a051",
-      "width": 768,
-      "height": 1024,
-      "original": "https://drive.google.com/file/d/1pY1F3dtPsslRa1TrCO2baAfRJ5U2h9No/view"
+      "path": "img/observations/v3-drive-nypa-palm.jpg",
+      "kind": "photograph",
+      "original_size": [
+        395,
+        500
+      ],
+      "crop": null,
+      "sha256": "647893e25b20499027487e2c79993f9b3f017f3c022936c45a26a4605166d438",
+      "width": 395,
+      "height": 500
+    },
+    {
+      "source": "https://commons.wikimedia.org/wiki/File:Black-mangrove-bark_(13746385495).gif",
+      "original": "File:Black-mangrove-bark (13746385495).gif",
+      "author": "Homer Edward Price",
+      "license": "CC BY 2.0",
+      "license_url": "https://creativecommons.org/licenses/by/2.0/",
+      "changes": "Converted to JPEG; full image retained",
+      "note": "Fissured Avicennia germinans bark; illustrates visible texture rather than identifying the observed species or diagnosing damage.",
+      "path": "img/observations/v3-fissured-bark.jpg",
+      "kind": "photograph",
+      "original_size": [
+        600,
+        800
+      ],
+      "crop": null,
+      "sha256": "cc262d2efa06564ab55e9286cae504f5fd29c7ea38ba46e3f25bf4f343c2f162",
+      "width": 600,
+      "height": 800
+    },
+    {
+      "source": "https://link.springer.com/article/10.1007/s10750-017-3106-6#Fig2",
+      "original": "https://media.springernature.com/full/springer-static/image/art%3A10.1007%2Fs10750-017-3106-6/MediaObjects/10750_2017_3106_Fig2_HTML.gif",
+      "author": "Ian W. Hendy and Simon M. Cragg",
+      "license": "CC BY 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "changes": "Single photographic panel cropped from the original research figure; JPEG optimized",
+      "note": "Rhizophora stylosa prop roots; Hendy & Cragg (2017), Hydrobiologia, DOI:10.1007/s10750-017-3106-6. Figure 2A: superficial experimental removal of the outer root layer; illustrates some damage, not root looseness.",
+      "path": "img/observations/v3-superficial-root-damage.jpg",
+      "kind": "photograph",
+      "original_size": [
+        746,
+        640
+      ],
+      "crop": [
+        0,
+        0,
+        249,
+        400
+      ],
+      "sha256": "deed564a3fb24d4704aa6c27213440f1606d989e958e6d84a3d96153a38ee792",
+      "width": 249,
+      "height": 400
+    },
+    {
+      "source": "https://link.springer.com/article/10.1007/s10750-017-3106-6#Fig1",
+      "original": "https://media.springernature.com/full/springer-static/image/art%3A10.1007%2Fs10750-017-3106-6/MediaObjects/10750_2017_3106_Fig1_HTML.jpg",
+      "author": "Ian W. Hendy and Simon M. Cragg",
+      "license": "CC BY 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "changes": "Single photographic panel cropped from the original research figure; JPEG optimized",
+      "note": "Rhizophora stylosa prop roots; Hendy & Cragg (2017), Hydrobiologia, DOI:10.1007/s10750-017-3106-6. Figure 1B: damaged root with wood-borer tunnels; the discussion identifies such root tissue as necrotic or dead.",
+      "path": "img/observations/v3-dead-root-tissue.jpg",
+      "kind": "photograph",
+      "original_size": [
+        558,
+        415
+      ],
+      "crop": [
+        296,
+        0,
+        558,
+        415
+      ],
+      "sha256": "acdb02bd369c2bb495416df062fd6a5808784e31abccdd98042aeb0decb60770",
+      "width": 262,
+      "height": 415
+    },
+    {
+      "source": "https://peerj.com/articles/17460/#fig-9",
+      "original": "https://dfzljdn9uc3pi.cloudfront.net/2024/17460/1/fig-9-2x.jpg",
+      "author": "Chatchai Ngernsaengsaruay; Ngernsaengsaruay et al. (2024), PeerJ 12:e17460",
+      "license": "CC BY 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "changes": "Single photographic panel (Figure 9F) cropped; JPEG optimized",
+      "note": "Natural cork warts on the underside of a Rhizophora mucronata leaf. These are an identification trait, not evidence of pests or disease.",
+      "path": "img/observations/v3-rhizophora-leaf-dots.jpg",
+      "kind": "photograph",
+      "original_size": [
+        758,
+        1200
+      ],
+      "crop": [
+        378,
+        252,
+        663,
+        373
+      ],
+      "sha256": "1482e28f2518d2996903084e877e8662c361ca6fc051add0554f8cf24e880b70",
+      "width": 285,
+      "height": 121
     }
   ],
   "choices": {
@@ -521,7 +609,7 @@
     "leaf_condition": {
       "smooth_healthy": "img/observations/v2-drive-avicennia_marina-leaf_01.jpg",
       "waxy_curled": "img/observations/v2-drive-rhizophora_stylosa-leaf_01.jpg",
-      "damaged_spots": "img/observations/v2-drive-rhizophora_apiculata-leaf_01.jpg",
+      "damaged_spots": "img/observations/v1-leaf-dark-spots.jpg",
       "brittle_dry": "img/observations/v1-dry-leaves.jpg"
     },
     "pests": {
@@ -531,14 +619,14 @@
     },
     "roots": {
       "firm_intact": "img/observations/v2-drive-shared_characteristics-prop_roots_01.jpg",
-      "loose_damage": "img/observations/v1-uprooted-roots.jpg",
+      "loose_damage": "img/observations/v3-superficial-root-damage.jpg",
       "exposed_erosion": "img/observations/v1-root-erosion.jpg",
-      "dead_rotten": "img/observations/v1-dead-mangrove.jpg"
+      "dead_rotten": "img/observations/v3-dead-root-tissue.jpg"
     },
     "bark_trunk": {
-      "intact_smooth": "img/observations/v2-drive-avicennia_marina-bark_01.jpg",
+      "intact_smooth": "img/observations/v3-drive-intact-bark.jpg",
       "peeling_cracks": "img/observations/v2-drive-avicennia_marina-bark_01.jpg",
-      "deep_fissures": "img/observations/v2-drive-rhizophora_apiculata-bark_01.jpg",
+      "deep_fissures": "img/observations/v3-fissured-bark.jpg",
       "missing_damage": "img/observations/v1-broken-trunk.jpg"
     },
     "bio_indicators": {
@@ -563,17 +651,18 @@
     },
     "leaf_shape": {
       "Elliptic": "img/observations/v2-drive-avicennia_marina-leaf_01.jpg",
-      "Elliptic (with dark dots)": "img/observations/v2-drive-rhizophora_mucronata-leaf_01.jpg",
+      "Elliptic (with dark dots)": "img/observations/v3-rhizophora-leaf-dots.jpg",
       "Elliptic (waxy, leaves point upward)": "img/observations/v2-drive-rhizophora_stylosa-leaf_01.jpg",
       "Lanceolate (leaflets)": "img/observations/v2-drive-nypa_fruticans-leaf_01.jpg",
-      "Obovate": "img/observations/v2-drive-lumnitzera_racemosa-leaf_01.jpg"
+      "Obovate": "img/observations/v2-drive-lumnitzera_racemosa-leaf_01.jpg",
+      "Oval nga dahon (Elliptic)": "img/observations/v2-drive-avicennia_marina-leaf_01.jpg"
     },
     "bark_texture": {
       "Smooth with thin flakes, greenish brown": "img/observations/v2-drive-avicennia_marina-bark_01.jpg",
       "Slightly rough, brown": "img/observations/v2-drive-lumnitzera_racemosa-bark_01.jpg",
-      "Rough, fibrous, brown with deep fissures": "img/observations/v2-drive-rhizophora_apiculata-bark_01.jpg",
-      "N/A (palm)": "img/observations/v2-drive-nypa_fruticans-roots_01.jpg",
-      "Rough, grayish to brown": "img/observations/v2-drive-avicennia_rumphiana-bark_01.jpg"
+      "Rough, fibrous, brown with deep fissures": "img/observations/v3-fissured-bark.jpg",
+      "N/A (palm)": "img/observations/v3-drive-nypa-palm.jpg",
+      "Rough, grayish to brown": "img/observations/v3-drive-rough-bark.jpg"
     }
   },
   "labels": {
@@ -647,7 +736,95 @@
     "img/observations/v1-obovate-leaves.jpg",
     "img/observations/v1-brown-bark.jpg",
     "img/observations/v1-ai-nypa-rhizome.jpg",
-    "img/observations/v1-ai-elliptic-dots.jpg"
+    "img/observations/v1-ai-elliptic-dots.jpg",
+    "img/observations/v2-drive-avicennia_marina-leaf_01.jpg",
+    "img/observations/v2-drive-rhizophora_stylosa-leaf_01.jpg",
+    "img/observations/v2-drive-rhizophora_apiculata-leaf_01.jpg",
+    "img/observations/v2-drive-shared_characteristics-prop_roots_01.jpg",
+    "img/observations/v2-drive-avicennia_marina-bark_01.jpg",
+    "img/observations/v2-drive-rhizophora_apiculata-bark_01.jpg",
+    "img/observations/v2-drive-nypa_fruticans-roots_01.jpg",
+    "img/observations/v2-drive-shared_characteristics-pencil_pneumatophores_01.jpg",
+    "img/observations/v2-drive-rhizophora_mucronata-leaf_01.jpg",
+    "img/observations/v2-drive-nypa_fruticans-leaf_01.jpg",
+    "img/observations/v2-drive-lumnitzera_racemosa-leaf_01.jpg",
+    "img/observations/v2-drive-lumnitzera_racemosa-bark_01.jpg",
+    "img/observations/v2-drive-avicennia_rumphiana-bark_01.jpg"
   ],
-  "drive_folder": "https://drive.google.com/drive/folders/106kHhvzyzrS1SWEBqPvX0eLe0bpVPuVj"
+  "drive_folder": "https://drive.google.com/drive/folders/106kHhvzyzrS1SWEBqPvX0eLe0bpVPuVj",
+  "label_aliases": {
+    "leaf_color": {},
+    "leaf_condition": {
+      "smooth_healthy": [
+        "Smooth & Healthy"
+      ],
+      "waxy_curled": [
+        "Waxy / Curled / Pointing Up"
+      ],
+      "damaged_spots": [
+        "Damaged / Holes / Dark Spots"
+      ],
+      "brittle_dry": [
+        "Brittle / Dry"
+      ]
+    },
+    "pests": {
+      "none_visible": [
+        "None Visible"
+      ],
+      "few_holes": [
+        "Few Holes / Bites"
+      ],
+      "many_holes": [
+        "Many Holes / Webbing"
+      ]
+    },
+    "roots": {
+      "firm_intact": [
+        "Firm & Intact"
+      ],
+      "loose_damage": [
+        "Loose / Some Damage"
+      ],
+      "exposed_erosion": [
+        "Exposed / Erosion Visible"
+      ],
+      "dead_rotten": [
+        "Dead / Rotten"
+      ]
+    },
+    "bark_trunk": {
+      "intact_smooth": [
+        "Intact / Smooth"
+      ],
+      "peeling_cracks": [
+        "Slightly Peeling / Cracks"
+      ],
+      "deep_fissures": [
+        "Deep Cracks / Fissures"
+      ],
+      "missing_damage": [
+        "Missing / Large Damage"
+      ]
+    },
+    "bio_indicators": {
+      "birds": [
+        "Birds (Herons / Egrets)"
+      ],
+      "small_fish": [
+        "Small Fish (Juveniles)"
+      ],
+      "snails": [
+        "Snails / Shells"
+      ],
+      "pollinators": [
+        "Butterflies / Bees"
+      ]
+    },
+    "negative_signs": {
+      "trash": [
+        "Trash / Plastic Visible"
+      ]
+    }
+  }
 }

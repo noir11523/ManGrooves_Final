@@ -212,7 +212,7 @@
           "label": "Damaged / Holes / Dark Spots",
           "points": 0,
           "display_order": 3,
-          "image_path": "img/observations/v2-drive-rhizophora_apiculata-leaf_01.jpg"
+          "image_path": "img/observations/v1-leaf-dark-spots.jpg"
         },
         {
           "id": 7,
@@ -326,7 +326,7 @@
           "label": "Loose / Some Damage",
           "points": 1,
           "display_order": 2,
-          "image_path": "img/observations/v1-uprooted-roots.jpg"
+          "image_path": "img/observations/v3-superficial-root-damage.jpg"
         },
         {
           "id": 13,
@@ -344,7 +344,7 @@
           "label": "Dead / Rotten",
           "points": 0,
           "display_order": 4,
-          "image_path": "img/observations/v1-dead-mangrove.jpg"
+          "image_path": "img/observations/v3-dead-root-tissue.jpg"
         },
         {
           "id": 33,
@@ -383,7 +383,7 @@
           "label": "Intact / Smooth",
           "points": 2,
           "display_order": 1,
-          "image_path": "img/observations/v2-drive-avicennia_marina-bark_01.jpg"
+          "image_path": "img/observations/v3-drive-intact-bark.jpg"
         },
         {
           "id": 16,
@@ -401,7 +401,7 @@
           "label": "Deep Cracks / Fissures",
           "points": 0,
           "display_order": 3,
-          "image_path": "img/observations/v2-drive-rhizophora_apiculata-bark_01.jpg"
+          "image_path": "img/observations/v3-fissured-bark.jpg"
         },
         {
           "id": 18,

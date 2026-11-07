@@ -54,3 +54,45 @@ test('reference JPEG support preserves bucket visibility, limits and existing fo
  await allowReferenceJpegs(client);await allowReferenceJpegs(client);
  assert.deepEqual(writes,[{name:'mangrooves-reference',settings:{public:true,fileSizeLimit:5242880,allowedMimeTypes:['image/png','image/svg+xml','image/jpeg']}}]);
 });
+
+test('reviewed replacements upgrade existing defaults without changing checklist meaning',()=>{
+ const criteria=structuredClone(reference.criteria);
+ const roots=criteria.find(c=>c.code==='roots');
+ roots.options.find(o=>o.code==='loose_damage').image_path='img/observations/v1-uprooted-roots.jpg';
+ const bark=criteria.find(c=>c.code==='bark_trunk');
+ bark.options.find(o=>o.code==='intact_smooth').image_path='img/observations/v2-drive-avicennia_marina-bark_01.jpg';
+ const traits={leaf_shape:{'Elliptic (with dark dots)':'img/observations/v2-drive-rhizophora_mucronata-leaf_01.jpg'}};
+ const species=[...reference.species,{leaf_shape:'Oval nga dahon (Elliptic)'}];
+ const plan=planReferencePhotos(criteria,traits,species);
+ assert.equal(plan.criteria.find(c=>c.code==='roots').options.find(o=>o.code==='loose_damage').image_path,catalog.choices.roots.loose_damage);
+ assert.equal(plan.criteria.find(c=>c.code==='bark_trunk').options.find(o=>o.code==='intact_smooth').image_path,catalog.choices.bark_trunk.intact_smooth);
+ assert.equal(plan.trait_images.leaf_shape['Elliptic (with dark dots)'],catalog.traits.leaf_shape['Elliptic (with dark dots)']);
+ assert.equal(plan.trait_images.leaf_shape['Oval nga dahon (Elliptic)'],catalog.traits.leaf_shape.Elliptic);
+ for(const next of plan.criteria){
+  const previous=criteria.find(c=>c.id===next.id);
+  assert.match(next.version,/^[0-9a-f-]{36}$/);
+  assert.notEqual(next.version,previous.version);
+  assert.deepEqual(next.options.map(({image_path,...o})=>o),previous.options.map(({image_path,...o})=>o));
+ }
+ const installed=criteria.map(c=>plan.criteria.find(n=>n.id===c.id)??c);
+ assert.deepEqual(planReferencePhotos(installed,plan.trait_images,species),{criteria:[],trait_images:plan.trait_images});
+});
+
+test('photo installation keeps valid revision tokens for seeded, edited and legacy categories',()=>{
+ const criteria=structuredClone(reference.criteria);
+ for(let i=0;i<criteria.length;i++)criteria[i].version=i===0?null:i===1?'reference-v1':'edited-revision';
+ criteria.find(c=>c.code==='roots').options.find(o=>o.code==='loose_damage').image_path='img/observations/v1-uprooted-roots.jpg';
+ const next=planReferencePhotos(criteria,{},reference.species);
+ for(const c of next.criteria)assert.match(c.version,/^[0-9a-f-]{36}$/);
+ assert.ok(next.criteria.some(c=>c.code==='leaf_color'));
+ assert.ok(next.criteria.some(c=>c.code==='roots'));
+});
+
+test('reference photographs distinguish visible damage and natural identifying features',()=>{
+ assert.notEqual(catalog.choices.bark_trunk.intact_smooth,catalog.choices.bark_trunk.peeling_cracks);
+ assert.notEqual(catalog.traits.bark_texture['Rough, grayish to brown'],'img/observations/v2-drive-avicennia_rumphiana-bark_01.jpg');
+ assert.notEqual(catalog.choices.leaf_condition.damaged_spots,catalog.traits.leaf_shape['Elliptic (with dark dots)']);
+ assert.match(catalog.photos.find(p=>p.path===catalog.traits.leaf_shape['Elliptic (with dark dots)']).note,/not evidence of pests or disease/);
+ for(const p of catalog.photos)assert.notEqual(p.kind,'generated');
+ for(const key of ['loose_damage','dead_rotten'])assert.match(catalog.photos.find(p=>p.path===catalog.choices.roots[key]).source,/10\.1007/);
+});

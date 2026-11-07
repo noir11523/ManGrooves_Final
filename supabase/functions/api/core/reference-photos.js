@@ -1,6 +1,7 @@
 // Credits are keyed by immutable asset path. Replacing an admin photo cannot
 // accidentally retain the attribution of the previous photograph.
 import catalog from '../data/observation-photos.json' with {type:'json'};
+import {randomUUID} from 'node:crypto';
 
 export const photoCredits = Object.fromEntries(catalog.photos.map(photo => [photo.path, {
   kind: photo.kind ?? 'photograph',
@@ -23,14 +24,15 @@ export function planReferencePhotos(criteria, traitImages, species) {
   const defaults=new Set(catalog.replaceable_paths??[]);
   const updates=[];
   for(const criterion of criteria) {
-    let changed=false;
+    let changed=!criterion.version;
     const options=criterion.options.map(option=>{
       const path=catalog.choices[criterion.code]?.[option.code];
       const expected=catalog.labels?.[criterion.code]?.[option.code];
-      if(!path || option.image_path===path || (option.image_path&&!defaults.has(option.image_path)) || (expected && option.label!==expected)) return option;
+      const accepted=[expected,...(catalog.label_aliases?.[criterion.code]?.[option.code]??[])];
+      if(!path || option.image_path===path || (option.image_path&&!defaults.has(option.image_path)) || (expected && !accepted.includes(option.label))) return option;
       changed=true;return {...option,image_path:path};
     });
-    if(changed)updates.push({...criterion,options,version:Number(criterion.version||1)+1});
+    if(changed)updates.push({...criterion,options,version:randomUUID()});
   }
   const images=structuredClone(traitImages??{});
   for(const [key,values] of Object.entries(catalog.traits)) {
