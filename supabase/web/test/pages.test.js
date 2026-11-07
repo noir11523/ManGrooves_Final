@@ -1,10 +1,11 @@
-import test from 'node:test';
+import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
 import {build} from 'esbuild';
 import {JSDOM} from 'jsdom';
 import {analyticsForUser} from '../../functions/api/core/monitoring-analytics.js';
 const dom=new JSDOM('<div id="app"></div><div id="toast" hidden></div>',{url:'https://example.test/#badges'});
+after(()=>{dom.window.dispatchEvent(new dom.window.Event('pagehide'));dom.window.close();});
 dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
 for(const key of ['window','document','location','history','navigator','FormData','File','Event'])Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
 const bundle=await build({entryPoints:[fileURLToPath(new URL('../src/app.js',import.meta.url))],bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'adapters',setup(b){

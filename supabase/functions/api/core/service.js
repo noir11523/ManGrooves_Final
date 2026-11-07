@@ -11,6 +11,7 @@ import {startRegistration} from './registration.js';
 import {profileDetails} from './profile-fields.js';
 import {philippineBarangays,publicBarangay} from './barangays.js';
 import {reviewFeedback} from './review-feedback.js';
+import {queueNotification,followUpKey} from './notifications.js';
 import {reportBarangay,withReportGeography,withinPhilippineSearchBounds} from './report-geography.js';
 
 export class Service extends Store {
@@ -163,9 +164,10 @@ export class Service extends Store {
   audit(tx, user, action, entity_type, entity_id, details = {}) {
     tx.create(this.ref('audit_logs', randomUUID()), {user_id: user.id, actor_name: user.full_name, action, entity_type, entity_id, details, created_at: now()});
   }
-  notification(tx, id, user_id, type, title, message, report_id = null) {
+  notification(tx, id, user_id, type, title, message, report_id = null, extra = {}) {
     tx.create(this.ref('notifications', id), {id, user_id, type, title, message, report_id,
-      link: report_id ? `reports.php?id=${report_id}` : 'notifications.php', created_at: now(), read_at: null});
+      link: report_id ? `reports.php?id=${report_id}` : type==='badge_earned'?'badges.php':extra.application_uid?`admin/expert-applications.php?uid=${encodeURIComponent(extra.application_uid)}`:'notifications.php',
+      ...extra,created_at: now(), read_at: null});
   }
   async saveChecklist(user, input, files) {
     requireRole(user, 'system_admin');
@@ -359,6 +361,7 @@ export class Service extends Store {
         rarity_level: rarity, needs_attention: action !== 'reject' && ['Stressed','At Risk','Unknown'].includes(health) ? 1 : 0,
         species_local_name:action==='reject'?null:species?.local_name??null, species_common_name:action==='reject'?null:species?.common_name??null,
         needs_follow_up:action!=='reject'&&needsFollowUp, follow_up_note:null,
+        follow_up_requested_at:action!=='reject'&&needsFollowUp?now():null,
         expert_id: user.id, expert_feedback: comment || null, verified_at: now(), corrected: action === 'correct',
         next_followup_date: null};
       tx.set(ref, report);
@@ -374,8 +377,12 @@ export class Service extends Store {
         if (publishSite) this.audit(tx,user,'site.approve','cluster',cluster.id,{name:cluster.name,report_id:id,source:'report_verification'});
       }
       this.logReview(tx, report, user, action, previous);
-      this.notification(tx, noticeId, report.user_id, `report_${report.status}`, action === 'reject' ? 'Report needs revision' : 'Report verified',
-        comment || `Your report ${report.report_code} was verified.`, id);
+      const owner=(await this.transactionRows(tx,'users',[['id','==',report.user_id]])).find(u=>u.status==='active');
+      if(owner){
+        this.notification(tx, noticeId, report.user_id, `report_${report.status}`, action === 'reject' ? 'Report declined' : needsFollowUp?'Report verified · Follow-up requested':action==='correct'?'Report verified with corrections':'Report verified',
+          comment || (action==='reject'?'Your report was declined.':`Your ${report.report_code} was verified.`), id);
+        if(report.needs_follow_up){const claim=this.ref('notification_keys',`${owner.id}_${followUpKey(report)}`);await tx.get(claim);tx.set(claim,{id:noticeId});}
+      }
       this.audit(tx, user, `report.${action}`, 'report', id, {previous_status: 'pending', status: report.status});
       return {report_id: id, user_id: report.user_id, status: report.status, cluster_id: report.cluster_id, new_badges: []};
     });
@@ -384,6 +391,7 @@ export class Service extends Store {
     requireRole(user,'expert','system_admin');
     const id=integer(input.report_id,'report');
     const needed=input.needs_follow_up===true||String(input.needs_follow_up)==='1';
+    const [noticeId]=await this.ids();
     return this.db.runTransaction(async tx=>{
       requireRole((await tx.get(this.ref('users',user.uid))).data(),'expert','system_admin');
       const ref=this.ref('reports',id), report=(await tx.get(ref)).data();
@@ -391,8 +399,15 @@ export class Service extends Store {
       if(report.user_id===user.id) throw new AppError('Ask another expert to review your own report.',403);
       if(report.status!=='verified') throw new AppError('Verify this observation before requesting a follow-up.',409);
       const feedback = text(Object.hasOwn(input,'expert_feedback') ? input.expert_feedback : Object.hasOwn(input,'follow_up_note') ? reviewFeedback({...report,follow_up_note:input.follow_up_note}) : reviewFeedback(report), 'feedback',5000,false);
-      const update={needs_follow_up:needed, expert_feedback:feedback||null, follow_up_note:null};
+      const changedRequest=needed!==!!report.needs_follow_up,changedFeedback=feedback!==reviewFeedback(report);
+      const requested=needed&&!report.needs_follow_up?now():report.follow_up_requested_at??null;
+      const update={needs_follow_up:needed, expert_feedback:feedback||null, follow_up_note:null,follow_up_requested_at:requested};
       tx.update(ref,update);
+      const owner=(await this.transactionRows(tx,'users',[['id','==',report.user_id]])).find(u=>u.status==='active');
+      if(owner&&(changedRequest||changedFeedback)){
+        if(needed&&changedRequest)await queueNotification(this,tx,noticeId,owner.id,followUpKey({...report,...update}),'followup_requested','Follow-up requested',feedback||'Please submit another observation for this site.',id);
+        else this.notification(tx,noticeId,owner.id,changedRequest?'followup_cancelled':'feedback_updated',changedRequest?'Follow-up no longer needed':'Feedback updated',feedback||(changedRequest?'You no longer need to submit this follow-up.':'Your report has new feedback.'),id);
+      }
       this.audit(tx,user,'report.follow_up_updated','report',id,{before:{needs_follow_up:!!report.needs_follow_up,expert_feedback:report.expert_feedback??null,follow_up_note:report.follow_up_note??null},after:update});
       return {report_id:id,...update};
     });

@@ -1,16 +1,30 @@
 import 'package:flutter/material.dart';
 
+import 'dart:async';
+
 import '../core/api_client.dart';
 import 'report_detail_screen.dart';
+import 'cloud_admin_screen.dart';
+import 'badges_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key, required this.api});
+  const NotificationsScreen({
+    super.key,
+    required this.api,
+    this.user,
+    this.onChanged,
+  });
   final ApiClient api;
+  final Map<String, dynamic>? user;
+  final Future<void> Function()? onChanged;
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
+class _NotificationsScreenState extends State<NotificationsScreen>
+    with WidgetsBindingObserver {
+  Timer? _timer;
+  bool _fetching = false, _opening = false;
   List<Map<String, dynamic>> _items = [];
   int _page = 1, _pages = 1, _unread = 0;
   bool _loading = true;
@@ -18,10 +32,37 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _timer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (ModalRoute.of(context)?.isCurrent == true) _load(page: _page);
+    });
     _load();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      _load(page: _page);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   Future<void> _load({int page = 1}) async {
+    if (_fetching ||
+        !mounted ||
+        (WidgetsBinding.instance.lifecycleState != null &&
+            WidgetsBinding.instance.lifecycleState !=
+                AppLifecycleState.resumed)) {
+      return;
+    }
+    _fetching = true;
     try {
       final result = await widget.api.notifications(page: page);
       if (!mounted) return;
@@ -43,24 +84,56 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         );
       }
     } finally {
+      _fetching = false;
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _open(Map<String, dynamic> item) async {
+    if (_opening) return;
+    _opening = true;
     try {
-      await widget.api.markNotificationRead(item['id'] as int);
+      final result = await widget.api.markNotificationRead(item['id'] as int);
       if (!mounted) return;
-      final link = Uri.tryParse(item['link']?.toString() ?? '');
+      final current = result['notification'] is Map
+          ? Map<String, dynamic>.from(result['notification'] as Map)
+          : item;
+      final target = current['target'] as Map?;
+      final link = Uri.tryParse(current['link']?.toString() ?? '');
       final id = int.tryParse(
-        link?.queryParameters['id'] ?? link?.queryParameters['parent'] ?? '',
+        '${target?['id'] ?? current['report_id'] ?? link?.queryParameters['id'] ?? link?.queryParameters['parent'] ?? ''}',
       );
-      if (id != null &&
-          [
-            'admin/report.php',
-            'reports.php',
-            'submit-report.php',
-          ].contains(link?.path)) {
+      if (target?['page'] == 'expert-applications' &&
+          widget.user?['role'] == 'system_admin' &&
+          RegExp(r'^[\w-]{1,80}$').hasMatch('${target?['uid']}')) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => CloudAdminScreen(
+              api: widget.api,
+              applicationUid: '${target?['uid']}',
+            ),
+          ),
+        );
+      } else if (target?['page'] == 'badges' &&
+          ['guardian', 'expert'].contains(widget.user?['role'])) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('My badges')),
+              body: BadgesScreen(api: widget.api),
+            ),
+          ),
+        );
+      } else if (id != null &&
+          id > 0 &&
+          (target?['page'] == 'report' ||
+              !current.containsKey('target') &&
+                  [
+                    'admin/report.php',
+                    'reports.php',
+                    'report-detail.php',
+                    'submit-report.php',
+                  ].contains(link?.path))) {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => ReportDetailScreen(api: widget.api, reportId: id),
@@ -68,6 +141,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         );
       }
       await _load(page: _page);
+      await widget.onChanged?.call();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -80,6 +154,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
         );
       }
+    } finally {
+      _opening = false;
     }
   }
 
@@ -94,6 +170,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               try {
                 await widget.api.markAllNotificationsRead();
                 await _load(page: _page);
+                await widget.onChanged?.call();
               } catch (_) {
                 if (mounted) {
                   setState(
@@ -125,7 +202,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   const Padding(
                     padding: EdgeInsets.all(24),
                     child: Text(
-                      'No notifications yet. Report activity and reminders will appear here.',
+                      'No notifications yet. Applications, report updates, feedback, and badges will appear here.',
                     ),
                   ),
                 for (final item in _items)

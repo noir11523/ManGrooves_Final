@@ -241,6 +241,7 @@ class ApiClient {
       });
   Future<Map<String, dynamic>> notifications({int page = 1}) =>
       _get('notifications.php', query: {'page': '$page'});
+  Future<Map<String, dynamic>> notificationSummary() => notifications();
   Future<Map<String, dynamic>> markNotificationRead(int id) =>
       _postJson('notifications.php', {'action': 'mark_read', 'id': id});
   Future<Map<String, dynamic>> markAllNotificationsRead() =>

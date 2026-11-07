@@ -1,5 +1,7 @@
 import 'report_history_screen.dart';
 
+import 'dart:async';
+
 import 'management_screen.dart';
 import 'checklist_screen.dart';
 import 'cloud_admin_screen.dart';
@@ -35,7 +37,10 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
+  Timer? _notificationTimer;
+  int _unreadNotifications = 0;
+  bool _checkingNotifications = false;
   int _index = 0;
   int _reportsVersion = 0;
   bool _mapVisited = false;
@@ -51,6 +56,46 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _user = Map<String, dynamic>.from(widget.user);
+    WidgetsBinding.instance.addObserver(this);
+    _notificationTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => _refreshNotifications(),
+    );
+    _refreshNotifications();
+  }
+
+  Future<void> _refreshNotifications() async {
+    if (!mounted ||
+        _checkingNotifications ||
+        (WidgetsBinding.instance.lifecycleState != null &&
+            WidgetsBinding.instance.lifecycleState !=
+                AppLifecycleState.resumed)) {
+      return;
+    }
+    _checkingNotifications = true;
+    try {
+      final result = await widget.api.notificationSummary();
+      final unread = (result['unread'] as num?)?.toInt() ?? 0;
+      if (mounted && unread != _unreadNotifications) {
+        setState(() => _unreadNotifications = unread);
+      }
+    } catch (_) {
+      // Keep the last known count while offline; resume retries.
+    } finally {
+      _checkingNotifications = false;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshNotifications();
+  }
+
+  @override
+  void dispose() {
+    _notificationTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   void _startFollowUp(Map<String, dynamic> reminder) {
@@ -296,13 +341,28 @@ class _HomeShellState extends State<HomeShell> {
               onPressed: _openMenu,
             ),
             IconButton(
-              tooltip: 'Notifications',
-              icon: const Icon(Icons.notifications_outlined),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => NotificationsScreen(api: widget.api),
+              tooltip: _unreadNotifications > 0
+                  ? 'Notifications, $_unreadNotifications unread'
+                  : 'Notifications',
+              icon: Badge(
+                isLabelVisible: _unreadNotifications > 0,
+                label: Text(
+                  _unreadNotifications > 99 ? '99+' : '$_unreadNotifications',
                 ),
+                child: const Icon(Icons.notifications_outlined),
               ),
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => NotificationsScreen(
+                      api: widget.api,
+                      user: _user,
+                      onChanged: _refreshNotifications,
+                    ),
+                  ),
+                );
+                await _refreshNotifications();
+              },
             ),
           ],
           title: Row(

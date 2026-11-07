@@ -97,5 +97,8 @@ $flashes = consume_flashes();
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 <script src="<?= e(asset('js/app.js') . '?v=' . rawurlencode($jsVersion)) ?>"></script>
 <?= isset($pageScripts) ? (string) $pageScripts : '' ?>
+<?php if (defined('MANGROOVES_CLOUD') && $authUser && !$isPublicLayout): ?>
+<script type="module" src="<?= e(asset('cloud/notifications.js') . '?v=' . substr(hash_file('sha256', APP_ROOT . '/assets/cloud/notifications.js'), 0, 12)) ?>"></script>
+<?php endif; ?>
 </body>
 </html>

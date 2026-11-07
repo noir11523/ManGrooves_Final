@@ -156,6 +156,18 @@ test('signed-in PHP dashboard and secure session survive a separate HTTP request
   const {res,text}=await b.request('/dashboard.php');assert.equal(res.status,200);assert.match(text,/<h1[^>]*>Dashboard/);assert.match(text,/Report #10/);assert.match(text,/2 unread/);
   const token=await b.request('/cloud-session.php',{action:'token'});assert.equal(token.data.access_token,'user-guardian');
 });
+test('every signed-in role loads the live notification bell on the dashboard',async()=>{
+  for(const role of ['guardian','expert','admin']){
+    const {b}=await login(role),{res,text}=await b.request('/dashboard.php');assert.equal(res.status,200);
+    const dom=new JSDOM(text),doc=dom.window.document;
+    assert.ok(doc.querySelector('[data-notification-bell]'));
+    const script=[...doc.querySelectorAll('script[src]')].find(s=>s.src.includes('/assets/cloud/notifications.js'));
+    assert.ok(script,role);assert.equal(script.type,'module');
+    assert.equal((await b.request(new URL(script.src,origin).pathname)).res.status,200);
+    dom.window.close();
+  }
+  const b=await browser(),{text}=await b.request('/login.php');assert.doesNotMatch(text,/cloud\/notifications\.js/);
+});
 test('all roles keep account actions in the top bar and reachable mobile navigation',async()=>{
   for(const role of ['guardian','expert','admin']){
     const {b}=await login(role);

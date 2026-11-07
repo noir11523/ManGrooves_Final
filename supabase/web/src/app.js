@@ -1,4 +1,7 @@
 import {mangroveTimeline} from './timeline-page.js';
+import {notificationsPage as renderNotificationsPage} from './notification-page.js';
+import {watchNotifications} from './notification-updates.js';
+let notificationWatcher;
 import {exploreSites} from './explore-page.js';
 import {residentialAddressFields,formattedAddress,bindBarangayPicker,contactFields} from './address-fields.js';
 import './observations.css';
@@ -46,7 +49,8 @@ async function loginPage() {
 }
 async function registerPage(){return registrationPage(authLayout);}
 function shell(route) {
-  $('#app').innerHTML = `<a class="skip-link" href="#content">Skip to content</a><div class="shell"><aside class="sidebar" id="site-menu" aria-label="Main menu"><button class="menu-close outline" aria-label="Close menu">Close menu ×</button><a class="brand" href="#dashboard">♣ ManGROOVES</a><nav aria-label="Main navigation">${renderNavigation(viewer.role,route)}</nav></aside><button class="menu-backdrop" hidden tabindex="-1" aria-label="Close menu"></button><div class="shell-main"><header class="topbar"><div><button class="mobile-menu outline" aria-label="Open menu" aria-controls="site-menu" aria-expanded="false">☰ Menu</button></div><div class="user"><a class="icon-button" href="#notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></a><a class="avatar" href="#profile" aria-label="Profile settings">${esc(viewer.first_name?.[0] ?? viewer.full_name[0])}</a><div class="user-name"><strong>${esc(viewer.full_name)}</strong><small>${esc(roleLabel[viewer.role])}</small></div><button class="outline" id="signout">Sign out</button></div></header><main class="workspace" id="content" tabindex="-1"><p class="loading">Loading…</p></main></div></div>`;
+  $('#app').innerHTML = `<a class="skip-link" href="#content">Skip to content</a><div class="shell"><aside class="sidebar" id="site-menu" aria-label="Main menu"><button class="menu-close outline" aria-label="Close menu">Close menu ×</button><a class="brand" href="#dashboard">♣ ManGROOVES</a><nav aria-label="Main navigation">${renderNavigation(viewer.role,route)}</nav></aside><button class="menu-backdrop" hidden tabindex="-1" aria-label="Close menu"></button><div class="shell-main"><header class="topbar"><div><button class="mobile-menu outline" aria-label="Open menu" aria-controls="site-menu" aria-expanded="false">☰ Menu</button></div><div class="user"><a class="icon-button" data-notification-bell href="#notifications" aria-label="Notifications"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></a><a class="avatar" href="#profile" aria-label="Profile settings">${esc(viewer.first_name?.[0] ?? viewer.full_name[0])}</a><div class="user-name"><strong>${esc(viewer.full_name)}</strong><small>${esc(roleLabel[viewer.role])}</small></div><button class="outline" id="signout">Sign out</button></div></header><main class="workspace" id="content" tabindex="-1"><p class="loading">Loading…</p></main></div></div>`;
+  notificationWatcher?.stop();notificationWatcher=watchNotifications({load:()=>api('notifications.php',{query:{summary_only:'1'}})});
   cleanupMenu = bindMenu($('.shell'));
   $('.skip-link').onclick = event => { event.preventDefault(); $('#content').focus(); };
   $('#signout').onclick = async () => { if (await confirm('Sign out?', 'You can sign in again to continue your saved draft on this device.')) { await reportDraft.flush(); reportDraft.reset(); await logout(); } };
@@ -126,10 +130,7 @@ async function clustersPage(node, growth = false, query = {}) {
 }
 async function timelinePage(node,id,query){cleanup=await mangroveTimeline(node,id,query,title,back);}
 async function notificationsPage(node, query) {
-  const data = await api('notifications.php', {query});
-  set(node, `${title('Notifications', `${data.unread} unread`)}<button id="mark-all" class="outline" ${data.unread ? '' : 'hidden'}>Mark all read</button><div class="list" style="margin-top:20px">${data.notifications.map(n => `<button class="report-row notification" data-id="${n.id}" data-report="${n.report_id ?? ''}"><div><strong>${n.read_at ? '' : '● '}${esc(n.title)}</strong><p>${esc(n.message)}</p><small>${esc(n.created_at.slice(0, 10))}</small></div></button>`).join('') || '<p class="empty">Report activity and reminders will appear here.</p>'}</div>${pager(data, 'notifications')}`); back();
-  $('#mark-all').onclick = async () => { try { await api('notifications.php', {body: {action: 'mark_all'}}); await notificationsPage(node, query); } catch (e) { toast(friendly(e)); } };
-  $$('.notification').forEach(n => n.onclick = async () => { try { await api('notifications.php', {body: {action: 'mark_read', id: Number(n.dataset.id)}}); if (n.dataset.report) location.hash = `report/${n.dataset.report}`; else await notificationsPage(node, query); } catch (e) { toast(friendly(e)); } });
+  cleanup=await renderNotificationsPage(node,query,title,back);
 }
 async function profilePage(node) {
   const {user, barangays} = await api('profile.php');
@@ -216,6 +217,7 @@ if (document.getElementById('app')) window.addEventListener('hashchange', async 
   route().catch(error => toast(friendly(error)));
 });
 async function restoreAccount(account) {
+  notificationWatcher?.stop();notificationWatcher=null;
   cleanup(); viewer = null;
   try { if (account) viewer = (await api('me.php')).user; }
   catch (error) {

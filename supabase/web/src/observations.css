@@ -96,3 +96,6 @@ label.check > input[type=checkbox],label.check > input[type=radio] { flex:0 0 22
   .observation-catalog .choice-group { padding:12px; }
   .observation-catalog .choice { padding:12px; }
 }
+.icon-button[data-notification-bell]{position:relative}
+.notification-count{position:absolute;top:-4px;right:-4px;min-width:19px;height:19px;border-radius:99px;background:#ad3535;color:#fff;font:600 11px/19px system-ui;text-align:center;padding:0 4px}
+.notification-count[hidden]{display:none!important}

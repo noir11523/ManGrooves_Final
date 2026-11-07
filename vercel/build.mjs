@@ -46,6 +46,7 @@ await build({entryPoints:[path.join(root,'vercel/src/cloud.js')],outfile:path.jo
     api.onResolve({filter:/^\.\/client\.js$/},args=>args.importer.includes(`${path.sep}supabase${path.sep}web${path.sep}src${path.sep}`)?{path:client}:null);
   }}]});
 const cssFile=path.join(out,'assets/cloud/cloud.css');
+await build({entryPoints:[path.join(root,'vercel/src/notifications.js')],outfile:path.join(out,'assets/cloud/notifications.js'),bundle:true,minify:true,sourcemap:false});
 const tree=postcss.parse(await readFile(cssFile,'utf8'));
 tree.walkRules(rule=>{
   if(rule.parent.type==='atrule' && /keyframes$/i.test(rule.parent.name))return;

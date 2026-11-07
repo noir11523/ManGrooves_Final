@@ -183,6 +183,9 @@ class SupabaseApiClient extends ApiClient {
   Future<Map<String, dynamic>> notifications({int page = 1}) =>
       _request('notifications.php', query: {'page': '$page'});
   @override
+  Future<Map<String, dynamic>> notificationSummary() =>
+      _request('notifications.php', query: {'summary_only': '1'});
+  @override
   Future<Map<String, dynamic>> markNotificationRead(int id) =>
       _request('notifications.php', body: {'action': 'mark_read', 'id': id});
   @override

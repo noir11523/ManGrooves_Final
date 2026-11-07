@@ -2,6 +2,7 @@ import {AppError,integer,text,password,publicUser,now,requireRole} from './domai
 import {sendImage,saveImage} from './uploads.js';
 import {profileDetails} from './profile-fields.js';
 import {sendApplicationEmail,emailNotice} from './application-email.js';
+import {queueNotification} from './notifications.js';
 
 export const emailAddress=value=>{
   const email=text(value,'your email',190).toLowerCase();
@@ -40,7 +41,8 @@ export async function completeRegistration(service,input,files,claims) {
   if(details.email!==claims.email?.toLowerCase()) throw new AppError('Use the email you verified.',403);
   const ref=service.ref('users',claims.uid),existing=await service.get('users',claims.uid);
   if(existing) throw new AppError('Your account already exists. Sign in or use Forgot password.',409);
-  const [id]=await service.ids(),user={...details,id,uid:claims.uid,status:details.role==='expert'?'pending_approval':'active',created_at:now(),privacy_consent_at:now(),email_verified_at:now()};
+  const admins=details.role==='expert'?(await service.rows('users',[['role','==','system_admin']])).filter(a=>a.status==='active'):[];
+  const [id,...noticeIds]=await service.ids(1+admins.length),user={...details,id,uid:claims.uid,status:details.role==='expert'?'pending_approval':'active',created_at:now(),privacy_consent_at:now(),email_verified_at:now()};
   if(details.role==='expert'&&!files.id_photo)throw new AppError('Upload a clear photo of your work or professional ID.');
   let proof;
   try {
@@ -50,6 +52,10 @@ export async function completeRegistration(service,input,files,claims) {
     if((await tx.get(ref)).exists) throw new AppError('Your account was already created. Sign in to continue.',409);
     tx.create(ref,user);
     if(details.role==='expert') tx.create(service.ref('expert_applications',claims.uid),{id,user_id:id,uid:claims.uid,full_name:user.full_name,email:user.email,id_path:proof.path,status:'pending',created_at:now()});
+    for(let i=0;i<admins.length;i++){
+      const admin=(await tx.get(service.ref('users',admins[i].uid))).data();
+      if(admin?.role==='system_admin'&&admin.status==='active')await queueNotification(service,tx,noticeIds[i],admin.id,`expert_application_${claims.uid}`,'expert_application','New expert application',`${user.full_name} is waiting for approval.`,null,{application_uid:claims.uid});
+    }
     service.audit(tx,user,'account.registered','user',id,{role:details.role,status:user.status});
   });
   } catch(error) {if(proof)await service.bucket.file(proof.path).delete({ignoreNotFound:true}).catch(()=>{});throw error;}
@@ -83,12 +89,14 @@ export async function expertApplications(service,user,input,res,query={}) {
   }
   if(!['approve','reject'].includes(input.action)) throw new AppError('Choose Approve or Decline.');
   const note=text(input.note??'','a reason',1000,input.action==='reject');
+  const [noticeId]=await service.ids();
   await service.db.runTransaction(async tx=>{
     const actor=(await tx.get(service.ref('users',user.uid))).data();requireRole(actor,'system_admin');
     const current=(await tx.get(ref)).data(),target=(await tx.get(service.ref('users',uid))).data();
     if(current?.status!=='pending'||target?.status!=='pending_approval') throw new AppError('This application was already reviewed.',409);
     tx.update(ref,{status:input.action==='approve'?'approved':'rejected',note,reviewed_at:now(),reviewer_name:user.full_name,reviewer_id:user.id});
     tx.update(service.ref('users',uid),{status:input.action==='approve'?'active':'rejected',role:'expert'});
+    service.notification(tx,noticeId,target.id,'expert_application_decision',input.action==='approve'?'Expert application approved':'Expert application declined',note||(input.action==='approve'?'Your expert access is now active.':'Your expert application was declined.'));
     service.audit(tx,user,`expert.${input.action}`,'user',target.id,{note});
   });
   await service.auth.revokeRefreshTokens(uid);

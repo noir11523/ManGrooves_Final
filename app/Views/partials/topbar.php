@@ -13,7 +13,7 @@ $displayTitle = isset($pageHeading) && trim((string) $pageHeading) !== '' ? (str
     </div>
     <div class="topbar-actions ms-auto">
 
-        <a class="icon-button position-relative" href="<?= e(url('notifications.php')) ?>" aria-label="Notifications<?= $unreadNotificationCount ? ', ' . $unreadNotificationCount . ' unread' : '' ?>">
+        <a class="icon-button position-relative" data-notification-bell href="<?= e(url('notifications.php')) ?>" aria-label="Notifications<?= $unreadNotificationCount ? ', ' . $unreadNotificationCount . ' unread' : '' ?>">
             <i class="bi bi-bell" aria-hidden="true"></i>
             <?php if ($unreadNotificationCount > 0): ?><span class="notification-count" aria-hidden="true"><?= e((string) min($unreadNotificationCount, 99)) ?><?= $unreadNotificationCount > 99 ? '+' : '' ?></span><?php endif; ?>
         </a>

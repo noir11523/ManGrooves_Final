@@ -19,6 +19,7 @@ import {createStaff} from './staff.js';
 import {manageSites} from './sites.js';
 import {manageSpecies} from './species.js';
 import {publicBarangay} from './barangays.js';
+import {userNotifications,notificationSummary} from './notifications.js';
 
 /** @param {{db:any, auth:any, bucket:any, projectId:string, mailer?:{send:Function}|null}} options */
 export function createApi({db, auth, bucket, projectId, mailer = null}) {
@@ -228,21 +229,25 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
           res.set({'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="ManGROOVES-certificate.pdf"'});res.end(bytes);return;
         }
         case 'notifications.php': {
-          if (user.role === 'guardian') await service.badges(user);
-          await syncNotifications(service, user);
-          let notifications = await service.rows('notifications', [['user_id', '==', user.id]]);
+          if(!get&&!post)throw new AppError('Method not allowed.',405);
+          if (['guardian','expert'].includes(user.role)) await service.badges(user);
+          let notifications = await userNotifications(service,user);
           if (post) {
             const input = req.body ?? {};
             if (!['mark_all', 'mark_read'].includes(input.action)) throw new AppError('Choose a notification action.');
             const id = input.action === 'mark_read' ? integer(input.id, 'notification') : null;
+            if(id!==null&&!notifications.some(n=>n.id===id))throw new AppError('Notification not found.',404);
             const selected = notifications.filter(n => !n.read_at && (id === null || n.id === id));
             for (let start = 0; start < selected.length; start += 400) {
               const batch = db.batch(); for (const n of selected.slice(start, start + 400)) batch.update(service.ref('notifications', n.id), {read_at: now()}); await batch.commit();
             }
-            notifications = await service.rows('notifications', [['user_id', '==', user.id]]);
+            notifications = await userNotifications(service,user);
           }
+          const summary=notificationSummary(notifications);
+          if(get&&req.query.summary_only==='1')return send(res,summary);
           const result = paginate(notifications.sort(newest), req.query.page);
-          return send(res, {...result, notifications: result.items, unread: notifications.filter(n => !n.read_at).length});
+          return send(res, {...result,...summary, notifications: result.items,
+            ...(post&&req.body?.action==='mark_read'?{notification:notifications.find(n=>n.id===Number(req.body.id))}:{}),});
         }
         case 'account-security.php': {
           only('POST'); const input = req.body ?? {};
@@ -316,20 +321,4 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
     res.status(status).json({ok: false, message: error instanceof AppError ? error.message : status === 413 ? 'The upload is too large.' : status === 400 ? 'Invalid form data.' : 'Could not complete the request. Try again.'});
   });
   return app;
-}
-
-async function syncNotifications(service, user) {
-  const dashboard = await service.dashboard(user);
-  const candidates = user.role === 'guardian' ? dashboard.reminders.map(r => ({key: `followup_${r.id}`, report_id: r.id, title: 'Follow-up due', message: `Visit ${r.cluster_name ?? r.report_code} again.`}))
-    : (await service.reports(user)).filter(r => r.status === 'pending').map(r => ({key: `review_${r.id}`, report_id: r.id, title: 'Report ready for review', message: `${reportLabel(r)} needs a condition and species check.`}));
-  for (const candidate of candidates) {
-    const claim = service.ref('notification_keys', `${user.id}_${candidate.key}`);
-    if ((await claim.get()).exists) continue;
-    const [id] = await service.ids();
-    await service.db.runTransaction(async tx => {
-      if ((await tx.get(claim)).exists) return;
-      tx.create(claim, {id});
-      service.notification(tx, id, user.id, candidate.key, candidate.title, candidate.message, candidate.report_id);
-    });
-  }
 }
