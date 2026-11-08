@@ -225,7 +225,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
         case 'analytics.php': only('GET'); return send(res, {analytics: await service.analytics(user, req.query)});
         case 'export-analytics.php': {
           only('GET'); requireRole(user, 'system_admin'); const analytics = await service.analytics(user, req.query);
-          res.set({'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="ManGROOVES-analytics.pdf"'});
+          res.set({'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="ManGROOVES-monitoring-report.pdf"'});
           const pdf = new PDFDocument({margin: 45}); pdf.pipe(res);
           writeMonitoringReport(pdf,analytics,now());
           await pdf.end(); return;

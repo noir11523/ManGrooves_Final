@@ -6,7 +6,7 @@ import {profileDetails} from '../functions/api/core/profile-fields.js';
 import {reviewFeedback} from '../functions/api/core/review-feedback.js';
 import {writeMonitoringReport} from '../functions/api/core/analytics-export.js';
 import Document from '../functions/api/pdf.js';
-import {PDFDocument} from 'pdf-lib';
+import {PDFDocument,PDFArray,decodePDFRawStream} from 'pdf-lib';
 const admin={id:9,role:'system_admin'},query={date_from:'2026-08-01',date_to:'2026-10-21'};
 const site=id=>({id,name:`Site ${id}`,barangay_id:1,barangay_name:'Inayawan',center_lat:10.28,center_lng:123.88,initial_seedlings:10});
 const visit=(id,cluster_id,final_health,day,extra={})=>({id,cluster_id,final_health,user_id:1,status:'verified',submitted_at:`2026-${day}T00:00:00Z`,verified_at:`2026-${day}T01:00:00Z`,...extra});
@@ -53,6 +53,43 @@ test('historical snapshots exclude later verification and use Manila dates and d
  assert.equal(a.clusters[0].report_id,2);assert.equal(a.verification.verified,2);assert.equal(a.growth[1].health,null);assert.equal(a.growth[1].verified_reports,0);
  assert.equal(analyticsForUser(admin,rows,[site(1)],{...query,date_to:'2026-10-02'}).clusters[0].report_id,3);
 });
+
+test('latest-site filters keep pending and rejected counts at the selected sites',()=>{
+ const rows=[visit(1,1,'Healthy','10-01',{final_species_id:8}),
+  visit(2,1,null,'10-02',{status:'pending',verified_at:null,suggested_health:'At Risk',final_species_id:null}),
+  visit(3,1,null,'10-03',{status:'rejected',verified_at:null,final_species_id:null}),
+  visit(4,2,'At Risk','10-02',{final_species_id:9})];
+ const a=analyticsForUser(admin,rows,[site(1),site(2)],{...query,health:'Healthy',species_id:'8'});
+ assert.deepEqual(a.report_ids,[1]);assert.equal(a.verification.pending,1);assert.equal(a.verification.rejected,1);
+ const other=analyticsForUser(admin,rows,[site(1),site(2)],{...query,health:'At Risk'});
+ assert.deepEqual(other.report_ids,[4]);assert.equal(other.verification.pending,0);assert.equal(other.verification.rejected,0);
+});
+
+test('timestamps sort by actual time even when reports use different UTC offsets',()=>{
+ const rows=[visit(1,1,'At Risk','10-01',{submitted_at:'2026-10-01T10:30:00+08:00',verified_at:'2026-10-02T00:00:00Z'}),
+  visit(2,1,'Healthy','10-01',{submitted_at:'2026-10-01T03:00:00Z',verified_at:'2026-10-02T00:00:00Z',parent_report_id:1})];
+ const a=analyticsForUser(admin,rows,[site(1)],query);
+ assert.equal(a.clusters[0].report_id,2);assert.equal(a.progress.improved,1);assert.equal(a.clusters_needing_attention,0);
+});
+
+test('invalid or impossible legacy dates are flagged and cannot break or inflate dated analytics',()=>{
+ const rows=[visit(1,1,'Healthy','10-01'),visit(2,1,'At Risk','10-02',{submitted_at:'invalid'}),
+  visit(3,1,'At Risk','10-03',{verified_at:'invalid'}),visit(4,1,'At Risk','10-04',{verified_at:'2026-09-01T00:00:00Z'}),
+  visit(5,1,'At Risk','10-05',{verified_at:null})];
+ const a=analyticsForUser(admin,rows,[site(1)],query);
+ assert.deepEqual(a.report_ids,[1]);assert.equal(a.data_quality.invalid_submission_date,1);
+ assert.equal(a.data_quality.invalid_verification_date,2);assert.equal(a.data_quality.missing_verification_date,1);
+ assert.equal(a.latest_health.Healthy,1);
+});
+
+test('follow-up measures require an earlier verified parent owned by the same reporter at the same site',()=>{
+ const rows=[visit(1,1,'At Risk','08-01'),visit(2,1,'Healthy','10-01',{parent_report_id:1,user_id:2}),
+  visit(3,2,'At Risk','10-01',{parent_report_id:4}),visit(4,2,'Healthy','10-02'),
+  visit(5,3,'Healthy','10-01',{parent_report_id:5}),visit(6,4,'Healthy','10-01',{needs_follow_up:true,follow_up_requested_at:'2026-11-01T00:00:00Z'})];
+ const a=analyticsForUser(admin,rows,[site(1),site(2),site(3),site(4)],query);
+ assert.equal(a.progress.followup_reports,0);assert.equal(a.progress.improved,0);assert.equal(a.progress.declined,0);
+ assert.equal(a.progress.awaiting_followup,0);
+});
 test('only explicit comparable follow-ups show improvement or decline; missing and zero counts are distinct',()=>{
  const rows=[visit(1,1,'Healthy','08-01',{observed_alive_count:10}),visit(2,1,'At Risk','10-01',{observed_alive_count:0}),visit(3,2,'Unknown','08-01'),visit(4,2,'Healthy','10-01',{parent_report_id:3,observed_alive_count:null})];
  const a=analyticsForUser(admin,rows,[site(1),site(2)],query);
@@ -66,7 +103,7 @@ test('guardian analytics does not expose other accounts or unrelated map sites',
 test('invalid coordinates and missing verification dates remain visible as data limitations',()=>{
  const a=analyticsForUser(admin,[visit(1,1,'Healthy','10-01'),visit(2,2,'Stressed','10-01',{verified_at:null})],[{...site(1),center_lat:null},site(2)],query);
  assert.equal(a.monitored_clusters,1);assert.equal(a.map.length,0);assert.equal(a.data_quality.missing_map_coordinates,1);assert.equal(a.data_quality.missing_verification_date,1);
- for(const q of [{date_from:'2026-02-30'},{date_from:'2026-10-22'}, {health:'Fine'},{cluster_id:'x'}])assert.throws(()=>analyticsForUser(admin,[],[],{...query,...q}));
+ for(const q of [{date_from:'2026-02-30'},{date_from:'2026-10-22'},{date_from:['2026-08-01']}, {health:'Fine'},{cluster_id:'x'}])assert.throws(()=>analyticsForUser(admin,[],[],{...query,...q}));
 });
 test('structured addresses accept absent optional parts, reject mismatched geography and preserve legacy text',async()=>{
  const service={get:async()=>({id:1,name:'Inayawan',city_municipality:'Cebu City',city_psgc:'CITY',province:'Cebu'})};
@@ -84,7 +121,25 @@ test('feedback merges distinct legacy instructions once and accepts a single fie
 test('PDF uses the same filtered evidence and produces paginated valid documents for long site names',async()=>{
  const sites=Array.from({length:30},(_,i)=>({...site(i+1),name:'Long monitoring site '.repeat(12)+i}));
  const a=analyticsForUser(admin,sites.map(c=>visit(c.id,c.id,'At Risk','10-01')),sites,query);
- const captured=[];const fake={fontSize(){return this;},moveDown(){return this;},table(h,rows){captured.push(h.join(' | '),...rows.map(r=>r.join(' | ')));return this;},text(v){captured.push(v);return this;}};
- writeMonitoringReport(fake,a,'2026-10-22T00:00:00Z');assert.ok(captured.some(t=>t.includes('Monitored clusters: 30')));assert.ok(captured.some(t=>t.includes('Survival rate: Insufficient data')));assert.ok(captured.some(t=>t.includes('Report #30')));
+ const captured=[];const fake={fontSize(){return this;},moveDown(){return this;},header(title,lines){captured.push(title,...lines);return this;},section(v){captured.push(v);return this;},note(v){captured.push(v);return this;},metrics(items){captured.push(...items.map(i=>i.join(': ')));return this;},conditionBar(counts){assert.deepEqual(counts,a.latest_health);return this;},table(h,rows){captured.push(h.join(' | '),...rows.map(r=>r.join(' | ')));return this;},text(v){captured.push(v);return this;}};
+ writeMonitoringReport(fake,a,'2026-10-22T00:00:00Z');assert.ok(captured.some(t=>t.includes('Monitored sites: 30')));assert.ok(captured.some(t=>t.includes('Survival rate: Insufficient data')));assert.ok(captured.some(t=>t.includes('Report #30')));
+ assert.ok(captured.includes('Total Verified Reports: 30'));assert.ok(captured.includes('Total | 0 | 0 | 30 | 0 | 30'));
+ assert.ok(!captured.some(t=>/Methodology and limitations|Decision-support guidance|Priority monitoring areas/.test(t)));
  let bytes;const pdf=new Document();pdf.pipe({end(v){bytes=v;}});writeMonitoringReport(pdf,a,'2026-10-22T00:00:00Z');await pdf.end();const parsed=await PDFDocument.load(bytes);assert.ok(parsed.getPageCount()>2);assert.equal(parsed.getTitle(),'ManGROOVES monitoring report');
+});
+
+test('PDF splits an oversized row across pages, keeps its final text, and stays inside the page bounds',async()=>{
+ let bytes;const pdf=new Document();pdf.pipe({end(v){bytes=v;}});
+ pdf.header('Pagination check',['Test data']);pdf.section('Sites');
+ pdf.table(['Site','Condition'],[['Very long site name '.repeat(900)+'END-OF-SITE','At Risk'],['LAST-ROW','Healthy']],{widths:[2,1]});
+ await pdf.end();const doc=await PDFDocument.load(bytes);assert.ok(doc.getPageCount()>2);
+ const streams=doc.getPages().flatMap(page=>{
+  const contents=page.node.Contents();
+  return (contents instanceof PDFArray?contents.asArray():[contents]).map(ref=>Buffer.from(decodePDFRawStream(doc.context.lookup(ref)).decode()).toString());
+ });
+ const content=streams.join('\n');
+ for(const marker of ['END-OF-SITE','LAST-ROW'])assert.ok(content.includes(Buffer.from(marker).toString('hex').toUpperCase()),marker);
+ for(const stream of streams)for(const match of stream.matchAll(/1 0 0 1 ([\d.-]+) ([\d.-]+) Tm/g)){
+  assert.ok(Number(match[1])>=44&&Number(match[1])<=551);assert.ok(Number(match[2])>=20&&Number(match[2])<=798);
+ }
 });

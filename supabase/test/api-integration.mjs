@@ -7,6 +7,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {databaseFixture} from './database-fixture.js';
 import {AppError} from '../functions/api/core/domain.js';
 import {createApi} from '../functions/api/core/api.js';
+import {PDFDocument,PDFArray,decodePDFRawStream} from 'pdf-lib';
 import {addInayawanSites} from '../scripts/add-inayawan-sites.js';
 const {db,pg}=await databaseFixture();
 const projectId='local-test';
@@ -264,6 +265,24 @@ try {
   await request('review.php', admin, {report_id: pending.report.report_id, action: 'confirm'}, 409); pass('review conflict cannot overwrite a completed review');
   const detail = await request(`report.php?id=${pending.report.report_id}`, guardian); assert.equal(detail.report.verification_history.length, 1); assert.equal(detail.report.final_species_id, 1); pass('validation history and final values persist');
   const pdf = await request('export-analytics.php', admin, null, 200, true); assert.equal(pdf.subarray(0, 4).toString(), '%PDF'); pass('administrator PDF export');
+  for(const health of ['Healthy','Unknown']){
+    const filters=new URLSearchParams({date_from:'2020-01-01',date_to:'2100-01-01',cluster_id:String(saved.report.cluster_id),health});
+    const source=(await request(`analytics.php?${filters}`,admin)).analytics;
+    const exported=await PDFDocument.load(await request(`export-analytics.php?${filters}`,admin,null,200,true));
+    const strings=exported.getPages().flatMap(page=>{
+      const contents=page.node.Contents();return (contents instanceof PDFArray?contents.asArray():[contents]).flatMap(ref=>{
+        const stream=Buffer.from(decodePDFRawStream(exported.context.lookup(ref)).decode()).toString();
+        return [...stream.matchAll(/<([0-9A-F]+)> Tj/g)].map(match=>Buffer.from(match[1],'hex').toString('latin1'));
+      });
+    });
+    for(const [label,value] of [['Total Verified Reports',source.verification.verified],['Monitored sites',source.monitored_clusters],['Sites needing attention',source.clusters_needing_attention]]){
+      const index=strings.indexOf(label);assert.ok(index>0);assert.equal(strings[index-1],String(value));
+    }
+    assert.ok(strings.some(s=>s.includes(`Latest condition: ${health}`)));
+  }
+  await request('export-analytics.php',expert,null,403);
+  await request('analytics.php?date_from=2026-10-01&date_from=2026-10-02',admin,null,422);
+  pass('filtered PDF metrics equal the analytics API, including empty filters; export permissions and repeated dates are enforced');
   await request('certificate-settings.php',admin,{signer_name:'Sample Coordinator',signer_title:'Program Coordinator'});
   const badges = await request('badges.php', guardian); assert.equal(badges.badges[0].earned, true); const certificate = await request('certificate.php?badge_id=1', guardian, null, 200, true); assert.equal(certificate.subarray(0, 4).toString(), '%PDF'); pass('earned badge and certificate');
   const follow = await submission(guardian, {cluster_id: saved.report.cluster_id, parent_report_id: firstId}); const following = await request('submit-report.php', guardian, follow.body, 201); assert.equal(following.report.cluster_id, saved.report.cluster_id);assert.equal(following.report.status,'pending');
