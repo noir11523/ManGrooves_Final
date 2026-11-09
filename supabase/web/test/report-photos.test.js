@@ -15,7 +15,7 @@ test('preflight checks selected contents and reports the correct slot without an
    calls++;assert.equal(path,'check-report-photos.php');assert.equal(await body.get('photo_0').text(),'old');
    assert.equal(JSON.parse(body.get('payload')).submission_token,'draft-token');throw failure;
  },'draft-token'),error=>error===failure);
- assert.equal(calls,1);assert.deepEqual(failure.photo_indices,[1]);assert.match(photoConflictMessage(failure),/^Close-up:/);
+ assert.equal(calls,1);assert.deepEqual(failure.photo_indices,[1]);assert.equal(photoConflictMessage(failure),'Photo already used. Choose a new one.');
  await assert.rejects(checkReportPhotos([photo('same'),photo('same')],async()=>{calls++;},'draft-token'),/already added/);
  assert.equal(calls,1);
 });

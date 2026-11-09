@@ -114,8 +114,8 @@ test('earlier-report photos fail in Details immediately; offline checks can retr
  const wait=async predicate=>{for(let i=0;i<100&&!predicate();i++)await new Promise(r=>setTimeout(r,10));assert.ok(predicate());};
  const choose=()=>{const input=$('[name=photo]');Object.defineProperty(input,'files',{configurable:true,value:[new File(['new bytes'],'photo.jpg',{type:'image/jpeg'})]});change(input);};
  try{
-  set('guardian_remarks','Keep my notes');choose();await wait(()=>$('.error').textContent.includes('earlier report'));
-  assert.equal(ui.reportDraft.step,0);assert.equal(ui.reportDraft.photo,null);assert.match($('.error').textContent,/Site overview:/);
+  set('guardian_remarks','Keep my notes');choose();await wait(()=>$('.error').textContent==='Photo already used. Choose a new one.');
+  assert.equal(ui.reportDraft.step,0);assert.equal(ui.reportDraft.photo,null);assert.equal($('.error').textContent,'Photo already used. Choose a new one.');
   failure='offline';choose();await wait(()=>$('.error').textContent.includes('connection'));assert.equal(ui.reportDraft.photo,null);
   failure='';choose();await wait(()=>ui.reportDraft.photo);assert.equal($('.error').textContent,'');
   assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep my notes');assert.equal($('#next').disabled,false);assert.equal(calls,3);
@@ -134,7 +134,7 @@ test('a late photo conflict returns Review to Details while preserving every ans
  const dispose=await ui.reportWizard($('#page'),{});
  try{
   $('#field-confirm').click();const sending=submit();await tick();closeConfirm('confirm');await sending;
-  assert.equal(ui.reportDraft.step,0);assert.match($('.error').textContent,/Close-up:/);
+  assert.equal(ui.reportDraft.step,0);assert.equal($('.error').textContent,'Photo already used. Choose a new one.');
   assert.equal(ui.reportDraft.fields.sitio_name,'Coast');assert.equal(ui.reportDraft.fields.latitude,10.28);
   assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep notes');assert.deepEqual(ui.reportDraft.observations,{roots:[11]});
   assert.equal(ui.reportDraft.photo.name,'one.jpg');assert.equal(ui.reportDraft.closeupPhoto.name,'two.jpg');

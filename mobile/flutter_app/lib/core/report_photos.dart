@@ -22,7 +22,7 @@ Future<void> validateReportPhotos(List<String> paths) async {
     final bytes = await file.readAsBytes();
     if (contents.any((previous) => listEquals(previous, bytes))) {
       throw const ApiException(
-        'This photo is already added to this report. Choose a different photo.',
+        'Photo already added. Choose another.',
         code: 'photo_duplicate',
       );
     }
@@ -35,12 +35,11 @@ bool isPhotoConflict(Object error) =>
     ['photo_duplicate', 'photo_already_submitted'].contains(error.code);
 
 String photoConflictMessage(ApiException error) {
-  final names = error.photoIndices.map(
-    (i) => i == 0
-        ? 'Site overview'
-        : i == 1
-        ? 'Close-up'
-        : 'Additional photo ${i - 1}',
-  );
-  return '${names.isEmpty ? '' : '${names.join(', ')}: '}${error.message}';
+  if (error.code == 'photo_duplicate') {
+    return 'Photo already added. Choose another.';
+  }
+  if (error.code == 'photo_already_submitted') {
+    return 'Photo already used. Choose a new one.';
+  }
+  return error.message;
 }

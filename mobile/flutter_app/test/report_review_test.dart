@@ -477,7 +477,7 @@ void main() {
       await tester.pumpAndSettle();
       await tap(tester, find.text('Gallery').first, photoIO: true);
       expect(
-        find.textContaining('Site overview: This photo was used'),
+        find.text('Photo already used. Choose a new one.'),
         findsOneWidget,
       );
       expect(tester.widget<Stepper>(find.byType(Stepper)).currentStep, 0);
@@ -486,7 +486,7 @@ void main() {
       expect(drafts.saved.values.first['photo_path'], isNull);
       api.photoFailure = null;
       await tap(tester, find.text('Gallery').first, photoIO: true);
-      expect(find.textContaining('earlier report'), findsNothing);
+      expect(find.text('Photo already used. Choose a new one.'), findsNothing);
       expect(drafts.saved.values.first['photo_path'], isNotNull);
       expect(
         tester
@@ -564,7 +564,7 @@ void main() {
       );
       expect(tester.widget<Stepper>(find.byType(Stepper)).currentStep, 0);
       expect(
-        find.textContaining('Close-up: This photo was used'),
+        find.text('Photo already used. Choose a new one.'),
         findsOneWidget,
       );
       expect(drafts.saved[scope]!['guardian_remarks'], 'Keep my notes');
@@ -885,12 +885,7 @@ void main() {
       );
       expect(find.byType(BottomSheet), findsNothing);
       await tap(tester, find.text('Gallery').last, photoIO: true);
-      expect(
-        find.text(
-          'This photo is already added to this report. Choose a different photo.',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('Photo already added. Choose another.'), findsOneWidget);
       await tap(
         tester,
         find.widgetWithText(FilledButton, 'Continue').first,

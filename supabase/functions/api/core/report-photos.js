@@ -4,8 +4,8 @@ import {cleanImage} from './images.js';
 
 export function photoError(code, indices = []) {
   const message = code === 'photo_duplicate'
-    ? 'This photo is already added to this report. Choose a different photo.'
-    : 'This photo was used in an earlier report. Choose a new photo from this visit.';
+    ? 'Photo already added. Choose another.'
+    : 'Photo already used. Choose a new one.';
   return Object.assign(new AppError(message, code === 'photo_duplicate' ? 422 : 409), {code, photo_indices: indices});
 }
 

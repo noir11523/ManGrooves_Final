@@ -12,15 +12,16 @@ export async function validateReportPhotos(photos) {
   for(const [index,file] of photos.entries()){
     if(!file)continue;
     const bytes=new Uint8Array(await readBytes(file));
-    if(contents.some(previous=>sameBytes(previous,bytes)))throw Object.assign(new Error('This photo is already added to this report. Choose a different photo.'),{code:'photo_duplicate',photo_indices:[index]});
+    if(contents.some(previous=>sameBytes(previous,bytes)))throw Object.assign(new Error('Photo already added. Choose another.'),{code:'photo_duplicate',photo_indices:[index]});
     contents.push(bytes);
   }
 }
 
 export const isPhotoConflict = error => ['photo_duplicate','photo_already_submitted'].includes(error?.code);
 export function photoConflictMessage(error) {
-  const names = (error.photo_indices ?? []).map(i => i === 0 ? 'Site overview' : i === 1 ? 'Close-up' : `Additional photo ${i - 1}`);
-  return `${names.length ? names.join(', ') + ': ' : ''}${error.message}`;
+  if(error.code==='photo_duplicate')return 'Photo already added. Choose another.';
+  if(error.code==='photo_already_submitted')return 'Photo already used. Choose a new one.';
+  return error.message;
 }
 export async function checkReportPhotos(photos, request, submissionToken) {
   await validateReportPhotos(photos);
