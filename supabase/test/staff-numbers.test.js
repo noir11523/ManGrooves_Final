@@ -10,7 +10,7 @@ test('legacy staff numbers follow submission order without changing guardian num
   let sequence=null,writes=0;
   const tx={get:async()=>({exists:sequence!==null}),update:(ref,patch)=>{Object.assign(reports.find(r=>r.id===ref.id),patch);writes++;},set:(_,value)=>sequence=value};
   const service=new Service({runTransaction:work=>work(tx)});
-  service.get=async()=>sequence;service.ref=(collection,id)=>({collection,id});service.transactionRows=async()=>reports;
+  service.rows=async()=>[];service.get=async()=>sequence;service.ref=(collection,id)=>({collection,id});service.transactionRows=async()=>reports;
   await service.ensureStaffNumbers();await service.ensureStaffNumbers();assert.equal(writes,3);
   assert.deepEqual(reports.map(r=>r.id),[10,20,30]);assert.deepEqual(reports.map(r=>r.report_number),[1,2,1]);
   const staff=await service.reportViews({role:'expert'},reports);

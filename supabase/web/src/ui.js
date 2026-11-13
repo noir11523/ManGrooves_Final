@@ -111,7 +111,7 @@ export function map(container, items, {onClick, timelineMode = 'health', onTileE
   return canvas;
 }
 export async function privatePhoto(img, path) {
-  try { const blob = await api(path, {blob: true}); const url = URL.createObjectURL(blob); img.src = url; img.onload = () => URL.revokeObjectURL(url); }
+  try { const blob = await api(path, {blob: true}); img.photoBlob=blob; const url = URL.createObjectURL(blob); img.src = url; img.onload = () => URL.revokeObjectURL(url); }
   catch { img.alt = 'Photo unavailable'; }
 }
 export function asset(path) { if (path.startsWith('../mobile-api/')) return apiUrl(path.slice('../mobile-api/'.length)); return new URL(`/assets/${path}`, location.origin).href; }

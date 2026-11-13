@@ -772,10 +772,37 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
       if (_idPhoto != null)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Image.file(
-            File(_idPhoto!.path),
-            height: 180,
-            fit: BoxFit.contain,
+          child: GestureDetector(
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (dialog) => Dialog(
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(dialog).height * .8,
+                  child: Column(
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialog),
+                        child: const Text('Close'),
+                      ),
+                      Expanded(
+                        child: InteractiveViewer(
+                          maxScale: 5,
+                          child: Image.file(
+                            File(_idPhoto!.path),
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            child: Image.file(
+              File(_idPhoto!.path),
+              height: 260,
+              fit: BoxFit.contain,
+            ),
           ),
         ),
       const Text(

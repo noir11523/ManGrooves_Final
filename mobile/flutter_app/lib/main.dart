@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'core/app_theme.dart';
 import 'core/api_client.dart';
 import 'core/firebase_api_client.dart';
 import 'core/supabase_api_client.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
   };
   try {
     await api.initialize();
+    await loadAppTheme();
     runApp(ManGroovesApp(api: api));
   } catch (error) {
     runApp(

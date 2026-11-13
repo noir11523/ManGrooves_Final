@@ -1,3 +1,4 @@
+import {checkClarity} from './photo-quality.js';
 const readBytes = file => file.arrayBuffer ? file.arrayBuffer() : new Promise((resolve,reject)=>{
   const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read this photo. Choose it again.'));reader.readAsArrayBuffer(file);
 });
@@ -15,9 +16,10 @@ export async function validateReportPhotos(photos) {
     if(contents.some(previous=>sameBytes(previous,bytes)))throw Object.assign(new Error('Photo already added. Choose another.'),{code:'photo_duplicate',photo_indices:[index]});
     contents.push(bytes);
   }
+  for (const [index,file] of photos.entries()) if(file) {try {await checkClarity(file);} catch(error){error.photo_indices=[index];throw error;}}
 }
 
-export const isPhotoConflict = error => ['photo_duplicate','photo_already_submitted'].includes(error?.code);
+export const isPhotoConflict = error => ['photo_duplicate','photo_already_submitted','photo_unclear'].includes(error?.code);
 export function photoConflictMessage(error) {
   if(error.code==='photo_duplicate')return 'Photo already added. Choose another.';
   if(error.code==='photo_already_submitted')return 'Photo already used. Choose a new one.';

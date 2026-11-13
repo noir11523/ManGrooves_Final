@@ -1,3 +1,5 @@
+import {isNamedSite} from './site-access.js';
+import {traitCatalog} from './trait-catalog.js';
 import {photoError, reportPhotoHashes} from './report-photos.js';
 import {withPhotoCredits, photoCredits} from './reference-photos.js';
 import {followUpAvailable, followUpState, observationHistory} from './follow-up.js';
@@ -85,6 +87,8 @@ export class Service extends Store {
     });
   }
   async reportViews(user, rows) {
+    const [catalog,traitNames]=await Promise.all([this.rows('species'),this.get('meta','trait_catalog')]);
+    rows=rows.map(r=>{const s=catalog.find(s=>s.id===(r.final_species_id??r.suggested_species_id))??catalog.find(s=>s.scientific_name===(r.final_species_name??r.suggested_species_name));const display=Object.fromEntries(['root_type','leaf_shape','bark_texture'].map(key=>['display_'+key,traitNames?.[key]?.find(c=>c.value===r[key])?.label??r[key]]));return {...r,...display,...(s?{species_local_name:s.local_name,species_common_name:s.common_name}:{})};});
     if(user.role==='guardian') return rows;
     return rows.map(r=>({...r,display_report_number:r.staff_report_number??r.id}));
   }
@@ -93,17 +97,15 @@ export class Service extends Store {
     return this.reportViews(user,await this.rows('reports', user.role === 'guardian' ? [['user_id', '==', user.id]] : []));
   }
   async clusters(user) {
-    const [sites,ownReports]=await Promise.all([this.rows('clusters'),user.role==='guardian'?super.rows('reports',[['user_id','==',user.id]]):[]]);
-    const visited=new Set(ownReports.map(r=>r.cluster_id));
-    return sites.filter(c => !c.location_pending && visibleSite(c,user)
-      && (user.role!=='guardian'||c.barangay_id===user.barangay_id||Number(c.created_by)===Number(user.id)||visited.has(c.id)))
+    const sites=await this.rows('clusters');
+    return sites.filter(c => !c.location_pending && visibleSite(c,user))
       .map(c => ({...c, latitude: c.center_lat, longitude: c.center_lng}));
   }
   async form(user) {
     requireRole(user, 'guardian', 'expert');
     const [criteria, clusters, species, barangay] = await Promise.all([this.criteria(), this.clusters(user), this.species(), this.get('barangays', user.barangay_id)]);
-    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)&&Number(c.verified_count)>0), species, location: {barangay, max_distance_meters:null, scope:'Philippines', max_gps_accuracy_meters: 100},
-      traits: Object.fromEntries(['root_type', 'leaf_shape', 'bark_texture'].map(k => [k, [...new Set(species.map(s => s[k]).filter(Boolean))].sort()]))};
+    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)&&Number(c.verified_count)>0&&isNamedSite(c)&&reportBarangay(c.center_lat,c.center_lng)?.province==='Cebu'), species, location: {barangay, max_distance_meters:null, scope:'Cebu', max_gps_accuracy_meters: 100},
+      ...await traitCatalog(this)};
   }
   async preview(user, input) {
     requireRole(user, 'guardian', 'expert');
@@ -207,7 +209,7 @@ export class Service extends Store {
     }
     const classification = classify(criteria, input.observations), matching = matchSpecies(catalog, input);
     const barangay=await this.findBarangay(input.latitude,input.longitude,barangays);
-    if(!barangay)throw new AppError('Barangay could not be identified. Place the pin inside a mapped Philippine barangay.');
+    if(!barangay || barangay.province!=='Cebu')throw new AppError('Place the pin inside a Cebu barangay.');
     const location = validateLocation(input, barangay);
     const requestedCluster = input.cluster_id ? integer(input.cluster_id, 'cluster') : null;
     const parentId = input.parent_report_id ? integer(input.parent_report_id, 'follow-up report') : null;
@@ -343,6 +345,7 @@ export class Service extends Store {
       const parentRef = previous.parent_report_id ? this.ref('reports', previous.parent_report_id) : null;
       if (parentRef) await tx.get(parentRef);
       const health = action === 'correct' ? input.final_health : previous.suggested_health ?? 'Unknown';
+      if(action==='confirm' && health==='Unknown')throw new AppError('Choose Correction to review an Unknown condition.');
       if (action !== 'reject' && ![...HEALTH_VALUES,'Unknown'].includes(health)) throw new AppError('Choose a condition result for this correction.');
       const speciesId = action === 'correct' ? (input.final_species_id ? integer(input.final_species_id, 'species') : null) : previous.suggested_species_id;
       const species = catalog.find(s => s.id === speciesId);
@@ -354,6 +357,10 @@ export class Service extends Store {
         barangay_id: previous.barangay_id, barangay_name: previous.barangay_name, center_lat: previous.latitude, center_lng: previous.longitude,
         sitio_name: previous.sitio_name, radius_meters: 75, initial_seedlings: previous.observed_alive_count, verified_count: 0,
         latest_report_at: '', latest_health: 'Unknown', created_at: now()};
+      // A later resolved report can name a previously unresolved cluster.
+      if(action!=='reject' && !isNamedSite(cluster) && isNamedSite({name:previous.sitio_name})) {
+        cluster={...cluster,name:previous.sitio_name,sitio_name:previous.sitio_name};
+      }
       const report = {...previous, status: action === 'reject' ? 'rejected' : 'verified', final_health: action === 'reject' ? null : health,
         final_species_id: action === 'reject' ? null : speciesId, final_species_name: action === 'reject' ? null : species?.scientific_name ?? null,
         cluster_id: action === 'reject' ? previous.cluster_id : cluster.id, cluster_name: action === 'reject' ? previous.cluster_name : cluster.name,
@@ -368,7 +375,8 @@ export class Service extends Store {
       if (action === 'reject' && parentRef) tx.update(parentRef, {active_child_id: null});
       if (action !== 'reject') {
         const latest = previous.submitted_at >= (cluster.latest_report_at ?? '');
-        const publishSite = cluster.visibility === 'personal' && !cluster.deleted_at && Number(cluster.active) !== 0;
+        const namedSite=isNamedSite(cluster);
+        const publishSite = namedSite && cluster.visibility === 'personal' && !cluster.deleted_at && Number(cluster.active) !== 0;
         tx.set(this.ref('clusters', cluster.id), {...cluster, verified_count: (cluster.verified_count ?? 0) + 1, version:randomUUID(), updated_at:now(),
           ...(publishSite ? {visibility:'shared', approved_by:user.id, approved_by_name:user.full_name, approved_at:now()} : {}),
           ...(latest ? {latest_health: report.final_health, latest_report_at: report.submitted_at, latest_report_id: report.id,

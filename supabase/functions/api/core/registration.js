@@ -32,6 +32,7 @@ export async function startRegistration(service,input,ip) {
   // Keep the complete-form route compatible with earlier installed apps.
   const details=input.stage==='account'?accountDetails(input):await registrationDetails(service,input);
   await service.limited(`email-code:${details.email}`,5);
+  if((await service.rows('users')).some(u=>String(u.email??'').trim().toLowerCase()===details.email))throw new AppError('Email already registered. Sign in instead.',409);
   await service.auth.startSignup(details.email,input.password);
   return {message:'Check your email for the code.',verification_required:true};
 }

@@ -95,7 +95,16 @@ class _CloudAdminScreenState extends State<CloudAdminScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: Text('${item['full_name']}'),
-          content: Image.memory(bytes, fit: BoxFit.contain),
+          insetPadding: const EdgeInsets.all(12),
+          content: SizedBox(
+            width: 700,
+            height: MediaQuery.sizeOf(context).height * .7,
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 5,
+              child: Image.memory(bytes, fit: BoxFit.contain),
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),

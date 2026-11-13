@@ -5,6 +5,7 @@ import 'package:mangrooves_mobile/core/api_client.dart';
 import 'package:mangrooves_mobile/core/report_photos.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'renaming a photo cannot bypass duplicate checking in any slot',
     () async {
@@ -12,10 +13,15 @@ void main() {
         'mangrooves-photo-test',
       );
       try {
-        final first = await File('${directory.path}/overview.jpg')
-            .writeAsBytes([1, 2, 3]);
-        final second = await File('${directory.path}/closeup.jpg')
-            .writeAsBytes([4, 5, 6]);
+        final first = await File('${directory.path}/overview.jpg').writeAsBytes(
+          await File(
+            '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
+          ).readAsBytes(),
+        );
+        final second = await File('${directory.path}/closeup.jpg').writeAsBytes(
+          await File('../../public/assets/img/observations/v1-green-leaf.jpg')
+              .readAsBytes(),
+        );
         final copy = await first.copy('${directory.path}/renamed.jpg');
         await validateReportPhotos([first.path, second.path]);
         await expectLater(

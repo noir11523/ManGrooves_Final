@@ -97,7 +97,7 @@ Future<void> _show(
   await tester.pumpWidget(
     Builder(
       builder: (context) => MaterialApp(
-        theme: (ManGroovesApp(api: api).build(context) as MaterialApp).theme,
+        theme: (ManGroovesApp(api: api).buildThemedApp(context, 'light')).theme,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(scale)),

@@ -1,3 +1,4 @@
+import '../core/app_theme.dart';
 import '../shared/residential_address_fields.dart';
 import '../shared/barangay_picker.dart';
 
@@ -294,6 +295,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: const Icon(Icons.logout),
             label: Text(_signingOut ? 'Signing out…' : 'Sign out'),
           ),
+          const SizedBox(height: 16),
+          const ThemePicker(),
         ],
       ),
     );

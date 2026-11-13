@@ -1,3 +1,4 @@
+import {bindPhotoPreview} from './photo-preview.js';
 import {api,friendly} from './client.js';
 import {$,$$,esc,errorBox,field,formValues,showError,toast,confirm,privatePhoto,download} from './ui.js';
 import {listFilters,bindListFilters,filterLocalList,matchesSearch} from './list-filters.js';
@@ -26,7 +27,7 @@ export async function expertApplicationsPage(node,query={}){
     if(!items.length)node.querySelector('.filter-empty').textContent='No expert applications yet.';
   };
   bindListFilters(node,query,apply);apply();
-  $$('.id-photo').forEach(button=>button.onclick=async()=>{const img=button.nextElementSibling;img.hidden=!img.hidden;button.setAttribute('aria-expanded',String(!img.hidden));button.textContent=img.hidden?'View ID photo':'Hide ID photo';if(!img.hidden)await privatePhoto(img,`expert-id.php?uid=${encodeURIComponent(button.dataset.uid)}`);});
+  $$('.id-photo').forEach(button=>button.onclick=async()=>{const img=button.nextElementSibling;bindPhotoPreview(img);img.classList.add('expert-id-preview');img.hidden=!img.hidden;button.setAttribute('aria-expanded',String(!img.hidden));button.textContent=img.hidden?'View ID photo':'Hide ID photo';if(!img.hidden)await privatePhoto(img,`expert-id.php?uid=${encodeURIComponent(button.dataset.uid)}`);});
   node.querySelectorAll('.retry-email').forEach(button=>button.onclick=async()=>{
     if(button.disabled)return;button.disabled=true;const label=button.textContent;button.textContent='Sending…';
     try { const result=await api('expert-applications.php',{body:{action:'retry_email',uid:button.closest('[data-uid]').dataset.uid}});toast(result.message);await expertApplicationsPage(node,query); }

@@ -41,7 +41,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
       _barangay = '',
       _error = '',
       _badge = '';
-  Map<String, dynamic> _summary = {};
+  Map<String, dynamic> _summary = {}, _catalog = {};
   int _page = 1, _pages = 1, _total = 0;
   int _loadRequest = 0;
   bool _loading = true;
@@ -78,6 +78,7 @@ class _ManagementScreenState extends State<ManagementScreen> {
       );
       if (!mounted || request != _loadRequest) return;
       setState(() {
+        _catalog = data;
         _items =
             (data[_users
                             ? 'items'
@@ -191,9 +192,15 @@ class _ManagementScreenState extends State<ManagementScreen> {
             child: DropdownButtonFormField<String>(
               initialValue: options.containsKey('${values[key]}')
                   ? '${values[key]}'
-                  : options.keys.first,
+                  : null,
               isExpanded: true,
-              decoration: InputDecoration(labelText: label),
+              decoration: InputDecoration(
+                labelText: label,
+                helperText: options.isEmpty
+                    ? 'Add choices in Condition checklist.'
+                    : null,
+              ),
+              validator: (value) => value == null ? 'Select $label.' : null,
               items: options.entries
                   .map(
                     (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
@@ -360,19 +367,32 @@ class _ManagementScreenState extends State<ManagementScreen> {
                             'leaf_shape',
                             'bark_texture',
                           ])
-                            input(
-                              key,
-                              key.startsWith('iucn_')
-                                  ? 'IUCN ${key.substring(5)}'
-                                  : '${key[0].toUpperCase()}${key.substring(1).replaceAll('_', ' ')}',
-                              required: [
-                                'scientific_name',
-                                'common_name',
-                                'root_type',
-                                'leaf_shape',
-                                'bark_texture',
-                              ].contains(key),
-                            ),
+                            if ([
+                              'root_type',
+                              'leaf_shape',
+                              'bark_texture',
+                            ].contains(key))
+                              choice(key, key.replaceAll('_', ' '), {
+                                for (final value
+                                    in (_catalog['traits']?[key] as List? ??
+                                        []))
+                                  '$value':
+                                      '${_catalog['trait_labels']?[key]?[value] ?? value}',
+                              })
+                            else
+                              input(
+                                key,
+                                key.startsWith('iucn_')
+                                    ? 'IUCN ${key.substring(5)}'
+                                    : '${key[0].toUpperCase()}${key.substring(1).replaceAll('_', ' ')}',
+                                required: [
+                                  'scientific_name',
+                                  'common_name',
+                                  'root_type',
+                                  'leaf_shape',
+                                  'bark_texture',
+                                ].contains(key),
+                              ),
                         if (!_species) ...[
                           input('badge_name', 'Badge name', max: 120),
                           input('description', 'Description', max: 1000),
@@ -606,8 +626,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
                       '': 'All statuses',
                       'active': 'Active',
                       'inactive': 'Suspended',
-                      'pending_approval': 'Awaiting approval',
-                      'rejected': 'Declined',
                     }
                   : const {'': 'All statuses', '1': 'Active', '0': 'Archived'},
               onApply: (q, status) {
@@ -627,19 +645,14 @@ class _ManagementScreenState extends State<ManagementScreen> {
                     initialValue: _role,
                     isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Role'),
-                    items:
-                        {
-                              '': 'All roles',
-                              ...roles,
-                              'applicant': 'Expert applicant',
-                            }.entries
-                            .map(
-                              (e) => DropdownMenuItem(
-                                value: e.key,
-                                child: Text(e.value),
-                              ),
-                            )
-                            .toList(),
+                    items: {'': 'All roles', ...roles}.entries
+                        .map(
+                          (e) => DropdownMenuItem(
+                            value: e.key,
+                            child: Text(e.value),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (v) {
                       setState(() {
                         _role = v ?? '';
@@ -923,11 +936,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
                   icon: const Icon(Icons.edit_outlined),
                   label: const Text('Edit access'),
                 ),
-              if (item['application_uid'] != null)
-                TextButton(
-                  onPressed: () => _application(item),
-                  child: const Text('View application'),
-                ),
               if (item['can_delete'] == true)
                 TextButton.icon(
                   style: TextButton.styleFrom(
@@ -960,9 +968,18 @@ class _ManagementScreenState extends State<ManagementScreen> {
         children: [
           SpeciesNames(item),
           const SizedBox(height: 16),
-          CatalogDetail('Roots', '${item['root_type'] ?? ''}'),
-          CatalogDetail('Leaves', '${item['leaf_shape'] ?? ''}'),
-          CatalogDetail('Bark', '${item['bark_texture'] ?? ''}'),
+          CatalogDetail(
+            'Roots',
+            '${(_catalog['trait_labels'] as Map?)?['root_type']?[item['root_type']] ?? item['root_type'] ?? ''}',
+          ),
+          CatalogDetail(
+            'Leaves',
+            '${(_catalog['trait_labels'] as Map?)?['leaf_shape']?[item['leaf_shape']] ?? item['leaf_shape'] ?? ''}',
+          ),
+          CatalogDetail(
+            'Bark',
+            '${(_catalog['trait_labels'] as Map?)?['bark_texture']?[item['bark_texture']] ?? item['bark_texture'] ?? ''}',
+          ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 12,

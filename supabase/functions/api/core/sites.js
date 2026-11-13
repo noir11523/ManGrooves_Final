@@ -3,7 +3,7 @@ import {AppError,integer,text,now,requireRole,validateLocation} from './domain.j
 
 export async function manageSites(service,user,input) {
   requireRole(user,'system_admin','expert');
-  if (!input) return {sites:(await service.rows('clusters')).filter(s=>!s.deleted_at).sort((a,b)=>String(a.name).localeCompare(String(b.name))),barangays:await service.rows('barangays')};
+  if (!input) return {sites:(await service.rows('clusters')).filter(s=>!s.deleted_at).sort((a,b)=>String(a.name).localeCompare(String(b.name))),barangays:(await service.rows('barangays')).filter(b=>b.province==='Cebu')};
   const id=input.id?integer(input.id,'site'):(await service.ids())[0];
   if(input.action==='approve')throw new AppError('Sites are added to the shared list after their first report is verified.',409);
   if(input.action==='delete')return service.db.runTransaction(async tx=>{
@@ -17,7 +17,7 @@ export async function manageSites(service,user,input) {
     return {message:'Site deleted from the catalog. Existing reports are kept.'};
   });
   const barangayId=integer(input.barangay_id,'barangay'),barangay=await service.get('barangays',barangayId);
-  if (!barangay) throw new AppError('Choose an available barangay.');
+  if (!barangay || barangay.province!=='Cebu') throw new AppError('Choose a Cebu barangay.');
   const pointBarangay=await service.findBarangay(input.center_lat,input.center_lng);
   if(!pointBarangay||pointBarangay.id!==barangayId)throw new AppError('Place the site pin inside the selected barangay.');
   const location=validateLocation({latitude:input.center_lat,longitude:input.center_lng,location_source:'manual'},barangay);

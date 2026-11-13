@@ -54,7 +54,7 @@ void main() {
             builder: (context) {
               final theme = (ManGroovesApp(
                 api: ApiClient(),
-              ).build(context) as MaterialApp).theme;
+              ).buildThemedApp(context, 'light')).theme;
               return MaterialApp(
                 theme: theme,
                 builder: (context, child) => MediaQuery(

@@ -92,9 +92,11 @@ test('compact photos reject renamed copies and a new site accepts an unknown cou
   choose('#extra-photos',[photo('close-up contents','extra.jpg')]);await waitFor(()=>$('#report-form .error').textContent.includes('already added'));
   assert.equal(ui.reportDraft.extraPhotos.length,0);
   assert.equal($('#count-hint').hidden,true);$('#count-unknown').click();
-  assert.equal($('#count-hint').hidden,false);assert.equal($('#count-hint').textContent,'Count not recorded.');
+  assert.equal($('#count-hint').hidden,false);assert.equal($('#count-hint').textContent,'Select a site or enter a barangay.');
   assert.equal($('[name=observed_alive_count]').disabled,true);assert.equal($('.count-row').hidden,true);
   assert.equal($('[name=cluster_id]').value,'');
+  await submit();assert.equal(ui.reportDraft.step,0);assert.match($('#report-form .error').textContent,/enter a barangay first/);
+  set('place_query','Pakigne, Minglanilla, Cebu');
   await submit();assert.equal(ui.reportDraft.step,1);
   $('#previous').click();await tick();set('cluster_id','10');await tick();
   assert.equal($('#count-unknown').checked,true);await submit();assert.equal(ui.reportDraft.step,1);
@@ -170,7 +172,7 @@ test('individual real photos and text-only answers preview and select without in
  ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:2,owner:undefined});
  const dispose=await ui.reportWizard($('#page'),{});
  try{
-  const choice=$('.choice'), input=choice.querySelector('input'),preview=choice.querySelector('.choice-picture');
+  const choice=$('[name=obs_leaf_color]').closest('.choice'), input=choice.querySelector('input'),preview=choice.querySelector('.choice-picture');
   assert.match(preview.querySelector('img').src,/observations\/v2-drive-avicennia_marina-leaf_01\.jpg/);
   assert.equal(preview.querySelector('img').loading,'lazy');
   assert.equal(choice.querySelector('.photo-credit'),null);
@@ -303,7 +305,7 @@ test('GPS refresh uses the final fix and replaces the prior pin name',async()=>{
   await new Promise(r=>setTimeout(r,280));
   const pendingAddress=lookups.at(-1);assert.equal(pendingAddress.query.latitude,10.274);
   pendingAddress.resolve({places:[{label:'Updated pin address'}],barangay:{name:'Cogon Pardo',city_municipality:'Cebu City'}});await tick();
-  assert.equal($('#place-search').value,'Another landmark');assert.equal(ui.reportDraft.fields.sitio_name,'Updated pin address');
+  assert.equal($('#place-search').value,'Another landmark');assert.equal(ui.reportDraft.fields.sitio_name,'Another landmark');
  }finally{dispose();ui.reportDraft.reset();}
 });
 
@@ -594,7 +596,7 @@ test('uncounted new-site search survives Back, pin edits and drafts through fina
     await submit();assert.equal(ui.reportDraft.step,1);
     const restoredInput=$('#place-search');restoredInput.value='Different landmark';restoredInput.dispatchEvent(new Event('input',{bubbles:true}));
     assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(Number(ui.reportDraft.fields.latitude),10.3012345);
-    assert.equal(ui.reportDraft.fields.sitio_name,'Pier 3, Basak Pardo, Cebu City, Cebu');
+    assert.equal(ui.reportDraft.fields.sitio_name,'Different landmark');
     await new Promise(r=>setTimeout(r,750));
     testMap.events.click({latlng:{lat:10.29,lng:123.9}});assert.equal(ui.reportDraft.fields.count_unknown,'1');
     await submit();assert.equal(ui.reportDraft.step,2);
@@ -618,9 +620,9 @@ test('checklist live search covers choices and traits in report order without lo
   const label=first.querySelector('[name=label]');label.value='Emerald green';label.dispatchEvent(new Event('input',{bubbles:true}));
   const find=value=>{search.value=value;search.dispatchEvent(new Event('input',{bubbles:true}));};
   find('  EMERALD green  ');assert.equal(first.hidden,false);assert.equal(first.open,true);
-  find('prop roots');assert.equal(first.hidden,true);assert.equal($('#trait-editors details').hidden,false);assert.equal($('#trait-editors details').open,true);
+  find('prop roots');assert.equal(first.hidden,true);assert.equal($('.trait-editor-group').hidden,false);assert.equal($('.trait-editor-group').open,true);
   find('nothing-matches');assert.equal($('.filter-empty').hidden,false);
-  $('.clear-filters').click();assert.equal(first.hidden,false);assert.equal(first.open,true);assert.equal(label.value,'Emerald green');assert.equal($('#trait-editors details').open,false);
+  $('.clear-filters').click();assert.equal(first.hidden,false);assert.equal(first.open,true);assert.equal(label.value,'Emerald green');assert.equal($('.trait-editor-group').open,false);
   assert.match($('.result-count').textContent,/10 categories/);
   const card=$('.trait-image-editor');assert.equal(card.children[0].tagName,'IMG');assert.equal(card.children[1].tagName,'STRONG');
 });
@@ -648,7 +650,7 @@ test('checklist editor retains names while adding, undoing and deleting choices,
   assert.equal($('[data-option="-1"] [name=label]').value, 'Mixed colors');
   const fileInput = $('[data-image=option_image_-1]');
   Object.defineProperty(fileInput, 'files', {value: [new File(['photo'], 'guide.jpg', {type: 'image/jpeg'})]}); change(fileInput);
-  const form = $('#criteria form'); await form.onsubmit({preventDefault() {}, submitter: form.querySelector('[type=submit]')});
+  const form = $('.checklist-editor form'); await form.onsubmit({preventDefault() {}, submitter: form.querySelector('[type=submit]')});
   assert.ok(saved); assert.equal(saved.name, 'Leaf appearance');
   assert.ok(saved.options.some(o => o.label === 'Mixed colors' && o.points === 1));
   assert.ok(saved.archived_options.some(o => o.id === removable.id));

@@ -118,40 +118,199 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   const Text('Categories in report order'),
                   if (_filteredCriteria.isEmpty && !_matchingTraits)
                     const Text('No matches. Try a category or choice.'),
-                  ..._filteredCriteria.map(
-                    (criterion) => Card(
-                      child: ListTile(
-                        title: Text(
-                          '${criterion['name']}',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        subtitle: Text(
-                          criterion['score_group'] == 'health'
-                              ? 'Condition: 0-2 points'
-                              : 'Supporting observations',
-                        ),
-                        trailing: const Icon(Icons.edit_outlined),
-                        onTap: () async {
-                          final saved = await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => _ChecklistEditor(
-                                api: widget.api,
-                                criterion: criterion,
-                              ),
-                            ),
-                          );
-                          if (saved == true) await _load();
-                        },
-                      ),
+                  if (_traitData != null)
+                    OutlinedButton.icon(
+                      onPressed: _changeOrder,
+                      icon: const Icon(Icons.reorder),
+                      label: const Text('Question order'),
                     ),
-                  ),
-                  if (_traitData != null) _traitEditor(),
+                  for (final key in _orderedKeys)
+                    if (_traitHeadings.containsKey(key))
+                      _traitEditor(key)
+                    else
+                      for (final criterion in _filteredCriteria.where(
+                        (c) => c['code'] == key,
+                      ))
+                        _criterionTile(criterion),
                 ],
               ),
             ),
           ),
   );
+
+  Widget _criterionTile(Map<String, dynamic> criterion) => Card(
+    child: ListTile(
+      title: Text(
+        '${criterion['name']}',
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      subtitle: Text(
+        criterion['score_group'] == 'health'
+            ? 'Condition: 0-2 points'
+            : 'Supporting observations',
+      ),
+      trailing: const Icon(Icons.edit_outlined),
+      onTap: () async {
+        final saved = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                _ChecklistEditor(api: widget.api, criterion: criterion),
+          ),
+        );
+        if (saved == true) await _load();
+      },
+    ),
+  );
+
+  List<String> get _orderedKeys =>
+      ((_traitData?['category_order'] as List?) ??
+              [
+                ..._traitHeadings.keys,
+                ...(_criteria ?? []).map((c) => c['code']),
+              ])
+          .map((key) => '$key')
+          .toList();
+
+  Future<void> _traitAction(Map<String, dynamic> body) async {
+    try {
+      final updated = await widget.api.cloudRequest(
+        'trait-images.php',
+        body: body,
+      );
+      if (mounted) setState(() => _traitData = updated);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is ApiException
+                  ? error.message
+                  : 'Could not save. Try again.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _editTrait(String trait, {String? value}) async {
+    var name = value == null
+        ? ''
+        : (_traitData?['trait_labels'] as Map?)?[trait]?[value]?.toString() ??
+              value;
+    final label = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(value == null ? 'Add choice' : 'Choice name'),
+        content: TextFormField(
+          initialValue: name,
+          onChanged: (text) => name = text,
+          autofocus: true,
+          maxLength: 190,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (name.trim().isNotEmpty) Navigator.pop(dialog, name.trim());
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (label != null) {
+      await _traitAction({
+        'action': value == null ? 'add_choice' : 'rename_choice',
+        'trait': trait,
+        'value': value,
+        'label': label,
+      });
+    }
+  }
+
+  Future<void> _deleteTrait(String trait, String value) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Delete this choice?'),
+        content: const Text(
+          'Choices used by a species must be replaced first.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (yes == true) {
+      await _traitAction({
+        'action': 'delete_choice',
+        'trait': trait,
+        'value': value,
+      });
+    }
+  }
+
+  Future<void> _changeOrder() async {
+    final order = List<String>.from(_orderedKeys);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: const Text('Question order'),
+          content: SizedBox(
+            width: 500,
+            height: MediaQuery.sizeOf(context).height * .6,
+            child: ReorderableListView.builder(
+              itemCount: order.length,
+              onReorderItem: (old, next) => update(() {
+                order.insert(next, order.removeAt(old));
+              }),
+              itemBuilder: (context, i) {
+                final key = order[i];
+                return ListTile(
+                  key: ValueKey(key),
+                  title: Text(
+                    _traitHeadings[key] ??
+                        (_criteria ?? [])
+                            .firstWhere((c) => c['code'] == key)['name']
+                            .toString(),
+                  ),
+                  leading: Text('${i + 1}'),
+                  trailing: ReorderableDragStartListener(
+                    index: i,
+                    child: const Icon(Icons.drag_handle),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == true) await _traitAction({'action': 'order', 'order': order});
+  }
 
   static const _traitHeadings = {
     'root_type': 'Klase sa Gamot (Root Type)',
@@ -159,10 +318,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     'bark_texture': 'Hitsura sa Panit sa Punoan (Bark Texture)',
   };
   bool get _matchingTraits => (_traitData?['traits'] as Map? ?? {}).entries.any(
-    (entry) => _matches([_traitHeadings[entry.key], ...(entry.value as List)]),
+    (entry) => _matches([
+      _traitHeadings[entry.key],
+      ...(entry.value as List),
+      ...((_traitData?['trait_labels'] as Map?)?[entry.key] as Map? ?? {})
+          .values,
+    ]),
   );
 
-  Widget _traitEditor() {
+  Widget _traitEditor(String category) {
     final traits = Map<String, dynamic>.from(
       _traitData?['traits'] as Map? ?? const {},
     );
@@ -172,7 +336,14 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     return Column(
       children: [
         for (final entry in traits.entries)
-          if (_matches([_traitHeadings[entry.key], ...(entry.value as List)]))
+          if (entry.key == category &&
+              _matches([
+                _traitHeadings[entry.key],
+                ...(entry.value as List),
+                ...((_traitData?['trait_labels'] as Map?)?[entry.key] as Map? ??
+                        {})
+                    .values,
+              ]))
             Card(
               child: ExpansionTile(
                 key: ValueKey('${entry.key}|$_query'),
@@ -182,6 +353,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 children: [
+                  TextButton.icon(
+                    onPressed: () => _editTrait(entry.key),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add choice'),
+                  ),
                   for (final value in entry.value as List)
                     Builder(
                       builder: (context) {
@@ -215,11 +391,27 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                     ),
                               const SizedBox(height: 8),
                               Text(
-                                item,
+                                (_traitData?['trait_labels']
+                                            as Map?)?[trait]?[item]
+                                        ?.toString() ??
+                                    item,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                 ),
+                              ),
+                            ],
+                          ),
+                          subtitle: Wrap(
+                            spacing: 8,
+                            children: [
+                              TextButton(
+                                onPressed: () => _editTrait(trait, value: item),
+                                child: const Text('Rename'),
+                              ),
+                              TextButton(
+                                onPressed: () => _deleteTrait(trait, item),
+                                child: const Text('Delete choice'),
                               ),
                             ],
                           ),

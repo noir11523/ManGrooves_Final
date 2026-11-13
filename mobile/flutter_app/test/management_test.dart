@@ -33,6 +33,11 @@ class _Api extends ApiClient {
           'barangay_name': 'Inayawan',
         },
       ],
+      'traits': {
+        'root_type': ['Pneumatophores'],
+        'leaf_shape': ['Oval'],
+        'bark_texture': [],
+      },
       'species': deleted
           ? []
           : [

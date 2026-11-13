@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -19,15 +17,9 @@ class ReportMapScreen extends StatefulWidget {
 }
 
 class _ReportMapScreenState extends State<ReportMapScreen> {
-  final _query = TextEditingController();
   final _reportQuery = TextEditingController();
   final _map = MapController();
   final _mapKey = GlobalKey();
-  Timer? _searchTimer;
-  int _searchVersion = 0;
-  List<Map<String, dynamic>> _places = [];
-  Map<String, dynamic>? _selectedPlace;
-  String? _searchMessage;
   bool _mapReady = false, _followReports = true, _tileError = false;
   int _tileVersion = 0;
   Map<String, dynamic>? _data;
@@ -43,9 +35,6 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
 
   @override
   void dispose() {
-    _searchTimer?.cancel();
-    _searchVersion++;
-    _query.dispose();
     _reportQuery.dispose();
     _map.dispose();
     super.dispose();
@@ -87,7 +76,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
       .toList();
 
   void _fitReports() {
-    if (!_mapReady || !_followReports || _selectedPlace != null) return;
+    if (!_mapReady || !_followReports) return;
     final points = _items.map(_point).whereType<LatLng>().toList();
     if (points.isEmpty) return;
     if (points.length == 1) {
@@ -101,131 +90,6 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
         ),
       );
     }
-  }
-
-  List<Map<String, dynamic>> _validPlaces(
-    Iterable<Map<String, dynamic>> places,
-  ) {
-    final seen = <String>{};
-    return places
-        .where((place) {
-          final point = _point(place), label = '${place['label'] ?? ''}'.trim();
-          return point != null &&
-              label.isNotEmpty &&
-              seen.add('$label|${point.latitude}|${point.longitude}');
-        })
-        .take(8)
-        .toList();
-  }
-
-  void _searchPlaces(String value, {bool immediately = false}) {
-    _searchTimer?.cancel();
-    final version = ++_searchVersion;
-    final trimmed = value.trim();
-    final term = trimmed.length > 150 ? trimmed.substring(0, 150) : trimmed;
-    final local = _validPlaces(
-      _items
-          .where(
-            (item) =>
-                [
-                  'sitio_name',
-                  'cluster_name',
-                  'barangay_name',
-                  'report_code',
-                ].any(
-                  (key) => '${item[key] ?? ''}'.toLowerCase().contains(
-                    term.toLowerCase(),
-                  ),
-                ),
-          )
-          .map(
-            (item) => {
-              ...item,
-              'label':
-                  item['sitio_name'] ??
-                  item['cluster_name'] ??
-                  item['barangay_name'] ??
-                  item['report_code'],
-            },
-          ),
-    );
-    setState(() {
-      _selectedPlace = null;
-      _places = term.length < 3 ? [] : local;
-      _searchMessage = term.isNotEmpty && term.length < 3
-          ? 'Type at least 3 letters.'
-          : null;
-    });
-    if (term.length < 3) {
-      if (term.isEmpty) {
-        _followReports = true;
-        _fitReports();
-      }
-      return;
-    }
-    _searchTimer = Timer(
-      immediately ? Duration.zero : const Duration(milliseconds: 700),
-      () async {
-        if (!mounted) return;
-        if (!widget.api.supportsCloudAccounts) {
-          setState(
-            () => _searchMessage = local.isEmpty
-                ? 'No saved locations found on this page.'
-                : 'Choose a location below.',
-          );
-          return;
-        }
-        setState(() => _searchMessage = 'Finding places...');
-        try {
-          final data = await widget.api.cloudRequest(
-            'places.php',
-            query: {'q': term},
-          );
-          if (!mounted || version != _searchVersion) return;
-          setState(() {
-            _places = _validPlaces([
-              ...local,
-              ...(data['places'] as List? ?? []).map(
-                (item) => Map<String, dynamic>.from(item as Map),
-              ),
-            ]);
-            _searchMessage = _places.isEmpty
-                ? 'No places found. Try another address or landmark.'
-                : 'Choose a location below.';
-          });
-        } catch (_) {
-          if (!mounted || version != _searchVersion) return;
-          setState(
-            () => _searchMessage = local.isEmpty
-                ? 'Search is unavailable. Try again in a moment.'
-                : 'Address search is unavailable. Choose a report location below.',
-          );
-        }
-      },
-    );
-  }
-
-  void _selectPlace(Map<String, dynamic> place) {
-    _searchTimer?.cancel();
-    _searchVersion++;
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _selectedPlace = place;
-      _query.text = '${place['label']}';
-      _places = [];
-      _searchMessage = 'Selected: ${place['label']}';
-      _followReports = false;
-    });
-    if (_mapReady) _map.move(_point(place)!, 16);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _mapKey.currentContext != null) {
-        Scrollable.ensureVisible(
-          _mapKey.currentContext!,
-          alignment: .1,
-          duration: const Duration(milliseconds: 200),
-        );
-      }
-    });
   }
 
   void _onTileError() {
@@ -334,53 +198,6 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
-            key: const ValueKey('map-place-search'),
-            controller: _query,
-            decoration: InputDecoration(
-              labelText: 'Find a location',
-              hintText: 'Address or landmark',
-              prefixIcon: const Icon(Icons.search),
-              helperText: 'Choose a place to see it on the map.',
-              helperMaxLines: 2,
-              counterText: '',
-              suffixIcon: _query.text.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Clear location',
-                      onPressed: () {
-                        _query.clear();
-                        _searchPlaces('');
-                      },
-                      icon: const Icon(Icons.close),
-                    ),
-            ),
-            maxLength: 150,
-            onChanged: _searchPlaces,
-            onSubmitted: (value) => _searchPlaces(value, immediately: true),
-          ),
-          if (_searchMessage != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(_searchMessage!),
-            ),
-          if (_places.isNotEmpty)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 220),
-              child: ListView(
-                shrinkWrap: true,
-                children: _places
-                    .map(
-                      (place) => ListTile(
-                        leading: const Icon(Icons.place_outlined),
-                        title: Text('${place['label']}'),
-                        onTap: () => _selectPlace(place),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-          const SizedBox(height: 12),
-          TextField(
             key: const ValueKey('map-report-search'),
             controller: _reportQuery,
             decoration: const InputDecoration(
@@ -483,7 +300,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
               '${located.length} pins on this page · ${_data!['total'] ?? items.length} reports total · Page $page of $pages',
             ),
           const Text(
-            'Tap a pin for details. Colors show condition; pending and rejected reports show the system suggestion. A blue pin marks your search.',
+            'Tap a pin for details. Colors show condition; pending and rejected reports show the system suggestion.',
           ),
           const SizedBox(height: 8),
           SizedBox(
@@ -499,11 +316,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
                   _mapReady = true;
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (!mounted) return;
-                    if (_selectedPlace != null) {
-                      _map.move(_point(_selectedPlace!)!, 16);
-                    } else {
-                      _fitReports();
-                    }
+                    _fitReports();
                   });
                 },
                 onPositionChanged: (_, hasGesture) {
@@ -523,22 +336,6 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
                 ),
                 MarkerLayer(
                   markers: [
-                    if (_selectedPlace != null)
-                      Marker(
-                        point: _point(_selectedPlace!)!,
-                        width: 42,
-                        height: 42,
-                        child: Tooltip(
-                          message:
-                              'Selected location: ${_selectedPlace!['label']}',
-                          child: const Icon(
-                            Icons.location_on,
-                            key: ValueKey('searched-location-pin'),
-                            color: Colors.blue,
-                            size: 42,
-                          ),
-                        ),
-                      ),
                     ...located.map(
                       (item) => Marker(
                         point: _point(item)!,
@@ -617,9 +414,7 @@ class _ReportMapScreenState extends State<ReportMapScreen> {
           if (!_loading && _error == null && items.isEmpty)
             const Padding(
               padding: EdgeInsets.all(24),
-              child: Text(
-                'No reports match these filters. You can still search for a place.',
-              ),
+              child: Text('No reports match these filters.'),
             ),
           if (!_loading && items.length > located.length)
             Text(

@@ -1,3 +1,4 @@
+import {loadTheme,themeSettings} from './themes.js';
 import {mangroveTimeline} from './timeline-page.js';
 import {notificationsPage as renderNotificationsPage} from './notification-page.js';
 import {watchNotifications} from './notification-updates.js';
@@ -8,6 +9,7 @@ import './observations.css';
 import './style.css';
 import './polish.css';
 import './layout.css';
+import './refinements.css';
 import {bindMenu,renderNavigation} from './navigation.js';
 import {expertApplicationsPage,certificateSettingsPage} from './account-admin.js';
 import {registrationPage,recoveryPage,signInPage,passwordField,bindPasswordToggles} from './auth-pages.js';
@@ -104,7 +106,7 @@ async function reportPage(node, id, reviewMode = false) {
   if(r.needs_follow_up || r.follow_up_state) node.insertAdjacentHTML('beforeend',`<section class="card follow-up-card"><h2>${esc(r.follow_up_state||'Follow-up needed')}</h2><p>${esc(r.expert_feedback?'See Feedback for instructions for your next visit.':'Please add a new observation from your next visit.')}</p>${r.can_follow_up?`<a class="button" href="#submit?parent=${r.id}&cluster=${r.cluster_id}">Submit follow-up</a>`:''}</section>`);
   if((r.observation_history??[]).length>1) node.insertAdjacentHTML('beforeend',`<section class="card"><h2>Observation history</h2><div class="list">${r.observation_history.map(v=>`<a class="report-row" href="#report/${v.id}"><div><strong>${esc(v.report_code)} · ${esc(v.visit_label)}</strong><small>${esc(v.submitted_at)} · ${esc(v.health)}</small>${v.follow_up_state?`<small>${esc(v.follow_up_state)}</small>`:''}</div>${pill(v.status)}</a>`).join('')}</div></section>`);
   if (!canReview || !['pending','verified'].includes(r.status)) return;
-  const followUpFields=`<label class="check"><input type="checkbox" name="needs_follow_up" value="1" ${r.needs_follow_up?'checked':''}><span>Request another observation</span></label>`;
+  const followUpFields=`<label class="check"><input type="checkbox" name="needs_follow_up" value="1" ${r.needs_follow_up?'checked':''}><span>Request follow-up</span></label>`;
   const feedbackField=`<label class="field"><span>Feedback</span><textarea name="expert_feedback" maxlength="5000" placeholder="Add your findings and any instructions for the next visit.">${esc(r.expert_feedback??'')}</textarea>${r.status==='pending'?'<small>Required when rejecting a report.</small>':''}</label>`;
   if(r.status==='verified') {
     $('#review-area').innerHTML=`<h2>Feedback and follow-up</h2><form id="review">${errorBox}${followUpFields}${feedbackField}<button>Save changes</button></form>`;
@@ -112,7 +114,7 @@ async function reportPage(node, id, reviewMode = false) {
   }
   const catalog = await api('species.php');
   if (!node.isConnected) return;
-  $('#review-area').innerHTML = `<h2>Review this report</h2><p>Check the photo and answers, then choose your decision.</p><form id="review">${errorBox}${select('action', 'Decision', [['confirm', 'Confirm system suggestion'], ['correct', 'Correction'], ['reject', 'Reject with feedback']], 'confirm')}<div id="corrections" class="row">${select('final_health', 'Corrected condition', ['Healthy', 'Stressed', 'At Risk', 'Unknown'].map(v => [v, v]), r.suggested_health)}${select('final_species_id', 'Corrected species', [['', 'Unassigned'], ...catalog.species.map(s => [s.id, [s.local_name,s.common_name,s.scientific_name].filter(Boolean).join(' · ')])], r.suggested_species_id)}${select('rarity_level', 'Rarity', ['Unassigned', 'Common', 'Vulnerable', 'Rare'].map(v => [v, v]), r.rarity_level)}</div>${followUpFields}${feedbackField}<button type="submit">Save review</button></form>`;
+  $('#review-area').innerHTML = `<h2>Review this report</h2><p>Check the photo and answers, then choose your decision.</p><form id="review">${errorBox}${select('action', 'Decision', [...(r.suggested_health==='Unknown'?[]:[['confirm', 'Confirm system suggestion']]), ['correct', 'Correction'], ['reject', 'Reject with feedback']], r.suggested_health==='Unknown'?'correct':'confirm')}<div id="corrections" class="row">${select('final_health', 'Corrected condition', ['Healthy', 'Stressed', 'At Risk', 'Unknown'].map(v => [v, v]), r.suggested_health)}${select('final_species_id', 'Corrected species', [['', 'Unassigned'], ...catalog.species.map(s => [s.id, [s.local_name,s.common_name,s.scientific_name].filter(Boolean).join(' · ')])], r.suggested_species_id)}${select('rarity_level', 'Rarity', ['Unassigned', 'Common', 'Vulnerable', 'Rare'].map(v => [v, v]), r.rarity_level)}</div>${followUpFields}${feedbackField}<button type="submit">Save review</button></form>`;
   const update = () => { const action=$('#review [name=action]').value; $('#corrections').hidden=action!=='correct'; $('#corrections').querySelectorAll('select').forEach(input=>input.disabled=action!=='correct'); $('#review [name=expert_feedback]').required=action==='reject'; $('#review [name=needs_follow_up]').disabled=action==='reject'; $('#review [name=needs_follow_up]').closest('label').hidden=action==='reject'; $('#review button[type=submit]').textContent=action==='confirm'?'Confirm system suggestion':action==='correct'?'Save correction':'Reject report'; }; update(); $('#review [name=action]').onchange = update;
   bind($('#review'), async values => {
     if (!(await confirm('Save this review?', 'Your decision and feedback will be saved.'))) return;
@@ -138,6 +140,7 @@ async function profilePage(node) {
   bindPasswordToggles($('#password'));
   bindBarangayPicker($('#profile'),barangays);
   bind($('#profile'), async values => { const result = await api('profile.php', {body: values}); viewer = result.user; toast('Profile updated.'); });
+  themeSettings(node.querySelector('.profile-layout'),user);
   bind($('#password'), async values => { if(values.next!==values.confirmation)throw new Error('The new passwords do not match.');if(values.next===values.current)throw new Error('Choose a different new password.');if (await confirm('Change password?', 'You will be signed out on all devices.')) { await changePassword(values.current, values.next, values.confirmation); toast('Password changed. Sign in again.'); } });
 }
 async function badgesPage(node) {
@@ -219,7 +222,7 @@ if (document.getElementById('app')) window.addEventListener('hashchange', async 
 async function restoreAccount(account) {
   notificationWatcher?.stop();notificationWatcher=null;
   cleanup(); viewer = null;
-  try { if (account) viewer = (await api('me.php')).user; }
+  try { if (account) { viewer = (await api('me.php')).user; loadTheme(viewer); } }
   catch (error) {
     if ([401,403].includes(error.status)) { toast(friendly(error)); await logout(); return; }
     ready = false;
@@ -239,7 +242,7 @@ if (document.getElementById('app')) initialize(restoreAccount).catch(error => {
 // Reuse the same tested forms and charts as the cloud site inside that layout.
 export async function renderEmbedded(name, node, query, user) {
   cleanup(); cleanup = () => {};
-  viewer = user;
+  viewer = user;loadTheme(user);
   const layout = html => { node.innerHTML = `<section class="auth card">${html}</section>`; };
   switch (name) {
     case 'register': return registrationPage(layout);

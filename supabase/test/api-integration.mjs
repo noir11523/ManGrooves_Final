@@ -27,7 +27,7 @@ const auth={
  async signIn(email,password){const user=[...accounts.values()].find(u=>u.email===email&&!u.disabled&&u.password===password);assert.ok(user,'Valid test sign-in');const idToken=randomUUID();sessions.set(idToken,user);return {idToken};}
 };
 const bucket={file:path=>({async save(bytes){images.set(path,bytes);},async delete(){images.delete(path);},async exists(){return [images.has(path)];},async download(){return images.get(path);},createReadStream(){return Readable.from([images.get(path)]);}})};
-const fixture=await readFile(new URL('fixtures/photo.jpg',import.meta.url));
+const fixture=await readFile(new URL('../../public/assets/img/observations/v1-intact-prop-roots.jpg',import.meta.url));
 const reference=JSON.parse(await readFile(new URL('../data/reference.json',import.meta.url),'utf8'));
 for(const [collection,rows] of Object.entries(reference)) for(const row of rows) await db.collection(collection).doc(row.id).set(row);
 const sentMail=[];let failMail=false;
@@ -572,11 +572,13 @@ try {
   pass('review totals count all matching pages, including pending reports of every health');
   const uncertainFinal=await submission(guardianSession,{checklist_versions:versions,observations:{...healthy,leaf_color:[select('leaf_color','unknown')]}});
   const uncertainRecord=await request('submit-report.php',guardianSession,uncertainFinal.body,201);
-  await request('review.php',expert,{report_id:uncertainRecord.report.report_id,action:'confirm',final_health:'Healthy',final_species_id:999});
+  await request('review.php',expert,{report_id:uncertainRecord.report.report_id,action:'confirm',final_health:'Healthy',final_species_id:999},422);
+  const uncertainBefore=(await request(`report.php?id=${uncertainRecord.report.report_id}`,guardianSession)).report;assert.equal(uncertainBefore.status,'pending');
+  await request('review.php',expert,{report_id:uncertainRecord.report.report_id,action:'correct',final_health:'Unknown',final_species_id:uncertainBefore.suggested_species_id,expert_feedback:'The evidence is insufficient to determine condition.'});
   const confirmedUnknown=(await request(`report.php?id=${uncertainRecord.report.report_id}`,guardianSession)).report;
   assert.equal(confirmedUnknown.final_health,'Unknown');assert.equal(Number(confirmedUnknown.needs_attention),1);
   assert.equal(confirmedUnknown.final_species_id,confirmedUnknown.suggested_species_id);
-  pass('confirm retains the system suggestion without manual health/species, including Unknown needing attention');
+  pass('Unknown suggestions cannot be confirmed; explicit expert correction can record Unknown needing attention');
   const deletionTarget=await account(9101,'guardian');
   const savedReport={id:9102,user_id:deletionTarget.id,uid:deletionTarget.uid,status:'verified',guardian_name:'Historical author',submitted_at:'2026-10-21'};
   await db.collection('reports').doc('9102').set(savedReport);
@@ -631,6 +633,24 @@ try {
   assert.equal(updatedHistory.find(r=>r.id===uncounted.report.report_id).observed_alive_count,null);
   assert.equal(updatedHistory.find(r=>r.id===nextCountSaved.report.report_id).observed_alive_count,5);
   pass('verification publishes an uncounted site and later counts leave the earlier timeline value unknown');
+  assert.ok((await request('report-form.php',unrelated)).clusters.some(c=>c.id===uncountedSite.id));
+  const newMember=await account(9401,'guardian');
+  await db.collection('users').doc(newMember.uid).update({barangay_id:99999});
+  assert.ok((await request('report-form.php',newMember)).clusters.some(c=>c.id===uncountedSite.id));
+  assert.ok((await request('report-form.php',expert)).clusters.some(c=>c.id===uncountedSite.id));
+  pass('verified sites are shared with new and existing guardians and experts regardless of home barangay');
+  const placeholder=await submission(guardianSession,{latitude:10.272,longitude:123.866,sitio_name:'Pinned location (10.272, 123.866)',checklist_versions:versions});
+  const placeholderSaved=await request('submit-report.php',guardianSession,placeholder.body,201);
+  await request('review.php',expert,{report_id:placeholderSaved.report.report_id,action:'confirm'});
+  assert.ok(!(await request('report-form.php',newMember)).clusters.some(c=>c.id===placeholderSaved.report.cluster_id));
+  pass('verification never publishes a coordinate-placeholder site in saved site choices');
+  const resolved=await submission(guardianSession,{latitude:10.272,longitude:123.866,sitio_name:'Cogon Pardo shoreline',checklist_versions:versions});
+  const resolvedSaved=await request('submit-report.php',guardianSession,resolved.body,201);
+  await request('review.php',expert,{report_id:resolvedSaved.report.report_id,action:'confirm'});
+  const resolvedSite=(await request('report-form.php',newMember)).clusters.find(c=>c.id===resolvedSaved.report.cluster_id);
+  assert.equal(resolvedSite.name,'Cogon Pardo shoreline');
+  pass('a later resolved and verified address can name and publish an unresolved site');
+
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

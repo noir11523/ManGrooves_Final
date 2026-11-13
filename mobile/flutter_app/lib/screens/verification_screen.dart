@@ -295,6 +295,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
       final response = await widget.api.report(widget.reportId);
       _report = Map<String, dynamic>.from(response['report'] as Map);
       _health = _report!['suggested_health']?.toString() ?? 'Unknown';
+      if (_health == 'Unknown') _decision = 'correct';
       _speciesId = _report!['suggested_species_id'] as int?;
       _rarity = _report!['rarity_level']?.toString() ?? 'Unassigned';
     } catch (error) {
@@ -482,7 +483,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                   'Species trait match: ${_report!['species_confidence'] ?? 0}%. This is a suggestion.',
                 ),
                 Text(
-                  'Traits: ${_report!['root_type']} / ${_report!['leaf_shape']} / ${_report!['bark_texture']}',
+                  'Traits: ${(_report!['display_root_type'] ?? _report!['root_type'])} / ${(_report!['display_leaf_shape'] ?? _report!['leaf_shape'])} / ${(_report!['display_bark_texture'] ?? _report!['bark_texture'])}',
                 ),
               ],
             ),
@@ -515,11 +516,12 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                 DropdownButtonFormField<String>(
                   initialValue: _decision,
                   decoration: const InputDecoration(labelText: 'Decision'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'confirm',
-                      child: Text('Confirm system suggestion'),
-                    ),
+                  items: [
+                    if (_report!['suggested_health'] != 'Unknown')
+                      const DropdownMenuItem(
+                        value: 'confirm',
+                        child: Text('Confirm system suggestion'),
+                      ),
                     DropdownMenuItem(
                       value: 'correct',
                       child: Text('Correction'),
@@ -542,7 +544,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                   const Padding(
                     padding: EdgeInsets.only(bottom: 16),
                     child: Text(
-                      'Uses the system condition and species suggestion shown above. Unknown condition remains marked for attention.',
+                      'Uses the system condition and species suggestion shown above. Review the details before confirming.',
                     ),
                   ),
                 if (_decision == 'correct') ...[

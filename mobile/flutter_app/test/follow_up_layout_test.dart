@@ -20,9 +20,8 @@ void main() {
           await tester.pumpWidget(
             Builder(
               builder: (context) {
-                final app = ManGroovesApp(
-                  api: ApiClient(),
-                ).build(context) as MaterialApp;
+                final app = ManGroovesApp(api: ApiClient())
+                    .buildThemedApp(context, 'light');
                 return MaterialApp(
                   theme: app.theme,
                   home: MediaQuery(

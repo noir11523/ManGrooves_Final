@@ -1,3 +1,4 @@
+import {bindPhotoPreview} from './photo-preview.js';
 import {residentialAddressFields,formattedAddress,bindBarangayPicker,contactFields} from './address-fields.js';
 import {api,login,friendly} from './client.js';
 import {$,esc,field,select,errorBox,formValues,showError,toast} from './ui.js';
@@ -88,7 +89,7 @@ export async function registrationPage(layout) {
   form.elements.id_photo.onchange=()=>{
     const file=form.elements.id_photo.files[0];
     if(proofPhotoUrl)URL.revokeObjectURL(proofPhotoUrl);
-    const preview=$('#id-photo-preview');preview.hidden=!file;
+    const preview=$('#id-photo-preview');bindPhotoPreview(preview);preview.hidden=!file;
     if(file){proofPhotoUrl=URL.createObjectURL(file);preview.src=proofPhotoUrl;}
   };
   const normalizedEmail=()=>email.value.trim().toLowerCase();

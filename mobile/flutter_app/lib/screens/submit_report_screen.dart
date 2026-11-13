@@ -75,6 +75,20 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   bool _pickingExtra = false;
   bool _countUnknown = false;
   int _category = 0;
+  List<String> get _categoryOrder =>
+      ((_form?['category_order'] as List?) ??
+              [
+                'root_type',
+                'leaf_shape',
+                'bark_texture',
+                ..._criteria.map((c) => c['code']),
+              ])
+          .map((v) => '$v')
+          .toList();
+  String get _categoryKey =>
+      _categoryOrder[_category.clamp(0, _categoryOrder.length - 1)];
+  bool get _isTrait =>
+      ['root_type', 'leaf_shape', 'bark_texture'].contains(_categoryKey);
   String _submissionToken = List.generate(
     24,
     (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -562,6 +576,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
       return;
     }
+    if (_countUnknown && _clusterId == null && _sitio.text.trim().isEmpty) {
+      setState(() => _error = 'Select a site or enter a barangay first.');
+      return;
+    }
     setState(() => _checkingPhotos = true);
     try {
       await _checkPhotos([
@@ -582,7 +600,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     bool closeup = false,
     bool extra = false,
   }) async {
-    if (_pickingPhoto || _checkingPhotos || (extra && _extraPhotos.length >= 4)) {
+    if (_pickingPhoto ||
+        _checkingPhotos ||
+        (extra && _extraPhotos.length >= 4)) {
       return;
     }
     _pickingExtra = extra;
@@ -1100,6 +1120,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     _cancelGps();
     _placeTimer?.cancel();
     final request = ++_placeRequest;
+    if (_parentReportId == null) {
+      _sitio.text = value.trim();
+    }
     setState(() {
       _placeSuggestions = [];
       _placeMessage = null;
@@ -1276,8 +1299,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   String? _categoryError(int index) {
-    if (index < _criteria.length) {
-      final c = _criteria[index];
+    final key = _categoryOrder[index];
+    if (!['root_type', 'leaf_shape', 'bark_texture'].contains(key)) {
+      final c = _criteria.firstWhere((c) => c['code'] == key);
       final count = (_observations[c['code']] ?? []).length;
       if (count == 0 || (c['selection_mode'] == 'single' && count != 1)) {
         return 'Choose an answer for ${c['name']}. Pick Not Sure if you cannot tell.';
@@ -1285,7 +1309,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     } else {
       final values = [_rootType, _leafShape, _barkTexture];
       final names = ['Root Type', 'Leaf Shape', 'Bark Texture'];
-      final i = index - _criteria.length;
+      final i = ['root_type', 'leaf_shape', 'bark_texture'].indexOf(key);
       if (values[i] == null || values[i]!.isEmpty) return 'Choose ${names[i]}.';
     }
     return null;
@@ -1596,7 +1620,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     final compactSteps =
         MediaQuery.sizeOf(context).width < 460 ||
         MediaQuery.textScalerOf(context).scale(16) > 20;
-    const stepNames = ['Photos', 'Location', 'Traits', 'Review'];
+    const stepNames = ['Photos', 'Location', 'Traits and Conditions', 'Review'];
     return PopScope(
       canPop: !widget.handleSystemBack,
       onPopInvokedWithResult: (didPop, _) {
@@ -1695,7 +1719,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                       content: _siteStep(),
                     ),
                     Step(
-                      title: Text(!compactSteps && _step == 2 ? 'Traits' : ''),
+                      title: Text(
+                        !compactSteps && _step == 2
+                            ? 'Traits and Conditions'
+                            : '',
+                      ),
                       isActive: _step >= 2,
                       state: _step > 2 ? StepState.complete : StepState.indexed,
                       content: _healthStep(),
@@ -1796,7 +1824,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       ),
       _Section(
         title: 'Close-up',
-        subtitle: 'Show the leaves, roots, or damage clearly.',
+        subtitle: 'Show leaves, roots, or damage. Use a clear, well-lit photo.',
         child: Column(
           children: [
             if (_closeupPhoto != null)
@@ -1896,9 +1924,20 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           ],
         ),
       ),
-      _siteSelector(),
-      const SizedBox(height: 12),
-      if (_clusterId == null) ..._placeFields(showBarangay: false),
+      CheckboxListTile(
+        title: const Text('Unable to count'),
+        subtitle: _countUnknown
+            ? const Text('Select a site or enter a barangay.')
+            : null,
+        value: _countUnknown,
+        onChanged: (v) {
+          setState(() => _countUnknown = v ?? false);
+          _draftEdited();
+        },
+      ),
+      if (_countUnknown || _parentReportId != null) _siteSelector(),
+      if (_countUnknown && _clusterId == null)
+        ..._placeFields(showBarangay: false),
       const SizedBox(height: 16),
       FilledButton(
         onPressed: _pickingPhoto || _checkingPhotos ? null : _continuePhotos,
@@ -2033,7 +2072,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 ),
               ),
             const SizedBox(height: 12),
-            _siteSelector(),
+            if (_countUnknown || _parentReportId != null) _siteSelector(),
             const SizedBox(height: 12),
             ..._placeFields(),
             if (_parentReportId != null)
@@ -2093,8 +2132,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             const SizedBox(height: 12),
             Material(
               color: _countUnknown
-                  ? const Color(0xFFE5F0DE)
-                  : const Color(0xFFF4F6EF),
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : Theme.of(context).colorScheme.surfaceContainerLowest,
               shape: RoundedRectangleBorder(
                 side: const BorderSide(color: Color(0xFF789466), width: 2),
                 borderRadius: BorderRadius.circular(12),
@@ -2116,7 +2155,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 ),
                 subtitle: _countUnknown
                     ? const Text(
-                        'Count not recorded.',
+                        'Select a site or enter a barangay.',
                         style: TextStyle(fontSize: 14),
                       )
                     : null,
@@ -2165,7 +2204,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         'Tap a circle to select or deselect. Tap a photo to enlarge it. Choose Not Sure if you cannot tell.',
       ),
       const SizedBox(height: 12),
-      if (_category < _criteria.length) _criterionCard(_criteria[_category]),
+      Text(
+        _isTrait ? 'Traits' : 'Site Conditions',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      if (!_isTrait)
+        _criterionCard(_criteria.firstWhere((c) => c['code'] == _categoryKey)),
       _speciesStep(),
     ],
   );
@@ -2174,13 +2218,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _assessment(),
-      if (_category >= _criteria.length)
+      if (_isTrait)
         _Section(
           title: 'Species traits',
           subtitle: 'Choose the roots, leaves and bark you see.',
           child: Column(
             children: [
-              if (_category == _criteria.length + 0)
+              if (_categoryKey == 'root_type')
                 _traitDropdown(
                   'Root type',
                   _rootType,
@@ -2188,7 +2232,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                   (value) => setState(() => _rootType = value),
                 ),
               const SizedBox(height: 12),
-              if (_category == _criteria.length + 1)
+              if (_categoryKey == 'leaf_shape')
                 _traitDropdown(
                   'Leaf shape',
                   _leafShape,
@@ -2196,7 +2240,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                   (value) => setState(() => _leafShape = value),
                 ),
               const SizedBox(height: 12),
-              if (_category == _criteria.length + 2)
+              if (_categoryKey == 'bark_texture')
                 _traitDropdown(
                   'Bark texture',
                   _barkTexture,
@@ -2206,7 +2250,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             ],
           ),
         ),
-      if (_category == _criteria.length + 2)
+      if (_category == _categoryOrder.length - 1)
         _Section(
           title: 'Notes',
           child: Column(
@@ -2478,7 +2522,16 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             return SizedBox(
               width: (space.maxWidth - 12 * (columns - 1)) / columns,
               child: ObservationChoice(
-                label: traitLabels[item] ?? item,
+                label:
+                    ((_form?['trait_labels'] as Map?)?[{
+                              'Root type': 'root_type',
+                              'Leaf shape': 'leaf_shape',
+                              'Bark texture': 'bark_texture',
+                            }[label]]
+                            as Map?)?[item]
+                        ?.toString() ??
+                    traitLabels[item] ??
+                    item,
                 selected: value == item,
                 hasPhoto: _traitPath(label, item) != null,
                 photoCredit:

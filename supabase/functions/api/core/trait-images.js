@@ -1,11 +1,12 @@
+import {traitCatalog,editTraits} from './trait-catalog.js';
 import {AppError, requireRole, text} from './domain.js';
 import {saveImage} from './uploads.js';
 import {photoCredits} from './reference-photos.js';
 
 export async function traitImages(service,user,input,files={}) {
   requireRole(user,'system_admin');
-  const species=await service.species();
-  const traits=Object.fromEntries(['root_type','leaf_shape','bark_texture'].map(k=>[k,[...new Set(species.map(s=>s[k]).filter(Boolean))].sort()]));
+  if(input&&['order','add_choice','rename_choice','delete_choice'].includes(input.action)){await editTraits(service,user,input);input=null;}
+  const catalog=await traitCatalog(service),traits=catalog.traits;
   if(input) {
     const key=input.trait, value=text(input.value,'the feature',255);
     if(!traits[key]?.includes(value))throw new AppError('Choose an existing species feature.');
@@ -22,5 +23,5 @@ export async function traitImages(service,user,input,files={}) {
       });
     } catch(error) {if(upload)await service.bucket.file(upload.path).delete().catch(()=>{});throw error;}
   }
-  return {traits,photo_credits:photoCredits,trait_images:(await service.get('meta','trait_images'))??{},message:input?'Feature image saved.':null};
+  return {...catalog,photo_credits:photoCredits,trait_images:(await service.get('meta','trait_images'))??{},message:input?'Feature image saved.':null};
 }

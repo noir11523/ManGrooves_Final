@@ -165,6 +165,14 @@ class _Api extends ApiClient {
       'leaf_shape': ['Oval'],
       'bark_texture': ['Smooth'],
     },
+    'category_order': [
+      'leaf_color',
+      'bio_indicators',
+      'negative_signs',
+      'root_type',
+      'leaf_shape',
+      'bark_texture',
+    ],
     'trait_images': {
       'root_type': {'Prop': 'img/observations/v1-intact-prop-roots.jpg'},
       'leaf_shape': {'Oval': 'img/observations/v1-green-leaf.jpg'},
@@ -445,8 +453,9 @@ void main() {
       const channel = MethodChannel('plugins.flutter.io/image_picker');
       messenger.setMockMethodCallHandler(
         channel,
-        (_) async =>
-            File('../../public/assets/img/guides/leaf-color.png').absolute.path,
+        (_) async => File(
+          '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
+        ).absolute.path,
       );
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final api = _Api()
@@ -469,6 +478,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tap(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Unable to count'),
+      );
       await tester.enterText(
         field('Search a barangay or landmark'),
         'My coastal site',
@@ -532,14 +545,14 @@ void main() {
           'longitude': '123.8833',
           'location_source': 'manual',
         },
-        'photo_path': File('../../public/assets/img/guides/leaf-color.png')
-            .absolute
-            .path,
+        'photo_path': File(
+          '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
+        ).absolute.path,
       };
       drafts.saved['$scope:closeup'] = {
-        'photo_path': File('../../public/assets/img/guides/roots.png')
-            .absolute
-            .path,
+        'photo_path': File(
+          '../../public/assets/img/observations/v1-green-leaf.jpg',
+        ).absolute.path,
       };
       await tester.pumpWidget(
         MaterialApp(
@@ -595,7 +608,7 @@ void main() {
       messenger.setMockMethodCallHandler(
         channel,
         (_) async => File(
-          '../../public/assets/img/guides/${picked++ == 0 ? 'leaf-color' : 'roots'}.png',
+          '../../public/assets/img/observations/${picked++ == 0 ? 'v1-intact-prop-roots' : 'v1-green-leaf'}.jpg',
         ).absolute.path,
       );
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
@@ -615,6 +628,10 @@ void main() {
       await tester.pumpAndSettle();
       await tap(tester, find.text('Gallery').first, photoIO: true);
       await tap(tester, find.text('Gallery').last, photoIO: true);
+      await tap(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Unable to count'),
+      );
       await tester.enterText(field('Search a barangay or landmark'), 'Pier');
       await tester.pump(const Duration(milliseconds: 750));
       FocusManager.instance.primaryFocus?.unfocus();
@@ -624,13 +641,17 @@ void main() {
         find.widgetWithText(FilledButton, 'Continue').first,
         photoIO: true,
       );
+      await tap(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Unable to count'),
+      );
       await tester.enterText(field('Living mangroves observed'), '3');
       await tap(
         tester,
         find.widgetWithText(CheckboxListTile, 'Unable to count'),
       );
       expect(field('Living mangroves observed'), findsNothing);
-      expect(find.text('Count not recorded.'), findsOneWidget);
+      expect(find.text('Select a site or enter a barangay.'), findsOneWidget);
       await tap(tester, find.text('Pier 3, Cebu City'));
       expect(
         tester
@@ -656,7 +677,7 @@ void main() {
         find.widgetWithText(CheckboxListTile, 'Unable to count'),
       );
       await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
-      expect(find.text('3. Traits'), findsOneWidget);
+      expect(find.text('3. Traits and Conditions'), findsOneWidget);
       await tap(tester, find.text('Previous'));
       expect(find.text('2. Location'), findsOneWidget);
       expect(field('Living mangroves observed'), findsNothing);
@@ -714,6 +735,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(field('Search a barangay or landmark'), findsNothing);
+      await tap(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Unable to count'),
+      );
       final input = field('Search a barangay or landmark');
       await tester.ensureVisible(input);
       await tester.enterText(input, 'Pier');
@@ -857,8 +883,9 @@ void main() {
       const channel = MethodChannel('plugins.flutter.io/image_picker');
       messenger.setMockMethodCallHandler(
         channel,
-        (_) async =>
-            File('../../public/assets/img/guides/leaf-color.png').absolute.path,
+        (_) async => File(
+          '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
+        ).absolute.path,
       );
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final drafts = _Drafts();
@@ -893,9 +920,9 @@ void main() {
       );
       expect(find.text('Add both photos before continuing.'), findsOneWidget);
       await openLocation(tester);
-      expect(find.text('Count not recorded.'), findsNothing);
+      expect(find.text('Select a site or enter a barangay.'), findsNothing);
       await tap(tester, find.text('Unable to count'));
-      expect(find.text('Count not recorded.'), findsOneWidget);
+      expect(find.text('Select a site or enter a barangay.'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       expect(tester.takeException(), isNull);
@@ -1286,7 +1313,7 @@ void main() {
       messenger.setMockMethodCallHandler(
         channel,
         (_) async => File(
-          '../../public/assets/img/guides/${picked++ == 0 ? 'leaf-color' : 'roots'}.png',
+          '../../public/assets/img/observations/${picked++ == 0 ? 'v1-intact-prop-roots' : 'v1-green-leaf'}.jpg',
         ).absolute.path,
       );
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));

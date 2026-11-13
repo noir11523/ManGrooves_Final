@@ -53,25 +53,25 @@ function jpeg(bytes) {
     const exif=Buffer.from('ffe1002245786966000049492a0008000000010012010300010000000100000000000000','hex');
     exif.writeUInt16LE(rotate,28); chunks.splice(1,0,exif);
   }
-  return {bytes:Buffer.concat(chunks),extension:'jpg',contentType:'image/jpeg'};
+  return {bytes:Buffer.concat(chunks),width,height,extension:'jpg',contentType:'image/jpeg'};
 }
 function crc32(bytes) { let crc=0xffffffff; for(const b of bytes) { crc^=b; for(let k=0;k<8;k++) crc=crc>>>1^(crc&1?0xedb88320:0); } return (crc^0xffffffff)>>>0; }
 function png(bytes) {
-  const chunks=[bytes.subarray(0,8)]; let offset=8,header=false,image=false,ended=false;
+  const chunks=[bytes.subarray(0,8)]; let offset=8,header=false,image=false,ended=false,width=0,height=0;
   while(offset+12<=bytes.length) {
     const size=bytes.readUInt32BE(offset), end=offset+12+size;
     if(end>bytes.length) throw new Error('PNG length');
     const type=bytes.toString('ascii',offset+4,offset+8);
     if(crc32(bytes.subarray(offset+4,end-4))!==bytes.readUInt32BE(end-4)) throw new Error('PNG checksum');
     if(!header&&type!=='IHDR') throw new Error('PNG header');
-    if(type==='IHDR') { if(header||size!==13) throw new Error('PNG header'); header=true; dimensions(bytes.readUInt32BE(offset+8),bytes.readUInt32BE(offset+12)); }
+    if(type==='IHDR') { if(header||size!==13) throw new Error('PNG header'); header=true; width=bytes.readUInt32BE(offset+8);height=bytes.readUInt32BE(offset+12);dimensions(width,height); }
     if(type==='IDAT') image=true;
     if(['IHDR','PLTE','tRNS','IDAT','IEND'].includes(type)) chunks.push(bytes.subarray(offset,end));
     if(type==='IEND') { ended=true; break; }
     offset=end;
   }
   if(!header||!image||!ended) throw new Error('Incomplete PNG');
-  return {bytes:Buffer.concat(chunks),extension:'png',contentType:'image/png'};
+  return {bytes:Buffer.concat(chunks),width,height,extension:'png',contentType:'image/png'};
 }
 function webp(bytes) {
   if(bytes.readUInt32LE(4)+8!==bytes.length) throw new Error('WebP length');
@@ -91,7 +91,7 @@ function webp(bytes) {
   }
   if(!image||offset!==bytes.length) throw new Error('Incomplete WebP'); dimensions(width,height);
   const content=Buffer.concat(chunks),head=Buffer.from('RIFF0000WEBP');head.writeUInt32LE(content.length+4,4);
-  return {bytes:Buffer.concat([head,content]),extension:'webp',contentType:'image/webp'};
+  return {bytes:Buffer.concat([head,content]),width,height,extension:'webp',contentType:'image/webp'};
 }
 export function cleanImage(bytes) {
   if(bytes[0]===0xff&&bytes[1]===0xd8) return jpeg(bytes);

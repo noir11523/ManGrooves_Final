@@ -14,7 +14,7 @@ const bundle=await build({entryPoints:[fileURLToPath(new URL('../src/app.js',imp
  b.onResolve({filter:/^chart.js\/auto$/},()=>({path:'chart',namespace:'stub'}));
  b.onLoad({filter:/.*/,namespace:'stub'},({path})=>({contents:path==='client'?`export const initialize=async f=>{globalThis.restoreTestAccount=f;};
  export const api=(...args)=>globalThis.testApi(...args);export const login=async()=>{};export const logout=async()=>{};
- export const changePassword=async()=>{};export const friendly=e=>e.message;export const apiUrl=p=>p;`:path==='chart'?'export default class Chart {constructor(){}destroy(){}}':'',loader:'js'}));
+ export const changePassword=async()=>{};export const friendly=e=>e.message;export const apiUrl=p=>p;`:path==='chart'?'export default class Chart {static instances={};static register(){}constructor(){}destroy(){}}':'',loader:'js'}));
 }}]});
 await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const tick=()=>new Promise(resolve=>setImmediate(resolve));

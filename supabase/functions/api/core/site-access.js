@@ -4,3 +4,8 @@ export const usableSite = (site, user) => !site.deleted_at && !site.location_pen
   (sharedSite(site) || Number(site.created_by) === Number(user.id));
 export const visibleSite = (site, user) => !site.deleted_at &&
   (user.role !== 'guardian' || sharedSite(site) || Number(site.created_by) === Number(user.id));
+
+export function isNamedSite(site) {
+  const name=String(site?.name??'').trim();
+  return Boolean(name) && !/^(?:pinned location|device location|loading|finding location|coordinates|address unavailable)\b/i.test(name) && !/^[-\d., ()]+$/.test(name);
+}

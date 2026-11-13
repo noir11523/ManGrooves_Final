@@ -252,3 +252,11 @@ test('source, database files and secrets cannot be served; assets remain accessi
   assert.equal(all.some(p=>/migration-data|\.sql$|\.local-key|client-config\.json|firebase|node_modules/.test(p)),false);
   const js=await readFile(root+'/dist/assets/cloud/cloud.js','utf8');assert.match(js,/cloud-session\.php/);assert.doesNotMatch(js,/createClient\(/);
 });
+test('saved themes reach the PHP shell without invalid nested document selectors',async()=>{
+  const {b}=await login();const {text}=await b.request('/dashboard.php');
+  assert.match(text,/assets\/css\/themes\.css\?v=/);
+  assert.match(text,/data-theme-user="\d+"/);
+  const css=await readFile(root+'/dist/assets/css/themes.css','utf8');
+  assert.match(css,/html\[data-theme=.?dark/);
+  assert.doesNotMatch(await readFile(root+'/dist/assets/cloud/cloud.css','utf8'),/\.cloud-panel html\[data-theme/);
+});

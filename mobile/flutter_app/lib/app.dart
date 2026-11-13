@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/api_client.dart';
+import 'core/app_theme.dart';
 import 'screens/auth_gate.dart';
 
 class ManGroovesApp extends StatelessWidget {
@@ -10,11 +11,32 @@ class ManGroovesApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const forest = Color(0xFF245B2B);
+    return ValueListenableBuilder<String>(
+      valueListenable: appTheme,
+      builder: (context, appearance, _) => buildThemedApp(context, appearance),
+    );
+  }
+
+  MaterialApp buildThemedApp(BuildContext context, String appearance) {
+    final forest = appearance == 'gold'
+        ? const Color(0xFF71551D)
+        : appearance == 'silver'
+        ? const Color(0xFF375A64)
+        : const Color(0xFF245B2B);
     const sand = Color(0xFFF6F2E9);
     return MaterialApp(
       title: 'ManGROOVES',
       debugShowCheckedModeBanner: false,
+      themeMode: appearance == 'dark' ? ThemeMode.dark : ThemeMode.light,
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFA6D3A0),
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: const Color(0xFF17231C),
+      ),
       theme: ThemeData(
         useMaterial3: true,
         textTheme: const TextTheme(

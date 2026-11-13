@@ -14,12 +14,12 @@ export function reportPhotoHashes(photos) {
   if (!Array.isArray(photos) || !photos.length || photos.length > 6) throw new AppError('Choose 1 to 6 photos.');
   if (photos.some(p => !Buffer.isBuffer(p) || !p.length || p.length > 5 * 1024 * 1024)) throw new AppError('Use photos under 5 MB each.');
   if (photos.reduce((sum,p) => sum + p.length, 0) > 12 * 1024 * 1024) throw new AppError('Keep all photos together under 12 MB.');
-  const hashes = photos.map(p => {
-    try { return createHash('sha256').update(cleanImage(p).bytes).digest('hex'); }
-    catch { throw new AppError('Choose a valid JPG, PNG, or WebP photo.'); }
-  });
+  const images=photos.map(p=>{try{return cleanImage(p);}catch{throw new AppError('Choose a valid JPG, PNG, or WebP photo.');}});
+  const hashes=images.map(image=>createHash('sha256').update(image.bytes).digest('hex'));
   const duplicates = hashes.flatMap((hash,i) => hashes.indexOf(hash) < i ? [i] : []);
   if (duplicates.length) throw photoError('photo_duplicate', duplicates);
+  const small=images.flatMap((image,i)=>Math.min(image.width,image.height)<240?[i]:[]);
+  if(small.length)throw Object.assign(new AppError('Photo is too small. Use a clearer photo.'),{code:'photo_unclear',photo_indices:small});
   return hashes;
 }
 

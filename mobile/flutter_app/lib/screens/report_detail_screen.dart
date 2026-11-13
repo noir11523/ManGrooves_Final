@@ -218,9 +218,12 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         _InfoCard(
           title: 'Species features',
           rows: {
-            'Root type': _report!['root_type'],
-            'Leaf shape': _report!['leaf_shape'],
-            'Bark texture': _report!['bark_texture'],
+            'Root type':
+                (_report!['display_root_type'] ?? _report!['root_type']),
+            'Leaf shape':
+                (_report!['display_leaf_shape'] ?? _report!['leaf_shape']),
+            'Bark texture':
+                (_report!['display_bark_texture'] ?? _report!['bark_texture']),
           },
         ),
         const SizedBox(height: 18),

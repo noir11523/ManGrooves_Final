@@ -140,7 +140,7 @@ export function matchSpecies(catalog, traits) {
     }));
     return {...species, trait_scores, confidence: Math.round(Object.values(trait_scores).reduce((a, b) => a + b, 0) / 3 * 100) / 100};
   }).sort((a, b) => b.confidence - a.confidence || a.scientific_name.localeCompare(b.scientific_name));
-  const best = keys.every(k => String(traits[k] ?? '').trim()) && ranked[0]?.confidence >= 45 && ranked[0]?.confidence !== ranked[1]?.confidence ? ranked[0] : null;
+  const best = keys.every(k => String(traits[k] ?? '').trim()) && ranked[0]?.confidence === 100 && ranked[0]?.confidence !== ranked[1]?.confidence ? ranked[0] : null;
   return {best, ranked: ranked.slice(0, 5)};
 }
 

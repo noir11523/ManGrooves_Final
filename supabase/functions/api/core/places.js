@@ -1,9 +1,11 @@
 import {AppError,text,distanceMeters} from './domain.js';
-import {reportBarangay,barangaySearchPoint,philippineSearchBounds,withinPhilippineSearchBounds} from './report-geography.js';
+import {reportBarangay,barangaySearchPoint,withinPhilippineSearchBounds} from './report-geography.js';
 import {philippineBarangays} from './barangays.js';
 import localReferences from '../data/local-places.json' with {type:'json'};
 
-const barangays=philippineBarangays();
+const barangays=philippineBarangays().filter(b=>b.province==='Cebu');
+const cebuBounds=[123.2,9.3,124.6,11.7];
+const isCebuPoint=(lat,lng)=>Boolean(reportBarangay(lat,lng));
 const ignoredSearchWords=new Set(['barangay','brgy','city','municipality','province','philippines','ph']);
 const normalize=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const queryTokens=value=>normalize(value).split(' ').filter(word=>(word.length>1||/^\d$/.test(word))&&!ignoredSearchWords.has(word));
@@ -69,7 +71,7 @@ function barangayResults(term,latitude,longitude) {
 export function placeResults(data,term='',latitude=null,longitude=null) {
   const places=(data?.features??[]).flatMap((feature,index)=>{
     const [longitude,latitude]=feature.geometry?.coordinates??[],p=feature.properties??{};
-    if(!withinPhilippineSearchBounds(latitude,longitude))return [];
+    if(!isCebuPoint(latitude,longitude))return [];
     const area=reportBarangay(latitude,longitude);
     const countryKnown=Boolean(p.country||p.countrycode||p.country_code);
     if(countryKnown?!isPhilippineFeature(p):!area)return [];
@@ -87,15 +89,15 @@ const caches=new WeakMap();
 export async function searchPlaces(service,user,query,fetcher=fetch) {
   const reverse = query.latitude != null || query.longitude != null;
   const latitude = Number(query.latitude), longitude = Number(query.longitude);
-  if(reverse && (!String(query.latitude ?? '').trim() || !String(query.longitude ?? '').trim() || !withinPhilippineSearchBounds(latitude,longitude))) throw new AppError('Choose a valid point in the Philippines.');
+  if(reverse && (!String(query.latitude ?? '').trim() || !String(query.longitude ?? '').trim() || !isCebuPoint(latitude,longitude))) throw new AppError('Choose a location in Cebu.');
   const term=reverse?'':text(query.q??'','an address',150,false);
   if(!reverse && term.length<3)return {places:[]};
   let home=null;
   if(!reverse&&service.get)try{home=await service.get('barangays',user.barangay_id);}catch{}
   const requestedLatitude=Number(query.bias_latitude),requestedLongitude=Number(query.bias_longitude);
-  const requestedBias=withinPhilippineSearchBounds(requestedLatitude,requestedLongitude);
+  const requestedBias=isCebuPoint(requestedLatitude,requestedLongitude);
   const bias=requestedBias?{latitude:requestedLatitude,longitude:requestedLongitude}
-    :{latitude:Number(home?.center_lat)||10.3157,longitude:Number(home?.center_lng)||123.8854};
+    :(home?.province==='Cebu'?{latitude:Number(home.center_lat)||10.3157,longitude:Number(home.center_lng)||123.8854}:{latitude:10.3157,longitude:123.8854});
   const biasLatitude=reverse?latitude:bias.latitude,biasLongitude=reverse?longitude:bias.longitude;
   const localPlaces=reverse?[]:[...referencePlaces(term),...barangayResults(term,biasLatitude,biasLongitude)];
   const googleKey=String(env('GOOGLE_MAPS_API_KEY')).trim();
@@ -111,7 +113,7 @@ export async function searchPlaces(service,user,query,fetcher=fetch) {
     if(!reverse&&googleKey){
       try{
         const url=new URL('https://maps.googleapis.com/maps/api/geocode/json');
-        const [west,south,east,north]=philippineSearchBounds;
+        const [west,south,east,north]=cebuBounds;
         url.searchParams.set('address',term);url.searchParams.set('components','country:PH');url.searchParams.set('region','ph');
         url.searchParams.set('bounds',`${south},${west}|${north},${east}`);url.searchParams.set('key',googleKey);
         const response=await fetcher(url,{signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
@@ -121,7 +123,7 @@ export async function searchPlaces(service,user,query,fetcher=fetch) {
           const latitude=place.geometry?.location?.lat,longitude=place.geometry?.location?.lng;
           const address=String(place.formatted_address??'').trim(),name=address.split(',')[0]?.trim()??'';
           const countryCode=place.address_components?.find(component=>component.types?.includes('country'))?.short_name;
-          if(!withinPhilippineSearchBounds(latitude,longitude)||!name||(!countryCode&& !/(?:^|,\s*)Philippines$/i.test(address))
+          if(!isCebuPoint(latitude,longitude)||!name||(!countryCode&& !/(?:^|,\s*)Philippines$/i.test(address))
             ||(countryCode&&countryCode.toUpperCase()!=='PH'))return [];
           return [{name,address,label:address,latitude,longitude}];
         });
@@ -137,7 +139,7 @@ export async function searchPlaces(service,user,query,fetcher=fetch) {
       else {
         url.searchParams.set('q',term);
         url.searchParams.set('lat',String(biasLatitude));url.searchParams.set('lon',String(biasLongitude));
-        url.searchParams.set('location_bias_scale','0.1');url.searchParams.set('countrycode','PH');url.searchParams.set('bbox',philippineSearchBounds.join(','));
+        url.searchParams.set('location_bias_scale','0.1');url.searchParams.set('countrycode','PH');url.searchParams.set('bbox',cebuBounds.join(','));
       }
       try {
         const response=await fetcher(url,{signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'api_client.dart';
+import 'photo_quality.dart';
 
 Future<void> validateReportPhotos(List<String> paths) async {
   if (paths.length > 6) throw const ApiException('Use up to 6 photos.');
@@ -28,11 +29,18 @@ Future<void> validateReportPhotos(List<String> paths) async {
     }
     contents.add(bytes);
   }
+  for (final bytes in contents) {
+    await checkPhotoClarity(bytes);
+  }
 }
 
 bool isPhotoConflict(Object error) =>
     error is ApiException &&
-    ['photo_duplicate', 'photo_already_submitted'].contains(error.code);
+    [
+      'photo_duplicate',
+      'photo_already_submitted',
+      'photo_unclear',
+    ].contains(error.code);
 
 String photoConflictMessage(ApiException error) {
   if (error.code == 'photo_duplicate') {

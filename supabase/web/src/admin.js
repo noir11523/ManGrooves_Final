@@ -1,3 +1,4 @@
+import {traitControls} from './trait-controls.js';
 import {adminList} from './admin-lists.js';
 import {sitesPage,catalogTabs} from './sites-page.js';
 import { api, friendly } from './client.js';
@@ -19,13 +20,13 @@ export async function checklistPage(node) {
   const traitRows=[];
   const traitRoot=$('#trait-editors'),traitHead={root_type:'Klase sa Gamot (Root Type)',leaf_shape:'Porma sa Dahon (Leaf Shape)',bark_texture:'Hitsura sa Panit sa Punoan (Bark Texture)'};
   for(const [key,values] of Object.entries(traitData.traits??{})){
-    const group=document.createElement('details');group.className='card trait-editor-group';const heading=document.createElement('summary');const strong=document.createElement('strong');strong.textContent=traitHead[key]||key;heading.append(strong);group.append(heading);traitRoot.append(group);
-    traitRows.push([group,{name:traitHead[key]||key,options:values.map(label=>({label}))}]);
+    const group=document.createElement('details');group.className='card trait-editor-group';group.dataset.trait=key;const heading=document.createElement('summary');const strong=document.createElement('strong');strong.textContent=traitHead[key]||key;heading.append(strong);group.append(heading);traitRoot.append(group);
+    traitRows.push([group,{name:traitHead[key]||key,options:values.map(value=>({label:traitData.trait_labels?.[key]?.[value]??value}))}]);
     const grid=document.createElement('div');grid.className='trait-editor-grid';group.append(grid);
     for(const value of values){
     const image=traitData.trait_images?.[key]?.[value],row=document.createElement('div');
     row.className='trait-image-editor';
-    const label=document.createElement('strong');label.textContent=value;
+    const label=document.createElement('strong');label.textContent=traitData.trait_labels?.[key]?.[value]??value;
     const preview=document.createElement('img');if(image)preview.src=asset(image);preview.hidden=!image;preview.alt='Reference photo for '+value;
     const input=document.createElement('input');input.type='file';input.accept='image/jpeg,image/png,image/webp';input.setAttribute('aria-label','Replace sample picture for '+value);
     const actions=document.createElement('div');actions.className='actions';
@@ -79,7 +80,7 @@ export async function checklistPage(node) {
   searchForm.querySelector('[name=q]').addEventListener('input',()=>searchForm.requestSubmit());
   for (const criterion of criteria) {
     const data = structuredClone(criterion), images = new Map(), wrapper = document.createElement('details');
-    wrapper.className = 'card checklist-editor'; root.append(wrapper);
+    wrapper.className = 'card checklist-editor'; wrapper.dataset.criterion=data.code; root.append(wrapper);
     rows.push([wrapper, data]);
     function read() {
       data.name = wrapper.querySelector('[name=name]').value;
@@ -133,6 +134,7 @@ export async function checklistPage(node) {
     wrapper.addEventListener('input',()=>read());
   }
   apply();
+  traitControls(node,traitData,criteria,()=>checklistPage(node.parentElement));
 }
 
 export async function adminPage(node, page, query = {}) {
