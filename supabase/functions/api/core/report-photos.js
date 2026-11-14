@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {AppError, requireRole, text} from './domain.js';
 import {cleanImage} from './images.js';
+import {validatePhotoQuality} from './photo-quality.js';
 
 export function photoError(code, indices = []) {
   const message = code === 'photo_duplicate'
@@ -12,14 +13,15 @@ export function photoError(code, indices = []) {
 // Both preflight and final submission use the same metadata-free fingerprints.
 export function reportPhotoHashes(photos) {
   if (!Array.isArray(photos) || !photos.length || photos.length > 6) throw new AppError('Choose 1 to 6 photos.');
-  if (photos.some(p => !Buffer.isBuffer(p) || !p.length || p.length > 5 * 1024 * 1024)) throw new AppError('Use photos under 5 MB each.');
+  if(photos.some(p=>!Buffer.isBuffer(p)))throw Object.assign(new AppError('Could not read this photo. Please choose another.'),{code:'photo_unclear'});
   if (photos.reduce((sum,p) => sum + p.length, 0) > 12 * 1024 * 1024) throw new AppError('Keep all photos together under 12 MB.');
-  const images=photos.map(p=>{try{return cleanImage(p);}catch{throw new AppError('Choose a valid JPG, PNG, or WebP photo.');}});
+  // Sequential decoding bounds memory. Both preflight and final submission call
+  // this before any report image, database row, or photo claim is written.
+  photos.forEach((photo,index)=>validatePhotoQuality(photo,index));
+  const images=photos.map(p=>cleanImage(p));
   const hashes=images.map(image=>createHash('sha256').update(image.bytes).digest('hex'));
   const duplicates = hashes.flatMap((hash,i) => hashes.indexOf(hash) < i ? [i] : []);
   if (duplicates.length) throw photoError('photo_duplicate', duplicates);
-  const small=images.flatMap((image,i)=>Math.min(image.width,image.height)<240?[i]:[]);
-  if(small.length)throw Object.assign(new AppError('Photo is too small. Use a clearer photo.'),{code:'photo_unclear',photo_indices:small});
   return hashes;
 }
 

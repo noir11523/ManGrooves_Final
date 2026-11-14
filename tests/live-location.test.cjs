@@ -184,13 +184,13 @@ test('failure to start and immediate permission errors leave no timers or watche
     assert.equal(clearedId, 0);
 });
 
-test('a stalled precise request tries one uncached alternative device request', () => {
+test('a stalled precise request tries one recent alternative device request', () => {
     const f = fixture();
     f.tracker.start();
     f.advance(15000);
     assert.equal(f.alternatives.length, 1);
     assert.equal(f.alternatives[0].options.enableHighAccuracy, false);
-    assert.equal(f.alternatives[0].options.maximumAge, 0);
+    assert.equal(f.alternatives[0].options.maximumAge, 10000);
     f.alternatives[0].success(f.reading(40));
     assert.equal(f.positions.length, 1);
     assert.equal(f.tracker.active, true);

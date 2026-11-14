@@ -54,10 +54,10 @@ test('shared verified sites are available across home barangays; coordinate plac
 });
 test('photo clarity distinguishes tiny/blank photos from detailed photos',()=>{
   const flat=new Uint8Array(192*192*4).fill(128);
-  assert.match(clarityProblem(128,128,flat),/too small/);
-  assert.match(clarityProblem(800,600,flat),/unclear/);
-  const detailed=flat.map((_,i)=>((i>>2)+Math.floor((i>>2)/192))%2?255:0);
-  assert.equal(clarityProblem(800,600,detailed),'');
+  assert.match(clarityProblem(128,128,flat),/resolution is too low/);
+  assert.match(clarityProblem(800,800,flat),/quality is too low/);
+  const detailed=flat.map((_,i)=>i%4===3?255:((i>>2)+Math.floor((i>>2)/192))%2?255:0);
+  assert.equal(clarityProblem(800,800,detailed),'');
 });
 
 test('trait category metadata and order persist independently without changing species matching',async()=>{

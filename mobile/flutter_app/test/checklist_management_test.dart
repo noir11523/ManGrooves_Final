@@ -103,6 +103,14 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 }
 
 class _CloudApi extends _Api {
+  @override
+  Future<Map<String, dynamic>> cloudUpload(
+    String path,
+    Map<String, dynamic> body,
+    Map<String, String> images, {
+    String? token,
+  }) => cloudRequest(path, body: body);
+
   Map<String, dynamic>? traitCreation;
   Map<String, dynamic> metadata = {
     'name': 'Leaf shape',
@@ -179,6 +187,7 @@ void main() {
       expect(find.byType(SegmentedButton<String>), findsOneWidget);
       expect(find.text('Points'), findsNothing);
       expect(find.text('Answers'), findsNothing);
+      expect(find.text('Add photo'), findsWidgets);
       await tester.enterText(_field('Choice').first, 'White');
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('-2-standard')),

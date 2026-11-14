@@ -7,7 +7,7 @@ export function enlargePhoto(img) {
   dialog.append(close,image);(img.closest('.cloud-panel')??document.body).append(dialog);
   dialog.addEventListener('close',()=>{if(objectUrl)URL.revokeObjectURL(objectUrl);dialog.remove();img.focus();},{once:true});dialog.showModal();
 }
-export function bindPhotoPreview(img) {
-  img.classList.add('zoomable-photo');img.tabIndex=0;img.setAttribute('role','button');img.setAttribute('aria-label','Enlarge ID photo');
+export function bindPhotoPreview(img, label='Enlarge ID photo') {
+  img.classList.add('zoomable-photo');img.tabIndex=0;img.setAttribute('role','button');img.setAttribute('aria-label',label);
   img.onclick=()=>enlargePhoto(img);img.onkeydown=event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();enlargePhoto(img);}};
 }

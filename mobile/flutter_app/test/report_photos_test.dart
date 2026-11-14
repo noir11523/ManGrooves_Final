@@ -15,7 +15,7 @@ void main() {
       try {
         final first = await File('${directory.path}/overview.jpg').writeAsBytes(
           await File(
-            '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
+            '../../supabase/test/fixtures/quality/clear.jpg',
           ).readAsBytes(),
         );
         final second = await File('${directory.path}/closeup.jpg').writeAsBytes(

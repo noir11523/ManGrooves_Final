@@ -12,7 +12,10 @@ Future<void> validateReportPhotos(List<String> paths) async {
   for (final path in paths) {
     final file = File(path), size = await File(path).length();
     if (size > 5 * 1024 * 1024) {
-      throw const ApiException('Use photos under 5 MB each.');
+      throw const ApiException(
+        'Photo exceeds the 5 MB limit.',
+        code: 'photo_unclear',
+      );
     }
     total += size;
     if (total > 12 * 1024 * 1024) {

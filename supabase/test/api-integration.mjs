@@ -27,7 +27,7 @@ const auth={
  async signIn(email,password){const user=[...accounts.values()].find(u=>u.email===email&&!u.disabled&&u.password===password);assert.ok(user,'Valid test sign-in');const idToken=randomUUID();sessions.set(idToken,user);return {idToken};}
 };
 const bucket={file:path=>({async save(bytes){images.set(path,bytes);},async delete(){images.delete(path);},async exists(){return [images.has(path)];},async download(){return images.get(path);},createReadStream(){return Readable.from([images.get(path)]);}})};
-const fixture=await readFile(new URL('../../public/assets/img/observations/v1-intact-prop-roots.jpg',import.meta.url));
+const fixture=await readFile(new URL('./fixtures/quality/clear.jpg',import.meta.url));
 const reference=JSON.parse(await readFile(new URL('../data/reference.json',import.meta.url),'utf8'));
 for(const [collection,rows] of Object.entries(reference)) for(const row of rows) await db.collection(collection).doc(row.id).set(row);
 const sentMail=[];let failMail=false;
@@ -462,6 +462,14 @@ try {
   const views=await submission(photoUser,{photo_views:'2',checklist_versions:versions,submission_token:'original-photo-visit'});
   const photoState=async()=>({images:images.size,...Object.fromEntries(await Promise.all(['reports','photo_claims','clusters','notifications','audit_logs'].map(async name=>[name,JSON.stringify((await db.collection(name).get()).docs.map(d=>d.data()))])))});
   const beforePhotoCheck=await photoState();
+  for(const filename of ['blur.jpg','out-of-focus.jpg','dark.jpg','bright.jpg','low-contrast.jpg','low-resolution.jpg']) {
+    const invalid=await readFile(new URL(`./fixtures/quality/${filename}`,import.meta.url));
+    const checked=await photoCheck(photoUser,[views.bytes,invalid],'quality-reject',422);assert.equal(checked.code,'photo_unclear');assert.deepEqual(checked.photo_indices,[1]);
+    const failed=await submission(photoUser,{checklist_versions:versions,submission_token:'quality-reject'},invalid);
+    assert.equal((await request('submit-report.php',photoUser,failed.body,422)).code,'photo_unclear');
+    assert.deepEqual(await photoState(),beforePhotoCheck);
+  }
+  pass('quality failures in preflight and final submission never write photos, reports, claims, sites or notifications');
   await photoCheck(photoUser,[views.bytes,fixture]);
   await photoCheck(photoUser,[views.bytes,fixture]);
   await photoCheck(null,[views.bytes],'new-visit',401);
@@ -669,8 +677,15 @@ try {
   const traitInput={action:'create_category',name:'Flower colour',question_text:'What colour are the flowers?',choices:['White','Red']};
   await request('trait-images.php',guardianSession,traitInput,403);
   await request('trait-images.php',expert,traitInput,403);
-  const traitResult=await request('trait-images.php',admin,traitInput),traitKey=traitResult.trait;
+  const traitBody=new FormData();traitBody.set('payload',JSON.stringify(traitInput));traitBody.set('choice_image_0',new Blob([fixture],{type:'image/jpeg'}),'white.jpg');
+  const traitResult=await request('trait-images.php',admin,traitBody),traitKey=traitResult.trait;
   const [white,red]=traitResult.traits[traitKey];
+  assert.match(traitResult.trait_images[traitKey][white],/checklist-photo/);assert.equal(traitResult.trait_images[traitKey][red],undefined);
+  const beforeFailedTrait=images.size;
+  const badTrait=new FormData();badTrait.set('payload',JSON.stringify({...traitInput,name:'Bad photo category'}));badTrait.set('choice_image_0',new Blob([fixture]),'good.jpg');badTrait.set('choice_image_1',new Blob(['corrupted']),'bad.jpg');
+  await request('trait-images.php',admin,badTrait,422);assert.equal(images.size,beforeFailedTrait);
+  assert.ok(!Object.values((await request('trait-images.php',admin)).trait_categories).some(c=>c.name==='Bad photo category'));
+  pass('category choice photos sync atomically and failed uploads leave no category or stored images');
   assert.equal(traitResult.trait_categories[traitKey].name,'Flower colour');
   const speciesCatalog=await request('species.php',admin),baseSpecies=speciesCatalog.species.find(s=>Number(s.active)!==0);
   assert.deepEqual(speciesCatalog.traits[traitKey],[white,red]);

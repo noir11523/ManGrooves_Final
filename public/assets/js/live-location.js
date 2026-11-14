@@ -67,7 +67,7 @@
             }
             this.active = true;
             this.deadline = this.now() + this.waitMs;
-            const alternativeAt = this.now() + 15000;
+            const alternativeAt = this.now() + 3000;
             let alternativeRequested = false;
             const generation = this.generation;
             const receive = position => {
@@ -101,7 +101,7 @@
                         if (this.active && generation === this.generation && error.code === 1) {
                             this.finish('denied', 'Allow location in your browser and device settings, then retry.');
                         }
-                    }, {enableHighAccuracy: false, maximumAge: 0, timeout: 15000});
+                    }, {enableHighAccuracy: false, maximumAge: 10000, timeout: 12000});
                 } catch (error) { /* Keep the primary watch running if the optional request fails. */ }
             };
             this.emit('searching', 'Finding your location. Allow access if asked.');
@@ -206,14 +206,14 @@
                 // Browser coordinate attributes can be prototype getters, not enumerable fields.
                 const coords = this.best?.coords;
                 let area = this.best && Date.now() - this.best.timestamp < 30000
-                    ? {latitude:coords.latitude, longitude:coords.longitude, accuracy:coords.accuracy, label:''} : null;
+                    ? {latitude:coords.latitude, longitude:coords.longitude, accuracy:coords.accuracy, label:'',source:'device'} : null;
                 if (options.allowIpFallback !== false && (!area || area.accuracy > 5000)) {
                     options.onState?.({state:'searching', message:'Finding the nearest area…'});
                     const timeout = setTimeout(() => controller.abort(), 10000);
                     try {
                         const ip = await (options.lookupIpArea || lookupIpArea)({signal:controller.signal});
                         // A known device estimate beats an IP location with unknown precision.
-                        if (!area || (ip.accuracy && ip.accuracy < area.accuracy)) area = ip;
+                        if (!area || (ip.accuracy && ip.accuracy < area.accuracy)) area = {...ip,source:'network'};
                     } catch { /* Search and manual pin placement remain available. */ }
                     finally { clearTimeout(timeout); }
                 }
@@ -221,8 +221,8 @@
                 if (area) options.onApproximate?.(area);
                 this.stop();
                 options.onState?.({state:area?'approximate':'unavailable',message:(area
-                    ? 'Approximate area only. Try again, search a place, or place a pin.'
-                    : 'Location unavailable. Try again, search a place, or place a pin.') + failureHint});
+                    ? 'Approximate area found. Check the pin.'
+                    : 'Location unavailable. Search or adjust the pin.') + failureHint});
             };
             this.finishing = false;
             this.tracker = new Tracker({...options, waitMs:30000,
@@ -240,7 +240,7 @@
                 onState:state=>{
                     if (!current() || this.accepted) return;
                     if (['denied','unsupported','insecure','unavailable','timeout'].includes(state.state)) {
-                        if (state.state === 'denied') failureHint = ' Allow location in your browser and device settings to retry.';
+                        if (state.state === 'denied') failureHint = ' Allow location access to try again.';
                         if (state.state === 'insecure') failureHint = ' Use the HTTPS site for device location.';
                         void finish();
                     }

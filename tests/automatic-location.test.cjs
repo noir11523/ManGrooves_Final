@@ -16,8 +16,8 @@ test('automatic capture finishes with a ready state after a precise fix without 
   assert.equal(f.states.at(-1).state,'ready');
 });
 test('device network positioning is attempted before IP and preserves precise coordinates',t=>{
-  const f=setup(t);t.mock.timers.tick(15000);assert.equal(f.source.networkOptions.enableHighAccuracy,false);
-  f.source.network(f.reading(45));t.mock.timers.tick(15000);
+  const f=setup(t);t.mock.timers.tick(3000);assert.equal(f.source.networkOptions.enableHighAccuracy,false);
+  f.source.network(f.reading(45));t.mock.timers.tick(27000);
   assert.equal(f.pins.length,1);assert.equal(f.pins[0].coords.accuracy,45);assert.equal(f.ipCalls,0);
   assert.equal(f.states.at(-1).state,'ready');assert.equal(f.locator.active,false);
 });
@@ -36,7 +36,7 @@ test('a usable coarse device estimate is preferred to IP and remains approximate
   const f=setup(t);t.mock.timers.tick(20000);
   const coords=Object.create(Object.defineProperties({}, {latitude:{get:()=>10.28},longitude:{get:()=>123.88},accuracy:{get:()=>400}}));
   f.receive({timestamp:Date.now(),coords});t.mock.timers.tick(10000);await tick();
-  assert.equal(f.ipCalls,0);assert.deepEqual(f.areas[0],{latitude:10.28,longitude:123.88,accuracy:400,label:''});assert.equal(f.pins.length,0);
+  assert.equal(f.ipCalls,0);assert.deepEqual(f.areas[0],{latitude:10.28,longitude:123.88,accuracy:400,label:'',source:'device'});assert.equal(f.pins.length,0);
 });
 test('late fallback responses cannot replace a manual selection or a new capture',async t=>{
   let resolve;const f=setup(t,{lookupIpArea:()=>new Promise(r=>resolve=r)});f.fail({code:1});

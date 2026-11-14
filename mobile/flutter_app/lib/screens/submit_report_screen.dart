@@ -172,6 +172,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   bool _clearingDraft = false;
   bool _pickingPhoto = false;
   bool _checkingPhotos = false;
+  bool _photoQualityPassed = false;
   String? _lastDraft;
   final _draftStatus = ValueNotifier<String>('');
   String? get _draftScope => widget.draftOwner == null
@@ -367,12 +368,32 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (draft['picking_photo'] == true && Platform.isAndroid) {
         final lost = await _picker.retrieveLostData();
         if (lost.files?.isNotEmpty == true) {
-          if (draft['picking_extra'] == true && _extraPhotos.length < 4) {
-            _extraPhotos.add(lost.files!.first);
-          } else if (draft['picking_closeup'] == true) {
-            _closeupPhoto = lost.files!.first;
-          } else {
-            _photo = lost.files!.first;
+          final photo = lost.files!.first,
+              extra = draft['picking_extra'] == true,
+              closeup = draft['picking_closeup'] == true;
+          try {
+            _checkingPhotos = true;
+            await _checkPhotos([
+              extra || closeup ? _photo?.path : photo.path,
+              extra || !closeup ? _closeupPhoto?.path : photo.path,
+              ..._extraPhotos.map((p) => p.path),
+              if (extra) photo.path,
+            ]);
+            if (extra && _extraPhotos.length < 4) {
+              _extraPhotos.add(photo);
+            } else if (closeup) {
+              _closeupPhoto = photo;
+            } else {
+              _photo = photo;
+            }
+            _photoQualityPassed = true;
+          } catch (error) {
+            _step = 0;
+            _error = error is ApiException
+                ? error.message
+                : 'Could not check this photo. Choose it again.';
+          } finally {
+            _checkingPhotos = false;
           }
         }
       }
@@ -657,7 +678,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       setState(() => _error = 'Select a site or enter a barangay first.');
       return;
     }
-    setState(() => _checkingPhotos = true);
+    setState(() {
+      _checkingPhotos = true;
+      _photoQualityPassed = false;
+    });
     try {
       await _checkPhotos([
         _photo!.path,
@@ -695,7 +719,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         requestFullMetadata: false,
       );
       if (image != null && mounted) {
-        setState(() => _checkingPhotos = true);
+        setState(() {
+          _checkingPhotos = true;
+          _photoQualityPassed = false;
+        });
         await _checkPhotos([
           extra || closeup ? _photo?.path : image.path,
           extra || !closeup ? _closeupPhoto?.path : image.path,
@@ -705,6 +732,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         if (!mounted) return;
         setState(() {
           _error = null;
+          _photoQualityPassed = true;
           if (extra) {
             _extraPhotos.add(image);
           } else if (closeup) {
@@ -920,7 +948,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       fallbackRequested = true;
       Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
+          accuracy: LocationAccuracy.low,
           timeLimit: Duration(seconds: 12),
         ),
       ).then(receive).catchError((Object _) {
@@ -935,7 +963,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       ),
     ).listen(receive, onError: (Object error) => fallback());
     _gpsSubscription = subscription;
-    fallbackTimer = Timer(const Duration(seconds: 8), fallback);
+    fallbackTimer = Timer(const Duration(seconds: 3), fallback);
     deadline = Timer(const Duration(seconds: 30), () {
       if (result.isCompleted) return;
       if (best != null && best!.accuracy <= maxAccuracy) {
@@ -993,6 +1021,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   Future<void> _chooseManualLocation({
     LatLng? areaCenter,
     double? areaAccuracy,
+    bool useNearbyArea = false,
   }) async {
     _cancelGps();
     areaCenter ??= _areaCenter;
@@ -1012,10 +1041,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       MaterialPageRoute(
         builder: (_) => LocationPickerScreen(
           api: widget.api,
-          initialName: _sitio.text,
+          initialName: useNearbyArea ? '' : _sitio.text,
           // The fallback centers the map only. It never selects a report pin.
           initialCenter:
-              _location?.point ??
+              (useNearbyArea ? areaCenter : _location?.point) ??
               areaCenter ??
               (_approximatePosition == null
                   ? null
@@ -1026,7 +1055,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               clusterCenter ??
               barangayCenter ??
               const LatLng(10.2833, 123.8833),
-          initialLocation: _location,
+          initialLocation: useNearbyArea ? null : _location,
           approximateCenter:
               areaCenter ??
               (_approximatePosition == null
@@ -1104,14 +1133,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   Future<void> _findApproximateArea(int request, {String? failureHint}) async {
-    if (_location != null) {
-      setState(() {
-        _locationNeedsRetry = true;
-        _locationMessage =
-            'Could not update your location. Your selected pin is unchanged. ${failureHint ?? 'Try again or adjust the pin.'}';
-      });
-      return;
-    }
     LatLng? center;
     double? accuracy;
     final device = _approximatePosition;
@@ -1122,10 +1143,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
     // Mobile uses device positioning only. A coarse reading can guide the map,
     // but cannot become a report pin; search and manual selection stay available.
-    if (!mounted ||
-        !widget.active ||
-        request != _locationRequest ||
-        _location != null) {
+    if (!mounted || !widget.active || request != _locationRequest) {
       return;
     }
     setState(() {
@@ -1133,7 +1151,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _areaAccuracy = accuracy;
       _locationNeedsRetry = true;
       _locationMessage =
-          '${center == null ? 'Location unavailable.' : 'Approximate area only.'} Try again, search a place, or place a pin.${failureHint == null ? '' : ' $failureHint'}';
+          '${center == null ? 'Location unavailable. Search or adjust the pin.' : 'Approximate area found. Check the pin.'}${failureHint == null ? '' : ' $failureHint'}';
     });
   }
 
@@ -1736,7 +1754,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         if (!didPop && widget.handleSystemBack) goBack();
       },
       child: ContentWidth(
-        maxWidth: _step == 2 ? 1240 : 880,
+        maxWidth: _step == 2
+            ? 1320
+            : _step == 1
+            ? 1000
+            : 880,
         child: Form(
           key: _formKey,
           onChanged: _draftEdited,
@@ -1881,21 +1903,92 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     );
   }
 
+  void _enlargeUpload(XFile photo) {
+    showDialog<void>(
+      context: context,
+      builder: (dialog) => Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Photo'),
+            leading: IconButton(
+              tooltip: 'Close',
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(dialog),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 5,
+              child: Image.file(File(photo.path), fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _uploadPreview(
+    XFile photo,
+    String label, {
+    required VoidCallback remove,
+  }) => Stack(
+    children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: AspectRatio(
+          aspectRatio: 4 / 3,
+          child: Semantics(
+            button: true,
+            label: 'Enlarge $label photo',
+            child: InkWell(
+              onTap: () => _enlargeUpload(photo),
+              child: Image.file(File(photo.path), fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        top: 4,
+        right: 4,
+        child: IconButton.filledTonal(
+          tooltip: 'Remove $label photo',
+          onPressed: _checkingPhotos || _pickingPhoto ? null : remove,
+          icon: const Icon(Icons.close),
+          iconSize: 20,
+        ),
+      ),
+    ],
+  );
+
   Widget _photosStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      if (_checkingPhotos || _photoQualityPassed)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            _checkingPhotos
+                ? 'Checking photo quality...'
+                : 'Photo quality passed.',
+          ),
+        ),
       _Section(
         title: 'Site overview',
         subtitle: 'Show the whole mangrove and its surroundings.',
         child: Column(
           children: [
             if (_photo != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: Image.file(File(_photo!.path), fit: BoxFit.cover),
-                ),
+              _uploadPreview(
+                _photo!,
+                'Site overview',
+                remove: () {
+                  setState(() {
+                    _photo = null;
+                    _photoQualityPassed = false;
+                  });
+                  _draftEdited();
+                },
               )
             else
               Container(
@@ -1937,15 +2030,16 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         child: Column(
           children: [
             if (_closeupPhoto != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: Image.file(
-                    File(_closeupPhoto!.path),
-                    fit: BoxFit.cover,
-                  ),
-                ),
+              _uploadPreview(
+                _closeupPhoto!,
+                'Close-up',
+                remove: () {
+                  setState(() {
+                    _closeupPhoto = null;
+                    _photoQualityPassed = false;
+                  });
+                  _draftEdited();
+                },
               )
             else
               Container(
@@ -1999,9 +2093,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                     Positioned.fill(
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: Image.file(
-                          File(_extraPhotos[i].path),
-                          fit: BoxFit.cover,
+                        child: InkWell(
+                          onTap: () => _enlargeUpload(_extraPhotos[i]),
+                          child: Image.file(
+                            File(_extraPhotos[i].path),
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                     ),
@@ -2012,10 +2109,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                         tooltip: 'Remove photo ${i + 1}',
                         visualDensity: VisualDensity.compact,
                         iconSize: 18,
-                        onPressed: () {
-                          setState(() => _extraPhotos.removeAt(i));
-                          _draftEdited();
-                        },
+                        onPressed: _checkingPhotos || _pickingPhoto
+                            ? null
+                            : () {
+                                setState(() => _extraPhotos.removeAt(i));
+                                _draftEdited();
+                              },
                         icon: const Icon(Icons.close),
                       ),
                     ),
@@ -2050,7 +2149,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       const SizedBox(height: 16),
       FilledButton(
         onPressed: _pickingPhoto || _checkingPhotos ? null : _continuePhotos,
-        child: Text(_checkingPhotos ? 'Checking photos…' : 'Continue'),
+        child: Text(_checkingPhotos ? 'Checking photo quality...' : 'Continue'),
       ),
     ],
   );
@@ -2186,6 +2285,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               ],
             ),
             const SizedBox(height: 8),
+            if (_areaCenter != null && _locationNeedsRetry && !_gettingLocation)
+              TextButton.icon(
+                onPressed: () => _chooseManualLocation(useNearbyArea: true),
+                icon: const Icon(Icons.near_me_outlined),
+                label: const Text('Show nearby area'),
+              ),
             Text(
               _gettingLocation
                   ? (_gpsProgressAccuracy == null
@@ -2585,7 +2690,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                   _busy
                       ? 'Submitting...'
                       : _confirmingSubmit
-                      ? 'Checking photos...'
+                      ? 'Checking photo quality...'
                       : 'Submit report',
                 ),
               ),
@@ -2643,7 +2748,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 photoCredit:
                     (_form?['photo_credits'] as Map?)?[_traitPath(label, item)]
                         as Map?,
-                thumbnail: _traitPhoto(label, item, 200),
+                thumbnail: _traitPhoto(label, item, 220),
                 picture: _traitPhoto(label, item, 600),
                 onToggle: toggle,
               ),

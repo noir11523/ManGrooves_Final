@@ -805,18 +805,21 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
         images.remove('option_image_${option['id']}');
       }
       if (_newTrait) {
-        await widget.api.cloudRequest(
-          'trait-images.php',
-          body: {
-            'action': 'create_category',
-            'name': _data['name'],
-            'question_text': _data['question_text'],
-            'choices': _options
-                .where((o) => o['delete'] != true)
-                .map((o) => o['label'])
-                .toList(),
-          },
-        );
+        final active = _options.where((o) => o['delete'] != true).toList();
+        final photos = <String, String>{
+          for (var i = 0; i < active.length; i++)
+            if (images['option_image_${active[i]['id']}'] != null)
+              'choice_image_$i': images['option_image_${active[i]['id']}']!,
+        };
+        await widget.api.cloudUpload('trait-images.php', {
+          'action': 'create_category',
+          'name': _data['name'],
+          'question_text': _data['question_text'],
+          'choices': _options
+              .where((o) => o['delete'] != true)
+              .map((o) => o['label'])
+              .toList(),
+        }, photos);
       } else {
         await widget.api.saveChecklist(_data, images);
       }
@@ -875,7 +878,7 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
               label: Text(
                 key == 'guide_image'
                     ? 'Change guide photo'
-                    : 'Change choice photo',
+                    : (hasPhoto ? 'Change photo' : 'Add photo'),
               ),
             ),
             if (hasPhoto)
@@ -1070,7 +1073,7 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
               ],
               Text(
                 _newTrait
-                    ? 'Add photos after saving.'
+                    ? 'Add a photo to help identify each choice.'
                     : 'JPG, PNG, or WebP. Up to 5 MB.',
               ),
               const SizedBox(height: 16),
@@ -1185,13 +1188,12 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                                     _dirty = true;
                                   }),
                           ),
-                        if (!_newTrait)
-                          _photo(
-                            'option_image_${option['id']}',
-                            option['image_path'] as String?,
-                            option,
-                            'remove_image',
-                          ),
+                        _photo(
+                          'option_image_${option['id']}',
+                          option['image_path'] as String?,
+                          option,
+                          'remove_image',
+                        ),
                       ],
                     ),
                   ),

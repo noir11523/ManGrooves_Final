@@ -7,7 +7,7 @@ export async function readInput(req) {
   if (!req.is('multipart/form-data')) return {input: req.body ?? {}, files: {}};
   return new Promise((resolve, reject) => {
     const fields = {}, files = {}, pending = [];
-    let failed = false, totalBytes = 0;
+    let failed = false, oversized = false, totalBytes = 0;
     const fail = () => { failed = true; };
     const parser = Busboy({headers: req.headers, limits: {files: 31, fields: 150, fileSize: 5 * 1024 * 1024, fieldSize: 256 * 1024}});
     parser.on('file', (name, stream) => {
@@ -15,7 +15,7 @@ export async function readInput(req) {
       const chunks = [];
       files[name] = null;
       pending.push(new Promise((done, error) => {
-        stream.on('limit', fail);
+        stream.on('limit', () => {oversized=true;fail();});
         stream.on('data', chunk => {
           totalBytes += chunk.length;
           if (totalBytes > 12 * 1024 * 1024) fail();
@@ -30,6 +30,7 @@ export async function readInput(req) {
     parser.on('close', async () => {
       try {
         await Promise.all(pending);
+        if(oversized)throw Object.assign(new AppError('Photo exceeds the 5 MB limit.'),{code:'photo_unclear'});
         if (totalBytes > 12 * 1024 * 1024) throw new AppError('Keep each save under 12 MB. Save photos in smaller batches.');
         if (failed) throw new AppError('Use photos under 5 MB and no more than 30 choice photos.');
         const input = fields.payload ? JSON.parse(fields.payload) : {...fields};

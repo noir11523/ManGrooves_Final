@@ -362,7 +362,7 @@ test('location buttons support automatic capture, approximate fallback, retry an
     assert.equal($('#manual-pin').disabled,false);
     gpsFail({code:1});await tick();
     assert.equal($('#gps').textContent,'Try again');assert.equal($('#gps').disabled,false);
-    assert.equal(ui.reportDraft.fields.location_source,'');assert.match($('#location-status').textContent,/Approximate area only/);
+    assert.equal(ui.reportDraft.fields.location_source,'');assert.match($('#location-status').textContent,/Approximate area found/);
     $('#gps').click();assert.equal($('#gps').disabled,true);
     gps({timestamp:Date.now(),coords:{latitude:10.28,longitude:123.88,accuracy:9}});
     assert.equal($('#gps').disabled,false);assert.equal($('#gps').textContent,'Use my location');
@@ -376,7 +376,7 @@ test('location buttons support automatic capture, approximate fallback, retry an
     late({timestamp:Date.now(),coords:{latitude:1,longitude:1,accuracy:1}});
     assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(Number(ui.reportDraft.fields.latitude),10.29);
     $('#gps').click();gpsFail({code:1});await tick();
-    assert.equal($('#gps').textContent,'Try again');assert.match($('#location-status').textContent,/selected pin is unchanged/);
+    assert.equal($('#gps').textContent,'Try again');assert.match($('#location-status').textContent,/Approximate area shown/);
     assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(Number(ui.reportDraft.fields.latitude),10.29);
   } finally {dispose();globalThis.fetch=originalFetch;ui.reportDraft.reset();}
 });
@@ -899,7 +899,7 @@ test('an unresolved pin blocks Next, retries without losing details and rejects 
 
 test('admins can save trait headings and add a category with answer choices',async()=>{
   const writes=[];const data={traits:{leaf_shape:['Elliptic']},trait_categories:{leaf_shape:{name:'Leaf shape',question_text:'What shape?'}},category_order:['leaf_shape']};
-  globalThis.testApi=async(path,{body}={})=>{if(body){writes.push({path,body});return {criteria:[]};}return path==='trait-images.php'?data:{criteria:[]};};
+  globalThis.testApi=async(path,{body}={})=>{if(body){writes.push({path,body:body instanceof FormData?JSON.parse(body.get('payload')):body});return {criteria:[]};}return path==='trait-images.php'?data:{criteria:[]};};
   await ui.checklistPage($('#page'));
   let form=$('.trait-category-form');form.elements.name.value='Leaf outline';form.elements.question_text.value='Which shape matches?';
   await form.onsubmit({preventDefault(){}});
@@ -919,7 +919,7 @@ test('a custom Trait syncs from Add category to species selection and report ste
  const traits={root_type:[reference.species[0].root_type],leaf_shape:[reference.species[0].leaf_shape],bark_texture:[reference.species[0].bark_texture],[key]:[value]};
  const catalog={traits,trait_categories:{[key]:meta},trait_labels:{[key]:{[value]:'White'}},category_order:[key,'root_type','leaf_shape','bark_texture'],species:[reference.species[0]],criteria:[]};
  globalThis.testApi=async(path,{body}={})=>{
-  if(path==='trait-images.php'&&body){assert.equal(body.action,'create_category');assert.deepEqual(body.choices,['White']);created=true;return {...catalog,trait:key};}
+  if(path==='trait-images.php'&&body){body=body instanceof FormData?JSON.parse(body.get('payload')):body;assert.equal(body.action,'create_category');assert.deepEqual(body.choices,['White']);created=true;return {...catalog,trait:key};}
   if(path==='species.php'&&body){speciesSaved=body;return {};}
   if(path==='report-preview.php'){preview=body;return {classification:{status:'Healthy',health_score:6},species:{},checklist_versions:{}};}
   return {...catalog,clusters:[],location:{}};
@@ -927,7 +927,7 @@ test('a custom Trait syncs from Add category to species selection and report ste
  await ui.checklistPage($('#page'));
  let form=$('.checklist-create form');assert.equal(form.elements.category_type.value,'trait');
  assert.equal(form.elements.selection_mode.closest('label').hidden,true);
- form.elements.name.value=meta.name;form.elements.question_text.value=meta.question_text;form.querySelector('.choice-label').value='White';form.querySelectorAll('.category-choice button')[1].click();
+ form.elements.name.value=meta.name;form.elements.question_text.value=meta.question_text;form.querySelector('.choice-label').value='White';form.querySelectorAll('.category-choice [aria-label="Remove choice"]')[1].click();
  await form.onsubmit({preventDefault(){},target:form});assert.equal(created,true);
  await ui.adminPage($('#page'),'species',{});$('.edit-item').click();
  const choice=$(`[name=${key}]`);assert.equal(choice.tagName,'SELECT');assert.equal(choice.options[1].textContent,'White');choice.value=value;
@@ -957,4 +957,43 @@ test('category tools preserve edits, reject duplicate choices and save reordered
  $('[aria-controls=order-categories]').click();$('.order-row [data-step="1"]').click();
  await $('.checklist-order .actions button').onclick({target:$('.checklist-order .actions button')});
  assert.deepEqual(writes[0],{action:'order',order:['leaf_shape','root_type']});clearTimeout(ui.toast.timer);
+});
+
+
+test('photo checking blocks Next; failed candidates never preview; accepted photos enlarge and remove',async()=>{
+ globalThis.testApi=async()=>({criteria:reference.criteria,clusters:[],species:[],location:{}});
+ let resolveCheck;
+ globalThis.testPhotoApi=()=>new Promise(resolve=>resolveCheck=resolve);
+ ui.reportDraft.reset();const dispose=await ui.reportWizard($('#page'),{},{id:'quality-flow'});
+ const choose=(selector,value)=>{const input=$(selector);Object.defineProperty(input,'files',{configurable:true,value:[value]});change(input);};
+ const wait=async fn=>{for(let n=0;n<100&&!fn();n++)await tick();assert.ok(fn());};
+ try {
+  choose('[name=photo]',new File(['clear'],'clear.jpg',{type:'image/jpeg'}));
+  await wait(()=>resolveCheck);
+  assert.equal($('#photo-status').textContent,'Checking photo quality...');assert.equal($('#next').disabled,true);assert.equal($('#photo-preview').hidden,true);
+  resolveCheck({ok:true});await wait(()=>ui.reportDraft.photo);await tick();
+  assert.equal($('#photo-status').textContent,'Photo quality passed.');assert.equal($('#next').disabled,false);
+  $('#photo-preview').click();assert.equal($('.photo-enlarge').open,true);$('.photo-enlarge button').click();assert.equal($('.photo-enlarge'),null);
+  globalThis.testPhotoApi=async()=>{throw Object.assign(Error('Photo is blurry. Please take a clearer photo.'),{code:'photo_unclear',photo_indices:[0]});};
+  choose('[name=photo]',new File(['blurry'],'bad.jpg',{type:'image/jpeg'}));await wait(()=>$('.error').textContent.includes('blurry'));
+  assert.equal(ui.reportDraft.photo.name,'clear.jpg');assert.equal($('#photo-preview').hidden,false);
+  $('[data-remove-main="photo"]').click();assert.equal(ui.reportDraft.photo,null);assert.equal($('#photo-preview').hidden,true);
+  globalThis.testPhotoApi=async()=>({ok:true});
+  choose('[name=closeup_photo]',new File(['close'],'close.jpg',{type:'image/jpeg'}));await wait(()=>ui.reportDraft.closeupPhoto);await tick();
+  $('#closeup-preview').click();assert.equal($('.photo-enlarge').open,true);$('.photo-enlarge button').click();
+  $('[data-remove-main="closeupPhoto"]').click();assert.equal(ui.reportDraft.closeupPhoto,null);assert.equal($('#closeup-preview').hidden,true);
+ }finally{dispose();delete globalThis.testPhotoApi;ui.reportDraft.reset();}
+});
+
+test('a coarse device fix offers a nearby pin even when a previous address was already selected',async t=>{
+ globalThis.testApi=async path=>path==='report-form.php'?{criteria:reference.criteria,clusters:[],species:[],location:{}}:{places:[]};
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,fields:{latitude:10.28,longitude:123.88,location_source:'manual',sitio_name:'Previous site'}});
+ const dispose=await ui.reportWizard($('#page'),{});
+ t.mock.timers.enable({apis:['setTimeout','setInterval']});
+ try {
+  $('#gps').click();t.mock.timers.tick(20000);gps({timestamp:Date.now(),coords:{latitude:10.3,longitude:123.9,accuracy:400}});t.mock.timers.tick(10000);
+  assert.equal($('#use-nearby-pin').hidden,false);assert.equal(ui.reportDraft.fields.latitude,10.28);
+  $('#use-nearby-pin').click();assert.equal($('#use-nearby-pin').hidden,true);assert.equal(Number(ui.reportDraft.fields.latitude),10.3);assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(ui.reportDraft.fields.sitio_name,'');assert.equal($('#next').disabled,true);
+  assert.match($('#location-status').textContent,/Approximate location/);
+ }finally{dispose();t.mock.timers.reset();ui.reportDraft.reset();}
 });

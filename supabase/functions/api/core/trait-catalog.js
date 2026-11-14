@@ -28,7 +28,7 @@ export function selectedCustomTraits(catalog,input) {
   return result;
 }
 
-export async function editTraits(service, user, input) {
+export async function editTraits(service, user, input, choiceImages={}) {
   requireRole(user,'system_admin');
   const current = await traitCatalog(service);
   return service.db.runTransaction(async tx=>{
@@ -46,7 +46,11 @@ export async function editTraits(service, user, input) {
       const key=`trait_category_${randomUUID().replaceAll('-','')}`,ref=service.ref('meta','trait_catalog'),stored=(await tx.get(ref)).data()??{};
       const order=[...new Set([...(layout.order??current.category_order),...Object.keys(categories)])];
       const lastTrait=Math.max(-1,...order.map((value,i)=>Object.hasOwn(categories,value)?i:-1));order.splice(lastTrait+1,0,key);
-      tx.set(ref,{...stored,[key]:labels.map(label=>({value:`choice_${randomUUID().replaceAll('-','')}`,label}))});
+      const choices=labels.map(label=>({value:`choice_${randomUUID().replaceAll('-','')}`,label}));
+      const imageRef=service.ref('meta','trait_images'),images=(await tx.get(imageRef)).data()??{};
+      const group=Object.fromEntries(choices.flatMap((choice,i)=>choiceImages[i]?[[choice.value,choiceImages[i]]]:[]));
+      tx.set(ref,{...stored,[key]:choices});
+      if(Object.keys(group).length)tx.set(imageRef,{...images,[key]:group});
       tx.set(layoutRef,{...layout,order,traits:{...layout.traits,[key]:{name,question_text,custom:true}}});
       service.audit(tx,user,'admin.trait_category_created','criteria',key);
       return {message:'Trait category added.',trait:key};

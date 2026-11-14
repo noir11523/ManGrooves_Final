@@ -1,26 +1,40 @@
-// Conservative clarity screening; experts still assess the photo's subject.
-export function clarityProblem(width,height,rgba) {
-  if(Math.min(width,height)<240)return 'Photo is too small. Use a clearer photo.';
-  const gray=[];for(let i=0;i<rgba.length;i+=4)gray.push(.299*rgba[i]+.587*rgba[i+1]+.114*rgba[i+2]);
-  const side=Math.round(Math.sqrt(gray.length));let sum=0,squares=0,n=0;
-  for(let y=1;y<side-1;y++)for(let x=1;x<side-1;x++){const i=y*side+x,v=4*gray[i]-gray[i-1]-gray[i+1]-gray[i-side]-gray[i+side];sum+=v;squares+=v*v;n++;}
-  return n&&squares/n-(sum/n)**2<5?'Photo is unclear. Retake it in good light.':'';
+import {photoQualityConfig as config,qualityMessages,resolutionProblem,sampleDimensions,imageQualityMetrics,qualityProblem} from '../../functions/api/core/photo-quality-metrics.js';
+export function clarityProblem(width,height,rgba,sampleWidth=Math.round(Math.sqrt(rgba.length/4)),sampleHeight=sampleWidth){
+  return resolutionProblem(width,height)||qualityProblem(imageQualityMetrics(rgba,sampleWidth,sampleHeight));
 }
 const checked=new WeakSet();
-export async function checkClarity(file){
-  if(checked.has(file))return;
-  // Image is the fallback for browsers without createImageBitmap.
-  if(typeof createImageBitmap!=='function'&&typeof Image!=='function')return;
+export const prepareReportPhoto=file=>checkClarity(file,true);
+export async function checkClarity(file,prepare=false){
+  if(checked.has(file))return file;
+  if(file.size>config.maxBytes)throw Object.assign(Error(qualityMessages.size),{code:'photo_unclear'});
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw Object.assign(Error(qualityMessages.format),{code:'photo_unclear'});
+  // Server preflight remains mandatory when a browser cannot decode locally.
+  if(typeof createImageBitmap!=='function'&&typeof Image!=='function')return file;
   let bitmap,url;
   try{
     if(typeof createImageBitmap==='function')bitmap=await createImageBitmap(file);
     else {url=URL.createObjectURL(file);bitmap=new Image();bitmap.src=url;await bitmap.decode();}
-    const canvas=document.createElement('canvas');canvas.width=canvas.height=192;
-    const context=canvas.getContext('2d',{willReadFrequently:true});
-    context.drawImage(bitmap,0,0,192,192);
-    const problem=clarityProblem(bitmap.naturalWidth||bitmap.width,bitmap.naturalHeight||bitmap.height,context.getImageData(0,0,192,192).data);
-    if(problem)throw new Error(problem);
+    const width=bitmap.naturalWidth||bitmap.width,height=bitmap.naturalHeight||bitmap.height;
+    const problem=resolutionProblem(width,height,prepare?{...config,maxPixels:64000000}:config);if(problem)throw Object.assign(Error(problem),{code:'photo_unclear'});
+    const [w,h]=sampleDimensions(width,height),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+    const context=canvas.getContext('2d',{willReadFrequently:true});if(!context)return file;
+    context.fillStyle='#fff';context.fillRect(0,0,w,h);context.imageSmoothingQuality='medium';context.drawImage(bitmap,0,0,w,h);
+    const failure=qualityProblem(imageQualityMetrics(context.getImageData(0,0,w,h).data,w,h));
+    if(failure)throw Object.assign(Error(failure),{code:'photo_unclear'});
+    if(prepare&&width*height>config.maxPixels){
+      // Preserve aspect ratio and the minimum resolution while bounding server memory.
+      const scale=Math.max(config.minSide/Math.min(width,height),Math.min(1,config.uploadSide/Math.max(width,height)));
+      const target=document.createElement('canvas');target.width=Math.round(width*scale);target.height=Math.round(height*scale);
+      const targetProblem=resolutionProblem(target.width,target.height);if(targetProblem)throw Object.assign(Error(targetProblem),{code:'photo_unclear'});
+      const painter=target.getContext('2d');if(!painter)throw Object.assign(Error(qualityMessages.pixels),{code:'photo_unclear'});
+      painter.fillStyle='#fff';painter.fillRect(0,0,target.width,target.height);painter.imageSmoothingQuality='high';painter.drawImage(bitmap,0,0,target.width,target.height);
+      const blob=await new Promise(resolve=>target.toBlob(resolve,file.type,.92));if(!blob)throw Error(qualityMessages.corrupt);
+      const extension={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[blob.type];
+      const smaller=new File([blob],file.name.replace(/\.[^.]+$/,'')+'.'+extension,{type:blob.type,lastModified:file.lastModified});
+      await checkClarity(smaller);return smaller;
+    }
     checked.add(file);
-  }catch(error){throw Object.assign(new Error(error.message?.startsWith('Photo is')?error.message:'Could not read this photo. Choose another.'),{code:'photo_unclear'});}
+    return file;
+  }catch(error){throw Object.assign(Error(error.code==='photo_unclear'?error.message:qualityMessages.corrupt),{code:'photo_unclear'});}
   finally{bitmap?.close?.();if(url)URL.revokeObjectURL(url);}
 }

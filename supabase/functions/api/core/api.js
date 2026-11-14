@@ -326,7 +326,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
     const status = error instanceof AppError ? error.status : error.type === 'entity.too.large' ? 413 : error.type === 'entity.parse.failed' ? 400 : 500;
     // Never log submitted credentials, photos, bearer tokens, or raw bodies.
     if (status === 500) console.error('API failure', {route: path(req), code: error.code ?? error.name});
-    const photoDetails = error instanceof AppError && ['photo_duplicate','photo_already_submitted'].includes(error.code)
+    const photoDetails = error instanceof AppError && ['photo_duplicate','photo_already_submitted','photo_unclear'].includes(error.code)
       ? {code:error.code, photo_indices:error.photo_indices} : {};
     res.status(status).json({ok: false, ...photoDetails, message: error instanceof AppError ? error.message : status === 413 ? 'The upload is too large.' : status === 400 ? 'Invalid form data.' : 'Could not complete the request. Try again.'});
   });

@@ -397,7 +397,7 @@ Future<void> tap(
           .evaluate()
           .any((element) => (element.widget as FilledButton).onPressed == null);
       final checking =
-          (find.text('Checking photos...').evaluate().isNotEmpty ||
+          (find.text('Checking photo quality...').evaluate().isNotEmpty ||
               find.text('Checking photos…').evaluate().isNotEmpty) &&
           find.byType(AlertDialog).evaluate().isEmpty;
       waiting =
@@ -505,9 +505,9 @@ void main() {
           'longitude': '123.8833',
           'location_source': 'manual',
         },
-        'photo_path': File(
-          '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
-        ).absolute.path,
+        'photo_path': File('../../supabase/test/fixtures/quality/clear.jpg')
+            .absolute
+            .path,
       };
       drafts.saved['$scope:closeup'] = {
         'photo_path': File(
@@ -630,9 +630,10 @@ void main() {
       const channel = MethodChannel('plugins.flutter.io/image_picker');
       messenger.setMockMethodCallHandler(
         channel,
-        (_) async => File(
-          '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
-        ).absolute.path,
+        (_) async =>
+            File('../../supabase/test/fixtures/quality/clear.jpg')
+                .absolute
+                .path,
       );
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final api = _Api()
@@ -723,9 +724,9 @@ void main() {
           'longitude': '123.8833',
           'location_source': 'manual',
         },
-        'photo_path': File(
-          '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
-        ).absolute.path,
+        'photo_path': File('../../supabase/test/fixtures/quality/clear.jpg')
+            .absolute
+            .path,
       };
       drafts.saved['$scope:closeup'] = {
         'photo_path': File(
@@ -786,7 +787,7 @@ void main() {
       messenger.setMockMethodCallHandler(
         channel,
         (_) async => File(
-          '../../public/assets/img/observations/${picked++ == 0 ? 'v1-intact-prop-roots' : 'v1-green-leaf'}.jpg',
+          '../../supabase/test/fixtures/quality/${picked++ == 0 ? 'clear' : 'close-up'}.jpg',
         ).absolute.path,
       );
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
@@ -1061,9 +1062,10 @@ void main() {
       const channel = MethodChannel('plugins.flutter.io/image_picker');
       messenger.setMockMethodCallHandler(
         channel,
-        (_) async => File(
-          '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
-        ).absolute.path,
+        (_) async =>
+            File('../../supabase/test/fixtures/quality/clear.jpg')
+                .absolute
+                .path,
       );
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final drafts = _Drafts();
@@ -1082,6 +1084,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('More views (optional)'), findsNothing);
       expect(find.widgetWithText(OutlinedButton, 'Photo'), findsOneWidget);
+      await tap(tester, find.text('Gallery').first, photoIO: true);
+      await tap(
+        tester,
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.label == 'Enlarge Site overview photo',
+        ),
+      );
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      await tap(tester, find.byTooltip('Close'));
+      await tap(tester, find.byTooltip('Remove Site overview photo'));
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.label == 'Enlarge Site overview photo',
+        ),
+        findsNothing,
+      );
       await tap(tester, find.text('Gallery').first, photoIO: true);
       await tap(
         tester,
@@ -1392,7 +1414,7 @@ void main() {
       await tap(tester, find.byKey(const ValueKey('device-location')));
       expect(find.text('Try again'), findsOneWidget);
       expect(
-        find.textContaining('Your selected pin is unchanged'),
+        find.textContaining('Location unavailable. Search or adjust the pin.'),
         findsOneWidget,
       );
       expect(find.textContaining('Manual pin: 10.301'), findsNothing);
@@ -1491,7 +1513,7 @@ void main() {
       messenger.setMockMethodCallHandler(
         channel,
         (_) async => File(
-          '../../public/assets/img/observations/${picked++ == 0 ? 'v1-intact-prop-roots' : 'v1-green-leaf'}.jpg',
+          '../../supabase/test/fixtures/quality/${picked++ == 0 ? 'clear' : 'close-up'}.jpg',
         ).absolute.path,
       );
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));

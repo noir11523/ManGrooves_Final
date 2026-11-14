@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "maxBytes": 5242880,
+  "minSide": 800,
+  "maxPixels": 6000000,
+  "sampleSide": 512,
+  "tileGrid": 4,
+  "minLaplacian": 45,
+  "minSharpTileLaplacian": 100,
+  "minSharpTiles": 2,
+  "minGradient": 3,
+  "minBrightness": 22,
+  "maxBrightness": 240,
+  "darkPercentile": 45,
+  "brightPercentile": 220,
+  "minContrast": 9,
+  "minTonalRange": 22,
+  "uploadSide": 2200
+}

@@ -1,3 +1,5 @@
+import {bindPhotoPreview} from './photo-preview.js';
+import {prepareReportPhoto} from './photo-quality.js';
 import {namedAddress,addressReady,resolvedAddress} from './report-address.js';
 import {resolveAnimalChoices} from './observation-selection.js';
 import {traitLabels,traitHeadings} from './trait-labels.js';
@@ -109,6 +111,7 @@ export async function reportWizard(node, query, user = null) {
     tracker?.stop(); tracker = null;
     const button = node.querySelector('#gps');
     if (button) { button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Use my location'; }
+    if(button&&node.isConnected)updateAddressControls();
   };
   const status = () => {
     const element = node.querySelector('#draft-notice');
@@ -235,35 +238,47 @@ export async function reportWizard(node, query, user = null) {
     const photoGrid=document.createElement('div');photoGrid.className='report-photo-grid';
     const overview=node.querySelector('.report-photo-picker'),closeup=$('#closeup-preview').closest('.report-photo-picker');
     overview.before(photoGrid);photoGrid.append(overview,closeup);overview.append($('#photo-preview'));
+    for(const [card,id,key,label] of [[overview,'photo-preview','photo','Site overview'],[closeup,'closeup-preview','closeupPhoto','Close-up']]){
+      const remove=document.createElement('button');remove.type='button';remove.className='remove-photo';remove.dataset.removeMain=key;remove.setAttribute('aria-label',`Remove ${label} photo`);remove.innerHTML='&times;';card.append(remove);
+      remove.onclick=()=>{if(photoBusy)return;draft[key]=null;changed();showPhoto();};
+      bindPhotoPreview($('#'+id),`Enlarge ${label} photo`);
+    }
     photoGrid.insertAdjacentHTML('afterend', '<div class="extra-photo-picker" aria-label="Extra photos (optional)"><div id="extra-previews"></div><button type="button" class="outline add-photo" id="add-photos" aria-label="Add another photo"><span aria-hidden="true">＋</span> Photo</button><small id="extra-count"></small><input id="extra-photos" name="extra_photos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></div>');
+    let photoBusy=false;
     const showPhoto = () => {
       extraUrls.forEach(URL.revokeObjectURL);extraUrls=draft.extraPhotos.map(p=>URL.createObjectURL(p));
       $('#extra-previews').innerHTML=extraUrls.map((url,i)=>`<figure><img class="inline-photo" src="${url}" alt="Additional photo ${i+1}"><button type="button" class="remove-photo" aria-label="Remove photo ${i+1}" data-remove-photo="${i}">×</button></figure>`).join('');
-      $$('[data-remove-photo]').forEach(button=>button.onclick=()=>{draft.extraPhotos.splice(Number(button.dataset.removePhoto),1);changed();showPhoto();});
+      $$('[data-remove-photo]').forEach(button=>button.onclick=()=>{if(photoBusy)return;draft.extraPhotos.splice(Number(button.dataset.removePhoto),1);changed();showPhoto();});
       $('#add-photos').disabled=draft.extraPhotos.length>=4;$('#extra-count').textContent=draft.extraPhotos.length?`${draft.extraPhotos.length}/4`:'';
-      if(closeupUrl)URL.revokeObjectURL(closeupUrl);
-      if(draft.closeupPhoto){closeupUrl=URL.createObjectURL(draft.closeupPhoto);$('#closeup-preview').src=closeupUrl;$('#closeup-preview').hidden=false;}
-      if (photoUrl) URL.revokeObjectURL(photoUrl);
-      if (draft.photo) { photoUrl = URL.createObjectURL(draft.photo); $('#photo-preview').src = photoUrl; $('#photo-preview').hidden = false; }
+      $$('#extra-previews img').forEach((img,i)=>{img.photoBlob=draft.extraPhotos[i];bindPhotoPreview(img,`Enlarge additional photo ${i+1}`);});
+      if(closeupUrl)URL.revokeObjectURL(closeupUrl);if(photoUrl)URL.revokeObjectURL(photoUrl);
+      closeupUrl=draft.closeupPhoto?URL.createObjectURL(draft.closeupPhoto):null;photoUrl=draft.photo?URL.createObjectURL(draft.photo):null;
+      for(const [id,url,key] of [['photo-preview',photoUrl,'photo'],['closeup-preview',closeupUrl,'closeupPhoto']]){
+        const img=$('#'+id);img.hidden=!url;img.photoBlob=draft[key];if(url)img.src=url;else img.removeAttribute('src');
+        node.querySelector(`[data-remove-main="${key}"]`).hidden=!url;
+      }
     }; showPhoto();
     photoGrid.insertAdjacentHTML('beforebegin','<p id="photo-status" role="status" hidden></p>');
     const changePhotos=work=>{
       photoWork=photoWork.then(async()=>{
         if(stopped||draft.step!==0)return;
         const status=node.querySelector('#photo-status'),next=node.querySelector('#next'),wasDisabled=next.disabled;
-        status.textContent='Checking photos…';status.hidden=false;next.disabled=true;
-        try{await work();}
-        catch(error){const message=node.querySelector('#report-form .error');if(!stopped&&draft.step===0&&message)showError(message,isPhotoConflict(error)?photoConflictMessage(error):friendly(error));}
-        finally{status.hidden=true;next.disabled=wasDisabled;}
+        photoBusy=true;status.textContent='Checking photo quality...';status.hidden=false;next.disabled=true;
+        node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=true);
+        try{await work();status.textContent='Photo quality passed.';}
+        catch(error){const message=node.querySelector('#report-form .error');status.hidden=true;if(!stopped&&draft.step===0&&message)showError(message,isPhotoConflict(error)?photoConflictMessage(error):friendly(error));}
+        finally{photoBusy=false;next.disabled=wasDisabled;node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=false);}
       });return photoWork;
     };
     const addPhotos=files=>changePhotos(async()=>{
         if(draft.extraPhotos.length+files.length>4)throw new Error('Add up to four additional photos.');
+        const prepared=[];for(const photo of files)prepared.push(await prepareReportPhoto(photo));files=prepared;
         await checkPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos,...files]);
         if(stopped||draft.step!==0)return;
         draft.extraPhotos.push(...files);changed();showPhoto();$('#report-form .error').textContent='';
     });
     const replacePhoto=(photo,closeup)=>changePhotos(async()=>{
+      photo=await prepareReportPhoto(photo);
       await checkPhotos([closeup?draft.photo:photo,closeup?photo:draft.closeupPhoto,...draft.extraPhotos]);
       if(stopped||draft.step!==0)return;
       if(closeup)draft.closeupPhoto=photo;else draft.photo=photo;
@@ -415,7 +430,7 @@ export async function reportWizard(node, query, user = null) {
     updateAddressControls=()=>{
       if(draft.step!==1||canvas!==currentCanvas)return;
       const pending=draft.fields.address_state==='pending';
-      $('#next').disabled=pending||!addressReady(draft.fields);
+      $('#next').disabled=pending||gpsButton.getAttribute('aria-busy')==='true'||!addressReady(draft.fields);
       $('#next').textContent=pending?'Finding address...':'Next';
       locationInput.setAttribute('aria-busy',String(pending));
       $('#retry-address').hidden=draft.fields.address_state!=='error';
@@ -470,6 +485,7 @@ export async function reportWizard(node, query, user = null) {
       if (!restoring) { draft.fields.location_selection = source; draft.fields.selected_place_label = ''; }
       $('[name=latitude]').value = Number(lat).toFixed(7); $('[name=longitude]').value = Number(lng).toFixed(7);
       if (!restoring) {
+        const nearby=node.querySelector('#use-nearby-pin');if(nearby)nearby.hidden=true;
         const site=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
         if(site&&!draft.fields.parent_report_id&&(source==='gps'||canvas.distance([lat,lng],[site.center_lat,site.center_lng])>Number(site.radius_meters||75))){
           Object.assign(draft.fields,{cluster_id:'',parent_report_id:''});draft.followup=false;
@@ -506,8 +522,10 @@ export async function reportWizard(node, query, user = null) {
       circle(Number(draft.fields.latitude), Number(draft.fields.longitude), Number(draft.fields.location_accuracy));
     }
     if (!draft.fields.location_source && locationInput.value.trim().length >= 3) locationInput.oninput();
+    const nearbyButton=document.createElement('button');nearbyButton.type='button';nearbyButton.className='outline';nearbyButton.hidden=true;nearbyButton.textContent='Use nearby pin';nearbyButton.id='use-nearby-pin';
+    gpsButton.parentElement.append(nearbyButton);
     function startLocation() {
-      stopGps();
+      stopGps();nearbyButton.hidden=true;
       gpsButton.disabled = true;
       gpsButton.setAttribute('aria-busy', 'true');
       gpsButton.textContent = 'Finding location…';
@@ -523,7 +541,10 @@ export async function reportWizard(node, query, user = null) {
           if(choose(latitude,longitude,'gps',accuracy))circle(latitude,longitude,accuracy);
         },
         onApproximate:area=>{
-          if (!current() || draft.fields.location_source) return;
+          if (!current()) return;
+          const usable=area.source==='device'&&area.accuracy>0&&area.accuracy<=5000;
+          nearbyButton.hidden=!usable;
+          nearbyButton.onclick=()=>{stopGps();nearbyButton.hidden=true;if(choose(area.latitude,area.longitude,'manual',null)){circle(area.latitude,area.longitude,area.accuracy);$('#location-status').textContent='Approximate location. Adjust the pin if needed.';}};
           if (area.accuracy) circle(area.latitude,area.longitude,area.accuracy);
           else canvas.setView([area.latitude,area.longitude],11);
         },
@@ -533,10 +554,11 @@ export async function reportWizard(node, query, user = null) {
           const retry = ['approximate','unavailable'].includes(state);
           gpsButton.disabled = busy;
           gpsButton.setAttribute('aria-busy', String(busy));
+          updateAddressControls();
           gpsButton.textContent = busy ? 'Finding location…' : retry ? 'Try again' : 'Use my location';
           if(pinWarning){$('#location-status').textContent=pinWarning;return;}
           $('#location-status').textContent = retry && draft.fields.location_source
-            ? 'Could not update your location. Your selected pin is unchanged. ' + message
+            ? (state==='approximate'?'Approximate area shown. Check the pin.':'Location unavailable. Your pin is unchanged.')
             : message;
         }
       });

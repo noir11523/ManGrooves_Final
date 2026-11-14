@@ -111,3 +111,14 @@ html[data-theme="dark"] .leaflet-control-zoom a{background:#fff;color:#203522}
 html[data-theme="dark"] :is(.trait-editor-group summary,.choice-group legend,.checklist-editor summary){color:#eef3ee}
 
 html[data-theme="dark"] .trait-editor-group > summary::after{color:#bce4b7}
+
+/* Report photo inspection and slightly roomier location/trait steps. */
+.report-task[data-step="1"]{max-width:1080px}
+.report-location #location-map{height:390px}
+.report-task[data-step="2"] .choice img{height:220px}
+.report-photo-picker{position:relative}.report-photo-picker>.remove-photo{position:absolute;right:8px;top:8px;width:32px;height:32px;min-height:32px;padding:0;border-radius:50%;background:#fff;color:#294c27;border:1px solid #adbcac;font-size:22px;z-index:1}
+.report-photo-picker>span{padding-right:32px}
+.category-choice>.choice-photo{grid-column:1/-1;margin:0 0 8px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.choice-photo-preview{width:140px;max-width:100%;height:100px;object-fit:contain;border-radius:8px}.choice-photo .clear-choice-photo{justify-self:start;align-self:start;width:auto}
+#photo-status{font-size:.9rem;color:var(--green);margin:0 0 12px}
+@media(max-width:680px){.report-location #location-map{height:300px}.report-task[data-step="2"] .choice img{height:200px}}

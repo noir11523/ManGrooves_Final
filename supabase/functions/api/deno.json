@@ -1,6 +1,7 @@
 {
   "nodeModulesDir": "auto",
   "imports": {
+    "@cf-wasm/photon/node": "npm:@cf-wasm/photon@0.4.0/node",
     "nodemailer": "npm:nodemailer@10.1.0",
     "express": "npm:express@5.1.0",
     "busboy": "npm:busboy@1.6.0",
