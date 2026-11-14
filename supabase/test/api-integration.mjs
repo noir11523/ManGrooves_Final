@@ -640,10 +640,10 @@ try {
   assert.ok((await request('report-form.php',expert)).clusters.some(c=>c.id===uncountedSite.id));
   pass('verified sites are shared with new and existing guardians and experts regardless of home barangay');
   const placeholder=await submission(guardianSession,{latitude:10.272,longitude:123.866,sitio_name:'Pinned location (10.272, 123.866)',checklist_versions:versions});
-  const placeholderSaved=await request('submit-report.php',guardianSession,placeholder.body,201);
-  await request('review.php',expert,{report_id:placeholderSaved.report.report_id,action:'confirm'});
-  assert.ok(!(await request('report-form.php',newMember)).clusters.some(c=>c.id===placeholderSaved.report.cluster_id));
-  pass('verification never publishes a coordinate-placeholder site in saved site choices');
+  await request('submit-report.php',guardianSession,placeholder.body,422);
+  const loading=await submission(guardianSession,{sitio_name:'Cebu coast',address_state:'pending',checklist_versions:versions});
+  await request('submit-report.php',guardianSession,loading.body,422);
+  pass('new reports reject unresolved addresses and coordinate-placeholder names before saving');
   const resolved=await submission(guardianSession,{latitude:10.272,longitude:123.866,sitio_name:'Cogon Pardo shoreline',checklist_versions:versions});
   const resolvedSaved=await request('submit-report.php',guardianSession,resolved.body,201);
   await request('review.php',expert,{report_id:resolvedSaved.report.report_id,action:'confirm'});
@@ -651,6 +651,21 @@ try {
   assert.equal(resolvedSite.name,'Cogon Pardo shoreline');
   pass('a later resolved and verified address can name and publish an unresolved site');
 
+  const newCategory={action:'create',name:'Water observations',question_text:'Is the water clear?',selection_mode:'single',score_group:'health',options:[{id:-1,label:'Clear',kind:'standard',points:2},{id:-2,label:'Cloudy',kind:'standard',points:1}]};
+  await request('checklist.php',expert,newCategory,403);
+  await request('checklist.php',admin,{...newCategory,options:'invalid'},422);
+  const categoryResult=await request('checklist.php',admin,newCategory);
+  const custom=categoryResult.criteria.find(c=>c.name==='Water observations');
+  assert.ok(custom.custom);assert.equal(custom.score_group,'context');assert.deepEqual(custom.options.map(o=>o.points),[2,1]);
+  const nextForm=await request('report-form.php',newMember);
+  assert.ok(nextForm.criteria.some(c=>c.id===custom.id));assert.ok(nextForm.category_order.includes(custom.code));
+  const latestVersions=Object.fromEntries(nextForm.criteria.map(c=>[c.id,c.version]));
+  const nextPreview=await request('report-preview.php',newMember,{observations:{...healthy,[custom.code]:[custom.options[0].id]},checklist_versions:latestVersions});
+  assert.equal(nextPreview.classification.status,'Healthy');assert.equal(nextPreview.classification.health_max_score,6);
+  await request('checklist.php',admin,newCategory,422);
+  const oldSnapshot=await request(`report.php?id=${firstId}`,guardianSession);
+  assert.ok(!oldSnapshot.report.observations.some(c=>c.code===custom.code));
+  pass('custom categories appear for all reporters, preserve scoring and historical answers, and require admin access');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

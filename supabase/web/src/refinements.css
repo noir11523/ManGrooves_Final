@@ -57,3 +57,40 @@ html[data-theme="dark"] .dashboard-stats .verified-total .card {background:#314c
 html[data-theme="dark"] .table {--bs-table-color:#eef3ee;--bs-table-hover-color:#fff;--bs-table-hover-bg:#344438}
 html[data-theme="dark"] .table thead th {background:#344438;color:#d6ead2}
 html[data-theme="dark"] .btn-outline-success {--bs-btn-color:#a6d3a0;--bs-btn-border-color:#a6d3a0;--bs-btn-hover-bg:#a6d3a0;--bs-btn-hover-color:#17231c}
+
+/* Keep the location task compact, with search and map together on wider screens. */
+.report-task[data-step="1"]{padding:16px}
+.report-location{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px;align-items:start}
+.report-location .location-tools{min-width:0;display:grid;gap:10px}
+.report-location h2,.report-location p,.report-location .field,.report-location .list{margin:0}
+.report-location .list:empty,.report-location p:empty,.report-location .address-status:empty{display:none}
+.report-location .location-actions{display:flex;flex-wrap:wrap;gap:8px}
+.report-location .location-actions button{flex:1 1 125px;padding:10px;min-height:44px}
+.report-location #location-map{height:350px;min-height:280px;margin:0;border-radius:12px;overflow:hidden}
+.report-location .address-status{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:.9rem}
+.report-location .address-status button{padding:8px 12px;min-height:40px}
+.report-location #report-barangay{font-size:.9rem;font-weight:600;overflow-wrap:anywhere}
+.report-location .place-result{padding:10px 12px}
+.report-location #place-results{max-height:220px;overflow-y:auto}
+@media(max-width:680px){.report-location{grid-template-columns:minmax(0,1fr);gap:12px}.report-location #location-map{height:260px;min-height:240px}}
+
+/* Compact category editing and theme-aware controls in the shared shell. */
+.trait-category-form{padding:12px 0 18px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.checklist-create>form{max-width:760px}.checklist-create textarea{min-height:90px}
+.checklist-page .checklist-order{padding:16px}.checklist-page .order-row{padding:4px 0}
+html[data-theme="dark"] .user-menu,html[data-theme="dark"] .user-menu:hover{background:transparent;color:#eef3ee}
+html[data-theme="dark"] .user-menu :is(strong,small,i){color:#d6ead2}
+html[data-theme="dark"] :is(.password-toggle,.password-field .password-toggle){background:transparent;color:#d6ead2;border-color:#526856}
+html[data-theme="dark"] :is(.form-control,.form-select,input[readonly],.input-group-text){background:#26372b;color:#eef3ee;border-color:#526856}
+html[data-theme="dark"] :is(.cloud-panel button.danger,.btn-danger){background:#8e323b;color:#fff;border-color:#c87b83}
+html[data-theme="dark"] :is(.public-header nav a,.dropdown-item:hover,.dropdown-item:focus){color:#eef3ee}
+html[data-theme="dark"] :is(.dropdown-item:hover,.dropdown-item:focus){background:#344c3b}
+html[data-theme="dark"] :is(.text-secondary,.text-muted,.form-text){color:#bdc9be!important}
+html[data-theme="dark"] :is(.pill,.pill small){background:#3d4c41;color:#eef3ee}
+html[data-theme="dark"] :is(.pill.healthy,.pill.verified){background:#315239;color:#d8f0d4}
+html[data-theme="dark"] :is(.pill.pending,.pill.stressed){background:#534727;color:#ffe6a9}
+html[data-theme="dark"] :is(.pill.at-risk,.pill.rejected){background:#592f30;color:#ffd7d2}
+html[data-theme="dark"] .leaflet-control-zoom a{background:#fff;color:#203522}
+html[data-theme="dark"] :is(.trait-editor-group summary,.choice-group legend,.checklist-editor summary){color:#eef3ee}
+
+html[data-theme="dark"] .trait-editor-group > summary::after{color:#bce4b7}

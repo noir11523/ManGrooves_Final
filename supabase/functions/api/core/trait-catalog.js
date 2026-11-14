@@ -2,12 +2,17 @@ import {randomUUID} from 'node:crypto';
 import {AppError, requireRole, text} from './domain.js';
 
 export const traitKeys = ['root_type', 'leaf_shape', 'bark_texture'];
-export async function traitCatalog(service) {
-  const [species, saved, criteria, layout] = await Promise.all([service.rows('species').then(rows=>rows.filter(s=>!s.deleted_at)), service.get('meta','trait_catalog'), service.criteria(), service.get('meta','observation_layout')]);
+export const traitCategories = {
+  root_type: {name:'Klase sa Gamot (Root Type)',question_text:'What do the roots look like?'},
+  leaf_shape: {name:'Porma sa Dahon (Leaf Shape)',question_text:'What shape are the leaves?'},
+  bark_texture: {name:'Hitsura sa Panit sa Punoan (Bark Texture)',question_text:'What does the bark look like?'},
+};
+export async function traitCatalog(service, supplied = {}) {
+  const [species, saved, criteria, layout] = await Promise.all([supplied.species ?? service.rows('species').then(rows=>rows.filter(s=>!s.deleted_at)), service.get('meta','trait_catalog'), supplied.criteria ?? service.criteria(), service.get('meta','observation_layout')]);
   const choices = Object.fromEntries(traitKeys.map(key => [key, (saved?.[key] ?? [...new Set(species.map(s=>s[key]).filter(Boolean))].sort().map(value=>({value,label:value}))).filter(c=>!c.deleted_at)]));
   const keys = [...traitKeys, ...criteria.map(c=>c.code)];
   const category_order = [...new Set([...(layout?.order??[]),...keys])].filter(key=>keys.includes(key));
-  return {traits:Object.fromEntries(traitKeys.map(key=>[key,choices[key].map(c=>c.value)])), trait_labels:Object.fromEntries(traitKeys.map(key=>[key,Object.fromEntries(choices[key].map(c=>[c.value,c.label]))])), category_order};
+  return {trait_categories:{...traitCategories,...layout?.traits}, traits:Object.fromEntries(traitKeys.map(key=>[key,choices[key].map(c=>c.value)])), trait_labels:Object.fromEntries(traitKeys.map(key=>[key,Object.fromEntries(choices[key].map(c=>[c.value,c.label]))])), category_order};
 }
 
 export async function editTraits(service, user, input) {
@@ -15,9 +20,15 @@ export async function editTraits(service, user, input) {
   const current = await traitCatalog(service);
   return service.db.runTransaction(async tx=>{
     requireRole((await tx.get(service.ref('users',user.uid))).data(),'system_admin');
-    if(input.action==='order') {
+    const layoutRef=service.ref('meta','observation_layout');
+    const layout=(await tx.get(layoutRef)).data()??{};
+    if(input.action==='category') {
+      if(!traitKeys.includes(input.trait))throw new AppError('Choose a valid trait.');
+      const category={name:text(input.name,'a category name',120),question_text:text(input.question_text,'a short question',255)};
+      tx.set(layoutRef,{...layout,traits:{...layout.traits,[input.trait]:category}});
+    } else if(input.action==='order') {
       if(!Array.isArray(input.order)||input.order.length!==current.category_order.length||new Set(input.order).size!==input.order.length||input.order.some(k=>!current.category_order.includes(k))) throw new AppError('Reload the checklist before changing its order.');
-      tx.set(service.ref('meta','observation_layout'),{order:input.order});
+      tx.set(layoutRef,{...layout,order:input.order});
     } else {
       const key=input.trait;
       if(!traitKeys.includes(key))throw new AppError('Choose a valid trait.');

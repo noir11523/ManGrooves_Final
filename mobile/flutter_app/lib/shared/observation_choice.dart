@@ -29,7 +29,7 @@ class ObservationChoice extends StatelessWidget {
       builder: (dialogContext) {
         final screen = MediaQuery.sizeOf(dialogContext);
         return Dialog(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(dialogContext).colorScheme.surface,
           insetPadding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 20,
@@ -125,11 +125,15 @@ class ObservationChoice extends StatelessWidget {
     key: selectionKey,
     selected: selected,
     child: Material(
-      color: selected ? const Color(0xFFE0EFD8) : Colors.white,
+      color: selected
+          ? Theme.of(context).colorScheme.secondaryContainer
+          : Theme.of(context).colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(
-          color: selected ? const Color(0xFF285D30) : const Color(0xFFCED8C8),
+          color: selected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.outline,
           width: selected ? 2 : 1,
         ),
       ),
@@ -161,7 +165,10 @@ class ObservationChoice extends StatelessWidget {
                 child: Text(
                   label,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
+                    color: selected
+                        ? Theme.of(context).colorScheme.onSecondaryContainer
+                        : Theme.of(context).colorScheme.onSurface,
                     fontSize: 18,
                     height: 1.4,
                     fontWeight: FontWeight.w700,

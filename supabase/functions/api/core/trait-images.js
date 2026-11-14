@@ -5,7 +5,7 @@ import {photoCredits} from './reference-photos.js';
 
 export async function traitImages(service,user,input,files={}) {
   requireRole(user,'system_admin');
-  if(input&&['order','add_choice','rename_choice','delete_choice'].includes(input.action)){await editTraits(service,user,input);input=null;}
+  if(input&&['category','order','add_choice','rename_choice','delete_choice'].includes(input.action)){await editTraits(service,user,input);input=null;}
   const catalog=await traitCatalog(service),traits=catalog.traits;
   if(input) {
     const key=input.trait, value=text(input.value,'the feature',255);

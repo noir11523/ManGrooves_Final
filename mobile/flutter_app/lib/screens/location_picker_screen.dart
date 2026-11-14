@@ -42,6 +42,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   LatLng? _selected;
   bool _edited = false;
   String? _placeLabel;
+  bool _resolvingAddress = false;
+  bool _addressFailed = false;
+  bool get _addressReady => isReportAddress(_placeLabel);
+
   final _search = TextEditingController();
   Timer? _debounce;
   Timer? _addressTimer;
@@ -50,6 +54,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   List<Map<String, dynamic>> _places = [];
   String? _searchMessage;
   void _searchPlaces(String value) {
+    _pinVersion++;
+    _addressTimer?.cancel();
+    _placeLabel = null;
+    _edited = true;
+    _resolvingAddress = false;
+    _addressFailed = false;
     _debounce?.cancel();
     final version = ++_searchVersion;
     setState(() {
@@ -62,9 +72,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       try {
         final data = await widget.api!.cloudRequest(
           'places.php',
-          query: {'q': value.trim(),
+          query: {
+            'q': value.trim(),
             'bias_latitude': '${(_selected ?? widget.initialCenter).latitude}',
-            'bias_longitude': '${(_selected ?? widget.initialCenter).longitude}',
+            'bias_longitude':
+                '${(_selected ?? widget.initialCenter).longitude}',
           },
         );
         if (!mounted || version != _searchVersion) return;
@@ -92,7 +104,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void initState() {
     super.initState();
     _selected = widget.initialLocation?.point;
-    _search.text = widget.initialName;
+    _search.text = isReportAddress(widget.initialName)
+        ? widget.initialName
+        : '';
+    _placeLabel = isReportAddress(widget.initialName)
+        ? widget.initialName
+        : null;
+    if (_selected != null &&
+        !_addressReady &&
+        widget.api?.supportsCloudAccounts == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _selectPoint(_selected!);
+      });
+    }
     if (_selected == null &&
         widget.api?.supportsCloudAccounts == true &&
         _search.text.trim().length >= 3) {
@@ -141,12 +165,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     setState(() {
       _selected = point;
       _edited = true;
-      _placeLabel = label;
+      _placeLabel = isReportAddress(label) ? label : null;
+      _resolvingAddress = widget.api?.supportsCloudAccounts == true;
+      _addressFailed = false;
       _places = [];
-      _searchMessage = null;
-      _search.text =
-          label ??
-          'Pinned location (${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)})';
+      _searchMessage = _resolvingAddress ? 'Finding the address...' : null;
+      _search.text = _placeLabel ?? '';
     });
     if (widget.api?.supportsCloudAccounts != true) return;
     final requestedName = _search.text;
@@ -164,22 +188,34 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         if (!mounted || version != _pinVersion || _selected != point) return;
         final places = result['places'] as List? ?? [];
         final barangay = result['barangay'] as Map?;
+        if (places.isEmpty && !isReportAddress(label)) {
+          throw const ApiException('Address not found.');
+        }
         setState(() {
-          if (label == null &&
+          if (!isReportAddress(label) &&
               places.isNotEmpty &&
+              isReportAddress(places.first['label']?.toString()) &&
               _search.text == requestedName) {
             _placeLabel = '${places.first['label']}';
             _search.text = _placeLabel!;
           }
-          _searchMessage = barangay == null
+          _resolvingAddress = false;
+          _addressFailed = !_addressReady;
+          _searchMessage = !_addressReady
+              ? 'Address not found. Retry or search a place.'
+              : barangay == null
               ? 'Check the map pin.'
               : 'Barangay: ${barangay['name']}, ${barangay['city_municipality']}';
         });
       } catch (_) {
         if (mounted && version == _pinVersion) {
-          setState(
-            () => _searchMessage = 'Address unavailable. Your pin is saved.',
-          );
+          setState(() {
+            _resolvingAddress = false;
+            _addressFailed = !_addressReady;
+            _searchMessage = _addressReady
+                ? 'Address selected. Check the pin.'
+                : 'Address not found. Retry or search a place.';
+          });
         }
       }
     });
@@ -235,6 +271,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 padding: const EdgeInsets.all(8),
                 child: Text(_searchMessage!),
               ),
+            if (_addressFailed)
+              TextButton(
+                onPressed: () => _selectPoint(_selected!),
+                child: const Text('Retry address'),
+              ),
             if (_places.isNotEmpty)
               ConstrainedBox(
                 constraints: BoxConstraints(
@@ -274,9 +315,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           ],
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Text(
-              'Tap the map or move the pin to your mangrove. Check the spot before confirming.',
-            ),
+            child: Text('Move the pin to the mangrove.'),
           ),
           Expanded(
             child: Stack(
@@ -394,14 +433,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     icon: const Icon(Icons.edit_location_alt_outlined),
                     label: const Text('Enter coordinates instead'),
                   ),
-                  const Text(
-                    'Map not loading? Enter coordinates if you know them.',
-                    style: TextStyle(fontSize: 12),
-                  ),
                   const SizedBox(height: 12),
                   FilledButton(
                     key: const ValueKey('confirm-location'),
-                    onPressed: _selected == null || error != null
+                    onPressed:
+                        _selected == null ||
+                            error != null ||
+                            (widget.api?.supportsCloudAccounts == true &&
+                                (_resolvingAddress || !_addressReady))
                         ? null
                         : () => Navigator.of(context).pop(
                             !_edited && widget.initialLocation != null
@@ -412,7 +451,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                                     name: _placeLabel,
                                   ),
                           ),
-                    child: const Text('Use this location'),
+                    child: Text(
+                      _resolvingAddress
+                          ? 'Finding address...'
+                          : 'Use this location',
+                    ),
                   ),
                 ],
               ),

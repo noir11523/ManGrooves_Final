@@ -1,3 +1,4 @@
+import {namedAddress,addressReady,resolvedAddress} from './report-address.js';
 import {resolveAnimalChoices} from './observation-selection.js';
 import {traitLabels,traitHeadings} from './trait-labels.js';
 import {validateReportPhotos,checkReportPhotos,isPhotoConflict,photoConflictMessage} from './report-photos.js';
@@ -55,6 +56,9 @@ export async function reportWizard(node, query, user = null) {
       }
     } catch { saveWarning = 'Could not restore your progress. Check device storage.'; }
   }
+  if(!namedAddress(draft.fields.sitio_name))draft.fields.sitio_name='';
+  if(!namedAddress(draft.fields.place_query))draft.fields.place_query='';
+  if(draft.step>1&&!addressReady(draft.fields))draft.step=1;
   draft.fields.submission_token ||= crypto.randomUUID();
   draft.owner = scope;
   let showObservationCategory = () => {};
@@ -64,10 +68,10 @@ export async function reportWizard(node, query, user = null) {
     const criterion=data.criteria.find(c=>c.code===categoryOrder[index]);
     if(criterion){
       const answers=draft.observations[criterion.code]??[];
-      if(!answers.length || (criterion.selection_mode==='single'&&answers.length!==1))return `Choose an answer for ${criterion.name}. Pick Not Sure if you cannot tell.`;
+      if(!answers.length || (criterion.selection_mode==='single'&&answers.length!==1))return `Choose an answer for ${criterion.name}.`;
     }else{
       const key=categoryOrder[index];
-      if(key&&!draft.fields[key])return `Choose ${traitHeadings[key]}.`;
+      if(key&&!draft.fields[key])return `Choose an answer for ${data.trait_categories?.[key]?.name??traitHeadings[key]}.`;
     }
     return '';
   };
@@ -95,7 +99,7 @@ export async function reportWizard(node, query, user = null) {
   };
   window.addEventListener('popstate',browserBack);
   draft.checklistVersions = Object.fromEntries(data.criteria.map(c => [c.id, c.version]));
-  let searchTimer, searchGeneration=0, locationGeneration=0;
+  let searchTimer, searchGeneration=0, locationGeneration=0, addressEdited=()=>{}, updateAddressControls=()=>{};
   let canvas, marker, accuracyCircle, tracker = null, photoUrl = null, stopped = false, saving = 0;
   const stopGps = () => {
     locationGeneration++;
@@ -139,7 +143,7 @@ export async function reportWizard(node, query, user = null) {
   document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', leaving);
   const dispose = () => { void flush(); stopped = true; clearTimeout(searchTimer);searchGeneration++;stopGps(); canvas?.remove(); canvas = null; if (photoUrl) URL.revokeObjectURL(photoUrl); if(closeupUrl) URL.revokeObjectURL(closeupUrl); extraUrls.forEach(URL.revokeObjectURL); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', leaving); window.removeEventListener('popstate',browserBack); draft.flush = async () => {}; };
   async function render() {
-    clearTimeout(searchTimer); searchGeneration++;
+    clearTimeout(searchTimer); searchGeneration++;addressEdited=()=>{};updateAddressControls=()=>{};
     stopGps(); canvas?.remove(); canvas = null; marker = null; accuracyCircle = null;
     if (stopped || !node.isConnected) return;
     await persist();
@@ -183,6 +187,7 @@ export async function reportWizard(node, query, user = null) {
         if (draft.step === 0) await checkPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos]);
         if (draft.step === 0 && $('#followup').checked && !draft.fields.parent_report_id) throw new Error('Choose the previous report for this follow-up.');
         if (draft.step === 1 && !['gps', 'manual'].includes(draft.fields.location_source)) throw new Error('Search for a place or tap the map to set your pin.');
+        if (draft.step>=1 && !addressReady(draft.fields)) throw new Error(draft.fields.address_state==='pending'?'Finding the address. Please wait.':'Choose an address or retry the pin.');
         if (draft.step === 2) {
           const missing=categoryError(draft.category);
           if(missing){showObservationCategory(draft.category,true);throw new Error(missing);}
@@ -207,7 +212,7 @@ export async function reportWizard(node, query, user = null) {
           } else showError(error, friendly(e));
         }
       }
-      finally { button.disabled = false;handlingForm=false; }
+      finally { button.disabled = false;handlingForm=false;updateAddressControls(); }
     };
   }
   async function details() {
@@ -321,7 +326,7 @@ export async function reportWizard(node, query, user = null) {
       if(site){
         stopGps();searchGeneration++;clearTimeout(searchTimer);
         placeInput.value=String(site.sitio_name||site.name).slice(0,120);
-        Object.assign(draft.fields,{sitio_name:placeInput.value,latitude:site.center_lat,longitude:site.center_lng,location_source:'manual',location_accuracy:'',location_selection:'site',selected_place_label:placeInput.value});
+        Object.assign(draft.fields,{sitio_name:placeInput.value,latitude:site.center_lat,longitude:site.center_lng,location_source:'manual',location_accuracy:'',location_selection:'site',selected_place_label:placeInput.value});resolvedAddress(draft.fields);
         changed();
       }else{
         placeInput.value='';
@@ -337,7 +342,7 @@ export async function reportWizard(node, query, user = null) {
       if(!site){$('[name=cluster_id]').value='';if(!draft.fields.parent_report_id)draft.fields.cluster_id='';}
       else if(!draft.fields.location_source){
         placeInput.value=String(site.sitio_name||site.name).slice(0,120);
-        Object.assign(draft.fields,{sitio_name:placeInput.value,latitude:site.center_lat,longitude:site.center_lng,location_source:'manual',location_accuracy:'',location_selection:'site',selected_place_label:placeInput.value});
+        Object.assign(draft.fields,{sitio_name:placeInput.value,latitude:site.center_lat,longitude:site.center_lng,location_source:'manual',location_accuracy:'',location_selection:'site',selected_place_label:placeInput.value});resolvedAddress(draft.fields);
       }
       await followups();
     } else if (draft.fields.parent_report_id) await followups();
@@ -345,7 +350,7 @@ export async function reportWizard(node, query, user = null) {
       $('[name=cluster_id]').value='';placeInput.value=place.label.slice(0,120);
       Object.assign(draft.fields,{cluster_id:'',parent_report_id:'',sitio_name:placeInput.value,place_query:place.label,
         latitude:place.latitude,longitude:place.longitude,location_source:'manual',location_accuracy:'',location_selection:'search',selected_place_label:placeInput.value,report_barangay:''});
-      draft.followup=false;updateCount();changed();
+      resolvedAddress(draft.fields);draft.followup=false;updateCount();changed();
     });
   }
   function bindPlaceSearch(input,target,onSelect,bias=()=>({lat:Number(draft.fields.latitude)||Number(data.location.barangay?.center_lat)||10.3157,lng:Number(draft.fields.longitude)||Number(data.location.barangay?.center_lng)||123.8854})) {
@@ -356,7 +361,7 @@ export async function reportWizard(node, query, user = null) {
         draft.fields.sitio_name=q.slice(0,120);
         const savedName=$('[name=sitio_name]');if(savedName)savedName.value=draft.fields.sitio_name;
       }
-      changed();
+      draft.fields.address_state='unselected';draft.fields.location_selection='';draft.fields.selected_place_label='';addressEdited();changed();
       target.replaceChildren();if(q.length<3||input.readOnly)return;
       searchTimer=setTimeout(async()=>{
         target.textContent='Finding places…';
@@ -375,14 +380,9 @@ export async function reportWizard(node, query, user = null) {
     };
   }
   function locationStep() {
-    $('#step-body').innerHTML = `<h2>Where is the mangrove?</h2><p id="location-status" class="muted" role="status">${draft.fields.location_source ? 'Your selected pin is saved.' : 'Finding your location… Allow access if asked.'}</p><label class="field"><span>Find an address or landmark</span><input id="place-search" type="search" autocomplete="off" placeholder="Type a place name"><small>Choose a result, then check the pin.</small></label><div id="place-results" class="list" role="status"></div><div id="location-map" class="map large"></div><input type="hidden" name="latitude" value="${esc(draft.fields.latitude??'')}"><input type="hidden" name="longitude" value="${esc(draft.fields.longitude??'')}">`;
+    $('#step-body').innerHTML = `<div class="report-location"><div class="location-tools"><h2>Where is the mangrove?</h2><label class="field"><span>Search a barangay or landmark</span><input id="place-search" name="place_query" type="search" autocomplete="off" placeholder="Barangay, street, or landmark"><small>Choose a result or move the pin.</small></label><div id="place-results" class="list" role="status"></div><div class="actions location-actions"><button type="button" id="gps" aria-describedby="location-status">Use my location</button><button type="button" id="manual-pin" class="outline">Adjust pin</button></div><p id="location-status" class="muted" role="status">Check the pin.</p><div class="address-status" aria-live="polite"><span id="nearby-address"></span><button type="button" id="retry-address" class="outline" hidden>Retry address</button></div><p id="report-barangay" role="status"></p></div><div id="location-map" class="map"></div></div><input type="hidden" name="latitude" value="${esc(draft.fields.latitude??'')}"><input type="hidden" name="longitude" value="${esc(draft.fields.longitude??'')}">`;
     const locationInput = $('#place-search');
-    locationInput.name='place_query';
-    locationInput.closest('.field').querySelector('span').textContent='Search a barangay or landmark';
-    locationInput.closest('.field').querySelector('small').textContent='Choose a result to place your pin, then check it on the map.';
-    locationInput.placeholder='Try a barangay or landmark';
     locationInput.readOnly=Boolean(draft.fields.parent_report_id);
-    $('#location-status').insertAdjacentHTML('beforebegin', '<div class="actions"><button type="button" id="gps" aria-describedby="location-status">Use my location</button><button type="button" id="manual-pin" class="outline" aria-describedby="location-status">Place a pin</button></div>');
     const gpsButton = $('#gps');
     const mapElement = $('#location-map');
     mapElement.tabIndex = 0;
@@ -409,29 +409,45 @@ export async function reportWizard(node, query, user = null) {
     const cluster = data.clusters.find(c => String(c.id) === String(draft.fields.cluster_id));
     if (cluster) { L.circle([cluster.center_lat, cluster.center_lng], {radius: cluster.radius_meters, color: '#5e8751', fillOpacity: .08}).addTo(canvas); canvas.setView([cluster.center_lat, cluster.center_lng], 18); }
     let addressGeneration = 0, addressTimer, pinWarning = '';
-    async function address(lat, lng, replaceName = true) {
+    updateAddressControls=()=>{
+      if(draft.step!==1||canvas!==currentCanvas)return;
+      const pending=draft.fields.address_state==='pending';
+      $('#next').disabled=pending||!addressReady(draft.fields);
+      $('#next').textContent=pending?'Finding address...':'Next';
+      locationInput.setAttribute('aria-busy',String(pending));
+      $('#retry-address').hidden=draft.fields.address_state!=='error';
+      $('#nearby-address').parentElement.hidden=!$('#nearby-address').textContent&&$('#retry-address').hidden;
+    };
+    addressEdited=()=>{
+      ++addressGeneration;clearTimeout(addressTimer);
+      $('#nearby-address').textContent='Choose a result or move the pin.';
+      updateAddressControls();
+    };
+    async function address(lat,lng,replaceName=true) {
       if(stopped||draft.step!==1||canvas!==currentCanvas)return;
-      const generation = ++addressGeneration;
-      locationInput.setAttribute('aria-busy','true');
-      $('#nearby-address').textContent='Finding the address…';
-      const requestedName=draft.fields.sitio_name;
-      const requestedQuery=locationInput.value;
+      const generation=++addressGeneration;
+      const knownName=(draft.fields.cluster_id||addressReady(draft.fields)||['site','search'].includes(draft.fields.location_selection))&&namedAddress(draft.fields.sitio_name)?draft.fields.sitio_name:'';
+      draft.fields.address_state='pending';
+      $('#nearby-address').textContent='Finding the address...';updateAddressControls();
+      const current=()=>!stopped&&draft.step===1&&canvas===currentCanvas&&generation===addressGeneration
+        &&Math.abs(Number(draft.fields.latitude)-Number(lat))<0.0000001&&Math.abs(Number(draft.fields.longitude)-Number(lng))<0.0000001;
       try {
-        const result = await api('places.php', {query: {latitude: lat, longitude: lng}});
-      if (stopped || draft.step !== 1 || canvas !== currentCanvas || generation !== addressGeneration || Math.abs(Number(draft.fields.latitude) - Number(lat)) > 0.0000001 || Math.abs(Number(draft.fields.longitude) - Number(lng)) > 0.0000001) return;
-        const label = result.places?.[0]?.label;
+        const result=await api('places.php',{query:{latitude:lat,longitude:lng}});
+        if(!current())return;
+        const label=result.places?.[0]?.label;
+        if(!namedAddress(label)&&!knownName)throw new Error('Address not found.');
         draft.fields.report_barangay=result.barangay?[result.barangay.name,result.barangay.city_municipality].filter(Boolean).join(', '):'';
-        $('#report-barangay').textContent=draft.fields.report_barangay?`Barangay: ${draft.fields.report_barangay}`:'Barangay not identified. Check the pin.';
-        void persist();
-        if (!label) {$('#nearby-address').textContent='No address found. Your pin is saved.';return;}
-        if (replaceName && !draft.fields.cluster_id && draft.fields.sitio_name===requestedName) { draft.fields.sitio_name = label.slice(0,120); void persist(); }
-        if(locationInput.value===requestedQuery && requestedQuery===requestedName && replaceName){locationInput.value=draft.fields.sitio_name;draft.fields.place_query=locationInput.value;void persist();}
-        $('#nearby-address').textContent = '';
-      } catch { if(generation===addressGeneration && canvas===currentCanvas) $('#nearby-address').textContent='Address unavailable. Your pin is saved.'; }
-      finally {if(generation===addressGeneration && canvas===currentCanvas)locationInput.removeAttribute('aria-busy');}
+        $('#report-barangay').textContent=draft.fields.report_barangay?`Barangay: ${draft.fields.report_barangay}`:'';
+        draft.fields.sitio_name=knownName||String(label).slice(0,120);
+        locationInput.value=draft.fields.sitio_name;draft.fields.place_query=locationInput.value;
+        resolvedAddress(draft.fields);$('#nearby-address').textContent='';
+      } catch {
+        if(!current())return;
+        if(knownName){resolvedAddress(draft.fields);$('#nearby-address').textContent='';}
+        else {draft.fields.address_state='error';$('#nearby-address').textContent='Address not found. Retry or search a place.';}
+      } finally {if(current()){updateAddressControls();void persist();}}
     }
-    $('#location-status').insertAdjacentHTML('afterend', '<small id="nearby-address" class="muted"></small>');
-    locationInput.closest('.field').insertAdjacentHTML('afterend','<p id="report-barangay" role="status"></p>');
+    $('#retry-address').onclick=()=>void address(Number(draft.fields.latitude),Number(draft.fields.longitude));
     function choose(lat, lng, source, accuracy, restoring = false) {
       const selectedSite=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
       if(!restoring && draft.fields.parent_report_id && (!selectedSite || canvas.distance([lat,lng],[selectedSite.center_lat,selectedSite.center_lng])>Number(selectedSite.radius_meters||75))){
@@ -457,7 +473,8 @@ export async function reportWizard(node, query, user = null) {
         }
         locationInput.readOnly=Boolean(draft.fields.parent_report_id);
         if(draft.fields.cluster_id){draft.fields.sitio_name=site.sitio_name||site.name;}
-        else {draft.fields.sitio_name=`Pinned location (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)})`;}
+        else {draft.fields.sitio_name='';}
+        draft.fields.address_state='pending';$('#nearby-address').textContent='Finding the address...';updateAddressControls();
         locationInput.value=draft.fields.sitio_name;draft.fields.place_query=locationInput.value;
         draft.fields.report_barangay='';$('#report-barangay').textContent='Finding barangay…';
         ++addressGeneration;clearTimeout(addressTimer);++searchGeneration;clearTimeout(searchTimer);$('#place-results').replaceChildren();
@@ -467,12 +484,14 @@ export async function reportWizard(node, query, user = null) {
       }
       return true;
     }
-    if (draft.fields.location_source) { choose(Number(draft.fields.latitude), Number(draft.fields.longitude), draft.fields.location_source, draft.fields.location_accuracy, true); canvas.setView([draft.fields.latitude, draft.fields.longitude], 18); void address(Number(draft.fields.latitude),Number(draft.fields.longitude),false); }
+    updateAddressControls();
+    if (draft.fields.location_source) { choose(Number(draft.fields.latitude), Number(draft.fields.longitude), draft.fields.location_source, draft.fields.location_accuracy, true); canvas.setView([draft.fields.latitude, draft.fields.longitude], 18); void address(Number(draft.fields.latitude),Number(draft.fields.longitude)); }
     bindPlaceSearch(locationInput,$('#place-results'),p=>{
       if(!draft.fields.parent_report_id){Object.assign(draft.fields,{cluster_id:''});draft.followup=false;}
       if(!choose(p.latitude,p.longitude,'manual',null))return false;
       if(!draft.fields.cluster_id)draft.fields.sitio_name=p.label.slice(0,120);
       Object.assign(draft.fields,{location_selection:'search',selected_place_label:draft.fields.sitio_name});
+      resolvedAddress(draft.fields);updateAddressControls();
       canvas.setView([p.latitude,p.longitude],18);$('#location-status').textContent='Check your pin below.';
     },()=>canvas.getCenter());
     const circle = (latitude, longitude, accuracy) => {
@@ -533,8 +552,8 @@ export async function reportWizard(node, query, user = null) {
     const sighting=data.criteria.find(c=>c.code==='bio_indicators')?.options.find(o=>
       (draft.observations.bio_indicators??[]).includes(o.id)&&!['unknown','none_of_the_above'].includes(o.code));
     if(sighting)resolveAnimalChoices(data.criteria,draft.observations,'bio_indicators',sighting.code);
-    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Tap a photo to enlarge it, then select your answer. Pick Not Sure if you cannot tell.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Condition score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
-    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. Photos show examples; compare them with what you see at the site.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${label}</legend><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}>${data.trait_images?.[key]?.[value]?`<img src="${esc(asset(data.trait_images[key][value]))}" alt="">`:''}<span>${esc(data.trait_labels?.[key]?.[value]||traitLabels[value]||value)}</span></label>`).join('')}</div></fieldset>`).join('')}`);
+    $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Choose what you see. Tap a photo to enlarge it.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Condition score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
+    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. Photos show examples; compare them with what you see at the site.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${esc(data.trait_categories?.[key]?.name??label)}</legend><p>${esc(data.trait_categories?.[key]?.question_text??'')}</p><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}>${data.trait_images?.[key]?.[value]?`<img src="${esc(asset(data.trait_images[key][value]))}" alt="">`:''}<span>${esc(data.trait_labels?.[key]?.[value]||traitLabels[value]||value)}</span></label>`).join('')}</div></fieldset>`).join('')}`);
     const headings=$$('#step-body h2');headings[0].textContent='Traits and site conditions';headings[1].textContent='Mangrove identification traits';
     const body=$('#step-body'), originalGroups=[...body.querySelectorAll('fieldset.choice-group')];
     const originalKeys=[...data.criteria.map(c=>c.code),...Object.keys(traitHeadings)];

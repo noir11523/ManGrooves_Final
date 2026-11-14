@@ -19,8 +19,12 @@
             <div class="col-6 col-lg-3">
                 <h2 class="footer-heading">Participate</h2>
                 <ul class="footer-links">
+                    <?php if ($authUser): ?>
+                    <li><a href="<?= e(url('dashboard.php')) ?>">Open dashboard</a></li>
+                    <?php else: ?>
                     <li><a href="<?= e(url('register.php')) ?>">Become a guardian</a></li>
                     <li><a href="<?= e(url('login.php')) ?>">Sign in</a></li>
+                    <?php endif; ?>
                     <?php if (($viewName ?? '') === 'home'): ?>
                         <li><a href="#for-experts">Expert applications</a></li>
                     <?php endif; ?>

@@ -7,5 +7,5 @@ export const visibleSite = (site, user) => !site.deleted_at &&
 
 export function isNamedSite(site) {
   const name=String(site?.name??'').trim();
-  return Boolean(name) && !/^(?:pinned location|device location|loading|finding location|coordinates|address unavailable)\b/i.test(name) && !/^[-\d., ()]+$/.test(name);
+  return Boolean(name) && !/^(?:pinned location|device location|loading|finding (?:location|address|the address)|coordinates|address unavailable)\b/i.test(name) && !/^[-\d., ()]+$/.test(name);
 }

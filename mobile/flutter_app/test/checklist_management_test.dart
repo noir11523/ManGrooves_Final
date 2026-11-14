@@ -102,7 +102,62 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+class _CloudApi extends _Api {
+  Map<String, dynamic> metadata = {
+    'name': 'Leaf shape',
+    'question_text': 'What shape?',
+  };
+  @override
+  bool get supportsCloudAccounts => true;
+  @override
+  Future<Map<String, dynamic>> traitImages() async => {
+    'traits': {'leaf_shape': <String>[]},
+    'trait_categories': {'leaf_shape': metadata},
+    'category_order': ['leaf_shape', 'leaf_color'],
+  };
+  @override
+  Future<Map<String, dynamic>> cloudRequest(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? query,
+    bool anonymous = false,
+  }) async {
+    if (body?['action'] == 'category') {
+      metadata = {
+        'name': body!['name'],
+        'question_text': body['question_text'],
+      };
+    }
+    return traitImages();
+  }
+}
+
 void main() {
+  testWidgets(
+    'cloud checklist supports editable trait questions and new categories',
+    (tester) async {
+      final api = _CloudApi();
+      await tester.pumpWidget(MaterialApp(home: ChecklistScreen(api: api)));
+      await tester.pumpAndSettle();
+      await _tap(tester, find.text('Leaf shape'));
+      await _tap(tester, find.text('Edit category and question'));
+      await tester.enterText(_field('Category name'), 'Leaf outline');
+      await tester.enterText(_field('Question'), 'Which outline matches?');
+      await _tap(tester, find.text('Save'));
+      expect(find.text('Leaf outline'), findsOneWidget);
+      expect(api.metadata['question_text'], 'Which outline matches?');
+      await _tap(tester, find.text('Add category'));
+      await tester.enterText(_field('Name'), 'Water observations');
+      await tester.enterText(_field('Question'), 'Is the water clear?');
+      await _tap(tester, find.text('Save changes'));
+      await _tap(tester, find.text('Save'));
+      expect(api.sent?['action'], 'create');
+      expect(api.sent?['name'], 'Water observations');
+      expect((api.sent?['options'] as List).length, 3);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('live checklist search finds choices and species features', (
     tester,
   ) async {
@@ -124,6 +179,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No matches. Try a category or choice.'), findsOneWidget);
     await _tap(tester, find.text('Clear'));
+    await tester.scrollUntilVisible(
+      find.text('Leaf color'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Leaf color'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

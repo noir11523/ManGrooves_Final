@@ -1,3 +1,4 @@
+import {isNamedSite} from './site-access.js';
 import {randomUUID} from 'node:crypto';
 import {AppError,integer,text,now,requireRole,validateLocation} from './domain.js';
 
@@ -22,6 +23,7 @@ export async function manageSites(service,user,input) {
   if(!pointBarangay||pointBarangay.id!==barangayId)throw new AppError('Place the site pin inside the selected barangay.');
   const location=validateLocation({latitude:input.center_lat,longitude:input.center_lng,location_source:'manual'},barangay);
   const name=text(input.name,'the site name',120),sitio_name=text(input.sitio_name||name,'the location name',120);
+  if(!isNamedSite({name})||!isNamedSite({name:sitio_name}))throw new AppError('Enter a site name and address.');
   const radius=integer(input.radius_meters??100,'site radius',25,5000);
   const active=input.active===0||input.active==='0'?0:1;
   return service.db.runTransaction(async tx=>{

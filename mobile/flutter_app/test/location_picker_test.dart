@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -42,6 +43,21 @@ class _PlaceApi extends ApiClient {
       },
     ],
   };
+}
+
+class _DelayedAddressApi extends _PlaceApi {
+  final lookups = <Completer<Map<String, dynamic>>>[];
+  @override
+  Future<Map<String, dynamic>> cloudRequest(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? query,
+    bool anonymous = false,
+  }) {
+    final pending = Completer<Map<String, dynamic>>();
+    lookups.add(pending);
+    return pending.future;
+  }
 }
 
 Future<void> _openPicker(
@@ -92,6 +108,50 @@ Future<void> _openPicker(
 }
 
 void main() {
+  testWidgets(
+    'map cannot confirm an unresolved address; retry enables confirmation',
+    (tester) async {
+      final api = _DelayedAddressApi();
+      ReportLocation? result;
+      await _openPicker(
+        tester,
+        api: api,
+        initial: const ReportLocation.manual(
+          latitude: 10.2833,
+          longitude: 123.8833,
+        ),
+        initialName: 'Pinned location (10.2833, 123.8833)',
+        onResult: (value) => result = value,
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+      final confirm = find.byKey(const ValueKey('confirm-location'));
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      expect(
+        tester
+            .widget<TextField>(_field('Find an address or landmark'))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      api.lookups.single.complete({'places': []});
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      await tester.tap(find.text('Retry address'));
+      await tester.pump(const Duration(milliseconds: 400));
+      api.lookups.last.complete({
+        'places': [
+          {'label': 'Cebu shoreline'},
+        ],
+      });
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      expect(result?.name, 'Cebu shoreline');
+    },
+  );
+
   testWidgets('moving a pin refreshes its displayed name before confirmation', (
     tester,
   ) async {
@@ -139,6 +199,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 750));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Test seaside landmark'));
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('confirm-location')));
       await tester.pumpAndSettle();

@@ -100,6 +100,21 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   bool _confirmingSubmit = false;
   bool _gettingLocation = false;
   bool _locationNeedsRetry = false;
+  bool _resolvingAddress = false;
+  bool _addressFailed = false;
+  int _addressRequest = 0;
+  ReportLocation? _addressPoint;
+  String? _addressName;
+  bool get _addressReady =>
+      _location != null &&
+      _addressPoint == _location &&
+      isReportAddress(_sitio.text) &&
+      _addressName == _sitio.text;
+  void _markAddressReady() {
+    _addressPoint = _location;
+    _addressName = _sitio.text;
+  }
+
   LatLng? _areaCenter;
   double? _areaAccuracy;
   String? _locationMessage;
@@ -142,6 +157,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     'sitio_name': _sitio.text,
     'place_query': _placeSearch.text,
     'selected_place_label': _selectedPlaceLabel,
+    'address_ready': _addressReady,
     'observed_alive_count': _aliveCount.text,
     'count_unknown': _countUnknown ? '1' : '0',
     'submission_token': _submissionToken,
@@ -254,6 +270,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _sitio.text = draft['sitio_name']?.toString() ?? '';
       _placeSearch.text = draft['place_query']?.toString() ?? _sitio.text;
       _selectedPlaceLabel = draft['selected_place_label'] as String?;
+      if (!isReportAddress(_sitio.text)) _sitio.clear();
+      if (!isReportAddress(_placeSearch.text)) _placeSearch.clear();
       _aliveCount.text = draft['observed_alive_count']?.toString() ?? '';
       _remarks.text = draft['guardian_remarks']?.toString() ?? '';
       _rootType = draft['root_type'] as String?;
@@ -299,6 +317,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               )
             : ReportLocation.manual(latitude: lat, longitude: lng);
       }
+      if (draft['address_ready'] == true && isReportAddress(_sitio.text)) {
+        _markAddressReady();
+      }
+      if (_step > 1 && !_addressReady) _step = 1;
       if (draft['form'] is Map) {
         _form = Map<String, dynamic>.from(draft['form'] as Map);
       }
@@ -422,6 +444,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 'Site selected. Check the pin before continuing.';
           }
         }
+        if (isReportAddress(_sitio.text)) _markAddressReady();
         await _loadPreviousReports(
           _clusterId!,
           preferredParentId: _parentReportId,
@@ -429,6 +452,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       }
       if (!_parentsFailed) _error = null;
       if (_placeSearch.text.isEmpty) _placeSearch.text = _sitio.text;
+      if (mounted && _step == 1 && _location != null && !_addressReady) {
+        unawaited(_fillNearbyAddress(_location!, replace: true));
+      }
       if (mounted) unawaited(_tryAutoCapture());
       if (_step == 3) await _fetchPreview();
     } catch (error) {
@@ -486,6 +512,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   Future<void> _selectCluster(int? clusterId) async {
+    _addressRequest++;
+    _resolvingAddress = false;
+    _addressFailed = false;
+    _addressPoint = null;
     _cancelGps();
     _placeTimer?.cancel();
     _placeRequest++;
@@ -520,6 +550,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           _selectedPlaceLabel = null;
           _locationMessage = 'Site selected. Check the pin before continuing.';
           _locationNeedsRetry = false;
+          if (isReportAddress(_sitio.text)) _markAddressReady();
         }
       }
     });
@@ -733,8 +764,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _placeSearch.clear();
       _reportBarangay = null;
       if (_clusterId == null) {
-        _sitio.text =
-            'Pinned location (${captured.latitude.toStringAsFixed(5)}, ${captured.longitude.toStringAsFixed(5)})';
+        _sitio.clear();
       }
       _placeSearch.text = _sitio.text;
       _selectedPlaceLabel = null;
@@ -995,8 +1025,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (location.name != null) {
         _sitio.text = location.name!;
       } else {
-        _sitio.text =
-            'Pinned location (${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)})';
+        _sitio.clear();
       }
       for (final site in _clusters) {
         if (site['id'] != _clusterId) continue;
@@ -1021,6 +1050,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       }
     }
     _placeSearch.text = _sitio.text;
+    if (isReportAddress(location.name) || _clusterId != null) {
+      _markAddressReady();
+    }
     await _fillNearbyAddress(location, replace: location.name == null);
     await _saveDraft();
   }
@@ -1063,17 +1095,21 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     ReportLocation point, {
     bool replace = false,
   }) async {
-    if (!widget.api.supportsCloudAccounts) {
-      return;
-    }
-    final requestedName = _sitio.text;
-    final requestedQuery = _placeSearch.text;
-    if (mounted) {
-      setState(() {
-        _reportBarangay = null;
-        _placeMessage = 'Finding the address…';
-      });
-    }
+    final request = ++_addressRequest;
+    final knownName =
+        (_addressReady ||
+                _clusterId != null ||
+                _selectedPlaceLabel == _sitio.text) &&
+            isReportAddress(_sitio.text)
+        ? _sitio.text
+        : null;
+    bool current() =>
+        mounted && request == _addressRequest && _location == point;
+    setState(() {
+      _resolvingAddress = true;
+      _addressFailed = false;
+      _reportBarangay = null;
+    });
     try {
       final result = await widget.api.cloudRequest(
         'places.php',
@@ -1082,45 +1118,55 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           'longitude': '${point.longitude}',
         },
       );
-      if (!mounted || _location != point) {
-        return;
+      if (!current()) return;
+      final places = result['places'] as List? ?? [];
+      final label = places.isEmpty ? null : places.first['label']?.toString();
+      if (!isReportAddress(label) && knownName == null) {
+        throw const ApiException('Address not found.');
       }
       final barangay = result['barangay'] as Map?;
-      setState(
-        () => _reportBarangay = barangay == null
-            ? 'Barangay not identified. Check the pin.'
-            : 'Barangay: ${barangay['name']}, ${barangay['city_municipality']}',
-      );
-      final places = result['places'] as List? ?? [];
-      if (places.isNotEmpty) {
-        final name = '${places.first['label']}';
-        if (replace && _clusterId == null && _sitio.text == requestedName) {
-          _sitio.text = name.length > 120 ? name.substring(0, 120) : name;
-          if (_placeSearch.text == requestedQuery) {
-            _placeSearch.text = _sitio.text;
-          }
-        }
-        setState(() => _placeMessage = null);
-        await _saveDraft();
-      } else {
-        setState(
-          () => _placeMessage = 'Address unavailable. Your pin is saved.',
-        );
-      }
+      setState(() {
+        _reportBarangay = barangay == null
+            ? null
+            : 'Barangay: ${barangay['name']}, ${barangay['city_municipality']}';
+        final name = knownName ?? label!;
+        _sitio.text = name.length > 120 ? name.substring(0, 120) : name;
+        _placeSearch.text = _sitio.text;
+        _markAddressReady();
+        _placeMessage = null;
+      });
     } catch (_) {
-      if (mounted && _location == point) {
-        setState(
-          () => _placeMessage = 'Address unavailable. Your pin is saved.',
-        );
+      if (!current()) return;
+      setState(() {
+        if (knownName != null) {
+          _markAddressReady();
+        } else {
+          _addressFailed = true;
+          _addressPoint = null;
+        }
+      });
+    } finally {
+      if (current()) {
+        setState(() => _resolvingAddress = false);
+        await _saveDraft();
       }
     }
   }
 
   void _searchLocationName(String value) {
+    _addressRequest++;
+    _resolvingAddress = false;
+    _addressFailed = false;
+    _addressPoint = null;
+    _selectedPlaceLabel = null;
     _cancelGps();
     _placeTimer?.cancel();
     final request = ++_placeRequest;
     if (_parentReportId == null) {
+      _clusterId = null;
+      _followup = false;
+      _previousReports = [];
+      _parentRequest++;
       _sitio.text = value.trim();
     }
     setState(() {
@@ -1207,6 +1253,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           ? label.substring(0, 120)
           : label;
       _sitio.text = _selectedPlaceLabel!;
+      _markAddressReady();
       _placeSearch.text = label;
       _placeSuggestions = [];
       _placeMessage = 'Location selected. Use Adjust pin to check its spot.';
@@ -1247,8 +1294,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
       return;
     }
-    if (_sitio.text.trim().isEmpty) {
-      setState(() => _error = 'Choose a place or set your pin.');
+    if (_resolvingAddress || !_addressReady) {
+      setState(
+        () => _error = _resolvingAddress
+            ? 'Finding the address. Please wait.'
+            : 'Choose an address or retry the pin.',
+      );
       return;
     }
     if (!_countUnknown &&
@@ -1304,7 +1355,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       final c = _criteria.firstWhere((c) => c['code'] == key);
       final count = (_observations[c['code']] ?? []).length;
       if (count == 0 || (c['selection_mode'] == 'single' && count != 1)) {
-        return 'Choose an answer for ${c['name']}. Pick Not Sure if you cannot tell.';
+        return 'Choose an answer for ${c['name']}.';
       }
     } else {
       final values = [_rootType, _leafShape, _barkTexture];
@@ -1329,6 +1380,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   void _editStep(int step) {
+    if (step == 1 &&
+        _location != null &&
+        !_addressReady &&
+        !_resolvingAddress) {
+      unawaited(_fillNearbyAddress(_location!, replace: true));
+    }
     setState(() {
       _step = step;
       _confirmed = false;
@@ -1374,6 +1431,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
 
   Future<void> _submit() async {
     if (_busy || _confirmingSubmit || _step != 3) return;
+    if (!_addressReady || _resolvingAddress) {
+      _editStep(1);
+      return;
+    }
     if (!_confirmed) {
       setState(() => _error = 'Confirm these details are from this visit.');
       return;
@@ -1430,6 +1491,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       final fields = <String, String>{
         ..._location!.fields,
         'sitio_name': _sitio.text,
+        'address_state': 'ready',
         'guardian_remarks': _remarks.text,
         'root_type': _rootType!,
         'leaf_shape': _leafShape!,
@@ -1984,7 +2046,23 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         helperMaxLines: 2,
       ),
     ),
-    if (_placeMessage != null)
+    if (_resolvingAddress)
+      const Text('Finding the address...', key: ValueKey('address-status')),
+    if (_addressFailed)
+      Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        children: [
+          const Text('Address not found. Retry or search a place.'),
+          TextButton(
+            onPressed: _location == null
+                ? null
+                : () => _fillNearbyAddress(_location!, replace: true),
+            child: const Text('Retry address'),
+          ),
+        ],
+      ),
+    if (_placeMessage != null && !_resolvingAddress)
       Text(_placeMessage!, style: Theme.of(context).textTheme.bodySmall),
     if (showBarangay && _reportBarangay != null)
       Text(_reportBarangay!, key: const ValueKey('report-barangay')),
@@ -2028,53 +2106,48 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_countUnknown || _parentReportId != null) ...[
+              _siteSelector(),
+              const SizedBox(height: 10),
+            ],
+            ..._placeFields(),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  key: const ValueKey('device-location'),
+                  onPressed: _busy || _gettingLocation
+                      ? null
+                      : () => _captureLocation(retry: true),
+                  icon: const Icon(Icons.my_location, size: 20),
+                  label: Text(
+                    _gettingLocation
+                        ? 'Finding location...'
+                        : _locationNeedsRetry
+                        ? 'Try again'
+                        : 'Use my location',
+                  ),
+                ),
+                OutlinedButton.icon(
+                  key: const ValueKey('manual-location'),
+                  onPressed: _busy ? null : _chooseManualLocation,
+                  icon: const Icon(Icons.pin_drop_outlined, size: 20),
+                  label: Text(_location == null ? 'Place a pin' : 'Adjust pin'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Text(
               _gettingLocation
                   ? (_gpsProgressAccuracy == null
-                        ? 'Finding your location…'
-                        : 'Improving location · about ${_gpsProgressAccuracy!.round()} m')
-                  : _locationMessage ??
-                        (_location != null
-                            ? 'Check your selected pin.'
-                            : 'Search a place or choose your spot on the map.'),
+                        ? 'Finding your location...'
+                        : 'Improving location - about ${_gpsProgressAccuracy!.round()} m')
+                  : _locationMessage ?? 'Check the map pin.',
               key: const ValueKey('automatic-location-status'),
+              style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              key: const ValueKey('device-location'),
-              onPressed: _busy || _gettingLocation
-                  ? null
-                  : () => _captureLocation(retry: true),
-              icon: const Icon(Icons.my_location),
-              label: Text(
-                _gettingLocation
-                    ? 'Finding location…'
-                    : _locationNeedsRetry
-                    ? 'Try again'
-                    : 'Use my location',
-              ),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              key: const ValueKey('manual-location'),
-              onPressed: _busy ? null : _chooseManualLocation,
-              icon: const Icon(Icons.pin_drop_outlined),
-              label: Text(_location == null ? 'Place a pin' : 'Adjust pin'),
-            ),
-            if (_location != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  '${_location!.source == 'manual' ? 'Manual pin' : 'Device location'}: '
-                  '${_location!.latitude.toStringAsFixed(6)}, '
-                  '${_location!.longitude.toStringAsFixed(6)}',
-                  key: const ValueKey('report-location-summary'),
-                ),
-              ),
-            const SizedBox(height: 12),
-            if (_countUnknown || _parentReportId != null) _siteSelector(),
-            const SizedBox(height: 12),
-            ..._placeFields(),
             if (_parentReportId != null)
               const Text('This follow-up stays linked to its requested site.'),
             if (_loadingParents) const LinearProgressIndicator(),
@@ -2189,20 +2262,21 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         const SizedBox(height: 12),
       ],
       FilledButton.icon(
-        onPressed: _gettingLocation ? null : _nextFromSite,
+        key: const ValueKey('location-next'),
+        onPressed: _gettingLocation || _resolvingAddress || !_addressReady
+            ? null
+            : _nextFromSite,
         icon: const Icon(Icons.arrow_forward),
-        label: const Text('Continue'),
+        label: Text(_resolvingAddress ? 'Finding address...' : 'Next'),
       ),
-      const SizedBox(height: 24),
+      const SizedBox(height: 12),
     ],
   );
 
   Widget _healthStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const Text(
-        'Tap a circle to select or deselect. Tap a photo to enlarge it. Choose Not Sure if you cannot tell.',
-      ),
+      const Text('Choose what you see. Tap a photo to enlarge it.'),
       const SizedBox(height: 12),
       Text(
         _isTrait ? 'Traits' : 'Site Conditions',
@@ -2504,9 +2578,23 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Text(
-        traitHeadings[label] ?? label,
+        (_form?['trait_categories'] as Map?)?[{
+                  'Root type': 'root_type',
+                  'Leaf shape': 'leaf_shape',
+                  'Bark texture': 'bark_texture',
+                }[label]]?['name']
+                ?.toString() ??
+            traitHeadings[label] ??
+            label,
         style: Theme.of(context).textTheme.titleMedium,
       ),
+      if ((_form?['trait_categories'] as Map?)?[{
+            'Root type': 'root_type',
+            'Leaf shape': 'leaf_shape',
+            'Bark texture': 'bark_texture',
+          }[label]]?['question_text']
+          case final String question)
+        Padding(padding: const EdgeInsets.only(top: 8), child: Text(question)),
       const SizedBox(height: 12),
       LayoutBuilder(
         builder: (context, space) => Wrap(
@@ -2817,7 +2905,12 @@ class _Section extends StatelessWidget {
             ),
             if (subtitle != null) ...[
               const SizedBox(height: 3),
-              Text(subtitle!, style: const TextStyle(color: Colors.black54)),
+              Text(
+                subtitle!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
             const SizedBox(height: 12),
             child,

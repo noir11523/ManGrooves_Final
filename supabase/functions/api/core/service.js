@@ -103,9 +103,10 @@ export class Service extends Store {
   }
   async form(user) {
     requireRole(user, 'guardian', 'expert');
-    const [criteria, clusters, species, barangay] = await Promise.all([this.criteria(), this.clusters(user), this.species(), this.get('barangays', user.barangay_id)]);
-    return {criteria, photo_credits:photoCredits, trait_images:(await this.get('meta','trait_images'))??{}, clusters:clusters.filter(c=>usableSite(c,user)&&Number(c.verified_count)>0&&isNamedSite(c)&&reportBarangay(c.center_lat,c.center_lng)?.province==='Cebu'), species, location: {barangay, max_distance_meters:null, scope:'Cebu', max_gps_accuracy_meters: 100},
-      ...await traitCatalog(this)};
+    const [criteria, clusters, catalog, barangay, images] = await Promise.all([this.criteria(), this.clusters(user), this.rows('species'), this.get('barangays', user.barangay_id), this.get('meta','trait_images')]);
+    const species=catalog.filter(s=>!s.deleted_at && Number(s.active)!==0);
+    return {criteria, photo_credits:photoCredits, trait_images:images??{}, clusters:clusters.filter(c=>usableSite(c,user)&&Number(c.verified_count)>0&&isNamedSite(c)&&isNamedSite({name:c.sitio_name||c.name})&&reportBarangay(c.center_lat,c.center_lng)?.province==='Cebu'), species, location: {barangay, max_distance_meters:null, scope:'Cebu', max_gps_accuracy_meters: 100},
+      ...await traitCatalog(this,{criteria,species:catalog.filter(s=>!s.deleted_at)})};
   }
   async preview(user, input) {
     requireRole(user, 'guardian', 'expert');
@@ -171,12 +172,16 @@ export class Service extends Store {
       link: report_id ? `reports.php?id=${report_id}` : type==='badge_earned'?'badges.php':extra.application_uid?`admin/expert-applications.php?uid=${encodeURIComponent(extra.application_uid)}`:'notifications.php',
       ...extra,created_at: now(), read_at: null});
   }
-  async saveChecklist(user, input, files) {
+  async saveChecklist(user, input, files = {}) {
     requireRole(user, 'system_admin');
-    const id = integer(input.id, 'checklist'), current = await this.get('criteria', id);
+    const creating=input.action==='create';
+    if(creating && !['single','multiple'].includes(input.selection_mode))throw new AppError('Choose an answer type.');
+    if(creating && !Array.isArray(input.options))throw new AppError('Add choices before saving.');
+    const id = creating ? (await this.ids())[0] : integer(input.id, 'checklist');
+    const current = creating ? {id,code:`custom_${randomUUID().replaceAll('-','')}`,version:'new',active:1,display_order:999,selection_mode:input.selection_mode,score_group:'context',options:[],custom:true} : await this.get('criteria', id);
     if (!current) throw new AppError('Checklist not found.', 404);
     const ids = await this.ids(31);
-    const updated = updateCriterion(current, input, () => ids.shift());
+    const updated = updateCriterion(current, creating ? {...input,version:'new'} : input, () => ids.shift());
     const created = [];
     try {
       if (files.guide_image) {
@@ -193,7 +198,12 @@ export class Service extends Store {
       await this.db.runTransaction(async tx => {
         const ref = this.ref('criteria', id), fresh = await tx.get(ref), actor = await tx.get(this.ref('users', user.uid));
         requireRole(actor.data(), 'system_admin');
-        if (fresh.data()?.version !== current.version) throw new AppError('This checklist changed. Reload before saving.', 409);
+        if(creating) {
+          const all=await this.transactionRows(tx,'criteria');
+          if(all.filter(c=>c.active!==0).length>=40)throw new AppError('Use up to 40 categories.');
+          if(all.some(c=>c.active!==0&&c.name.toLowerCase()===updated.name.toLowerCase()))throw new AppError('This category name already exists.');
+          updated.display_order=Math.max(0,...all.map(c=>Number(c.display_order)||0))+1;
+        } else if (fresh.data()?.version !== current.version) throw new AppError('This checklist changed. Reload before saving.', 409);
         tx.set(ref, updated);
         this.audit(tx, user, 'admin.checklist_updated', 'criteria', id, {before: current, after: updated});
       });
@@ -211,6 +221,9 @@ export class Service extends Store {
     const barangay=await this.findBarangay(input.latitude,input.longitude,barangays);
     if(!barangay || barangay.province!=='Cebu')throw new AppError('Place the pin inside a Cebu barangay.');
     const location = validateLocation(input, barangay);
+    if (!isNamedSite({name:input.sitio_name}) || (input.address_state && input.address_state !== 'ready')) {
+      throw new AppError('Choose an address before continuing.');
+    }
     const requestedCluster = input.cluster_id ? integer(input.cluster_id, 'cluster') : null;
     const parentId = input.parent_report_id ? integer(input.parent_report_id, 'follow-up report') : null;
     const countUnknown = input.count_unknown === true || String(input.count_unknown) === '1';
@@ -358,7 +371,7 @@ export class Service extends Store {
         sitio_name: previous.sitio_name, radius_meters: 75, initial_seedlings: previous.observed_alive_count, verified_count: 0,
         latest_report_at: '', latest_health: 'Unknown', created_at: now()};
       // A later resolved report can name a previously unresolved cluster.
-      if(action!=='reject' && !isNamedSite(cluster) && isNamedSite({name:previous.sitio_name})) {
+      if(action!=='reject' && (!isNamedSite(cluster)||!isNamedSite({name:cluster.sitio_name||cluster.name})) && isNamedSite({name:previous.sitio_name})) {
         cluster={...cluster,name:previous.sitio_name,sitio_name:previous.sitio_name};
       }
       const report = {...previous, status: action === 'reject' ? 'rejected' : 'verified', final_health: action === 'reject' ? null : health,
@@ -375,7 +388,7 @@ export class Service extends Store {
       if (action === 'reject' && parentRef) tx.update(parentRef, {active_child_id: null});
       if (action !== 'reject') {
         const latest = previous.submitted_at >= (cluster.latest_report_at ?? '');
-        const namedSite=isNamedSite(cluster);
+        const namedSite=isNamedSite(cluster)&&isNamedSite({name:cluster.sitio_name||cluster.name});
         const publishSite = namedSite && cluster.visibility === 'personal' && !cluster.deleted_at && Number(cluster.active) !== 0;
         tx.set(this.ref('clusters', cluster.id), {...cluster, verified_count: (cluster.verified_count ?? 0) + 1, version:randomUUID(), updated_at:now(),
           ...(publishSite ? {visibility:'shared', approved_by:user.id, approved_by_name:user.full_name, approved_at:now()} : {}),

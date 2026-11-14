@@ -142,7 +142,7 @@ export async function searchPlaces(service,user,query,fetcher=fetch) {
         url.searchParams.set('location_bias_scale','0.1');url.searchParams.set('countrycode','PH');url.searchParams.set('bbox',cebuBounds.join(','));
       }
       try {
-        const response=await fetcher(url,{signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
+        const response=await fetcher(url,{signal:AbortSignal.timeout(reverse&&barangay?2500:8000),headers:{Accept:'application/json'}});
         if(!response.ok)throw new Error('Search unavailable');
         data=await response.json();
       } catch(error) {if(!reverse&&!localPlaces.length&&!googlePlaces.length)throw error;}

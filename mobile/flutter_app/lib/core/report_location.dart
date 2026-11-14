@@ -32,3 +32,14 @@ class ReportLocation {
       'location_accuracy': accuracy!.toStringAsFixed(2),
   };
 }
+
+/// Excludes temporary map labels from report addresses and shared site names.
+bool isReportAddress(String? value) {
+  final name = (value ?? '').trim();
+  return name.isNotEmpty &&
+      !RegExp(
+        r'^(pinned location|device location|loading|finding (location|address|the address)|coordinates|address unavailable)\b',
+        caseSensitive: false,
+      ).hasMatch(name) &&
+      !RegExp(r'^[-\d., ()]+$').hasMatch(name);
+}

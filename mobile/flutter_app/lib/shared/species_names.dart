@@ -33,7 +33,7 @@ class SpeciesNames extends StatelessWidget {
                 fontStyle: names[i] == scientific
                     ? FontStyle.italic
                     : FontStyle.normal,
-                color: i == 0 ? const Color(0xFF285D30) : null,
+                color: i == 0 ? Theme.of(context).colorScheme.primary : null,
               ),
             ),
           ),

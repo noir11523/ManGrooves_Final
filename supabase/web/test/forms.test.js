@@ -1,6 +1,7 @@
 // DOM unit tests: actual forms and events, with network/map adapters stubbed.
 // These do not replace visual browser/device testing.
 import test from 'node:test';
+import {resolvedAddress} from '../src/report-address.js';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -133,6 +134,7 @@ test('a late photo conflict returns Review to Details while preserving every ans
  ui.reportDraft.reset();Object.assign(ui.reportDraft,{owner:undefined,dirty:true,step:3,preview:{classification:{status:'Unknown'}},
   photo:new File(['one'],'one.jpg',{type:'image/jpeg'}),closeupPhoto:new File(['two'],'two.jpg',{type:'image/jpeg'}),
   fields:{sitio_name:'Coast',latitude:10.28,longitude:123.88,location_source:'manual',guardian_remarks:'Keep notes',root_type:'Prop roots'},observations:{roots:[11]}});
+  resolvedAddress(ui.reportDraft.fields);
  const dispose=await ui.reportWizard($('#page'),{});
  try{
   $('#field-confirm').click();const sending=submit();await tick();closeConfirm('confirm');await sending;
@@ -145,7 +147,7 @@ test('a late photo conflict returns Review to Details while preserving every ans
 
 test('observation choices select in one tap without a guide or enlarge control',async()=>{
  globalThis.testApi=async()=>({criteria:reference.criteria,clusters:[],location:{},traits:{root_type:[],leaf_shape:[],bark_texture:[]}});
- ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:2,owner:undefined});
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:2,owner:undefined,fields:{sitio_name:'Test coast',latitude:10.28,longitude:123.88,location_source:'manual'}});resolvedAddress(ui.reportDraft.fields);
  const animalOption=reference.criteria.find(c=>c.code==='bio_indicators').options[0];
  const noAnimalsOption=reference.criteria.find(c=>c.code==='negative_signs').options.find(o=>o.code==='no_animals');
  ui.reportDraft.observations={bio_indicators:[animalOption.id],negative_signs:[noAnimalsOption.id]};
@@ -169,7 +171,7 @@ test('observation choices select in one tap without a guide or enlarge control',
 test('individual real photos and text-only answers preview and select without inline credits or lost deselection',async()=>{
  const traits=Object.fromEntries(Object.entries(catalog.traits).map(([key,values])=>[key,Object.keys(values)]));
  globalThis.testApi=async()=>({criteria:reference.criteria.map(withPhotoCredits),traits,trait_images:catalog.traits,photo_credits:photoCredits,clusters:[],location:{}});
- ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:2,owner:undefined});
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:2,owner:undefined,fields:{sitio_name:'Test coast',latitude:10.28,longitude:123.88,location_source:'manual'}});resolvedAddress(ui.reportDraft.fields);
  const dispose=await ui.reportWizard($('#page'),{});
  try{
   const choice=$('[name=obs_leaf_color]').closest('.choice'), input=choice.querySelector('input'),preview=choice.querySelector('.choice-picture');
@@ -277,7 +279,7 @@ test('dragged new-report pin refreshes the name, clears a distant site and ignor
  try {
   lookups=[];
   globalThis.testMarker.setLatLng([10.29,123.89]);globalThis.testMarker.events.dragend();
-  assert.equal(ui.reportDraft.fields.cluster_id,'');assert.equal(ui.reportDraft.followup,false);assert.match(ui.reportDraft.fields.sitio_name,/Pinned location/);
+  assert.equal(ui.reportDraft.fields.cluster_id,'');assert.equal(ui.reportDraft.followup,false);assert.equal(ui.reportDraft.fields.sitio_name,'');assert.equal($('#next').disabled,true);
   await new Promise(r=>setTimeout(r,280));
   globalThis.testMarker.setLatLng([10.30,123.90]);globalThis.testMarker.events.dragend();
   await new Promise(r=>setTimeout(r,280));
@@ -293,14 +295,14 @@ test('GPS refresh uses the final fix and replaces the prior pin name',async()=>{
  const dispose=await ui.reportWizard($('#page'),{});
  try {
   $('#gps').click();gps({coords:{latitude:10.272,longitude:123.866,accuracy:83},timestamp:Date.now()});
-  assert.match($('#place-search').value,/Pinned location/);assert.equal($('#selected-address'),null);await new Promise(r=>setTimeout(r,280));
+  assert.equal($('#place-search').value,'');assert.equal($('#next').disabled,true);assert.equal($('#selected-address'),null);await new Promise(r=>setTimeout(r,280));
   gps({coords:{latitude:10.273,longitude:123.866,accuracy:8},timestamp:Date.now()});await new Promise(r=>setTimeout(r,280));
   const last=lookups.at(-1);assert.equal(last.query.latitude,10.273);
   last.resolve({places:[{label:'Cogon Pardo, Cebu City'}],barangay:{name:'Cogon Pardo',city_municipality:'Cebu City'}});await tick();
   for(const lookup of lookups.slice(0,-1))lookup.resolve({places:[{label:'Outdated address'}]});await tick();
   assert.equal($('#place-search').value,'Cogon Pardo, Cebu City');assert.match($('#report-barangay').textContent,/Cogon Pardo/);
   assert.equal(Number(ui.reportDraft.fields.latitude),10.273);assert.equal(ui.reportDraft.fields.location_source,'gps');assert.equal($('#gps').disabled,false);
-  $('#gps').click();gps({coords:{latitude:10.274,longitude:123.866,accuracy:8},timestamp:Date.now()});
+  $('#gps').click();gps({coords:{latitude:10.274,longitude:123.866,accuracy:8},timestamp:Date.now()});await new Promise(r=>setTimeout(r,280));
   $('#place-search').value='Another landmark';$('#place-search').dispatchEvent(new Event('input',{bubbles:true}));
   await new Promise(r=>setTimeout(r,280));
   const pendingAddress=lookups.at(-1);assert.equal(pendingAddress.query.latitude,10.274);
@@ -321,6 +323,29 @@ test('site catalog filters and saves through the admin editor without publishing
   $('.edit-site').click();const dialog=$('#admin-editor');dialog.querySelector('[name=name]').value='Renamed nursery';
   const form=dialog.querySelector('form');await form.onsubmit({preventDefault(){},target:form,submitter:form.querySelector('[type=submit]')});await tick();
   assert.equal(saved.name,'Renamed nursery');assert.equal(saved.version,'v1');assert.ok($('#add-site'));assert.equal($('#add'),null);
+ }finally{dispose?.();clearTimeout(ui.toast.timer);}
+});
+
+test('site editor waits for the current pin address and supports retry without coordinate placeholders',async()=>{
+ const lookups=[],writes=[];
+ globalThis.testApi=async(path,{body}={})=>{
+  if(path==='places.php')return new Promise(resolve=>lookups.push(resolve));
+  if(body){writes.push(body);return {message:'Saved'};}
+  return {sites:[],barangays:reference.barangays};
+ };
+ const dispose=await ui.adminPage($('#page'),'species',{tab:'sites'});
+ try {
+  $('#add-site').click();const dialog=$('#admin-editor'),button=dialog.querySelector('[type=submit]'),input=dialog.querySelector('[name=sitio_name]');
+  const pin=(lat,lng)=>testMap.events.click({latlng:{lat,lng}});
+  pin(10.29,123.89);assert.equal(button.disabled,true);assert.equal(input.value,'');assert.match($('#site-pin-status').textContent,/Finding/);
+  pin(10.30,123.90);lookups[0]({places:[{label:'Old address'}]});await tick();assert.equal(input.value,'');assert.equal(button.disabled,true);
+  lookups[1]({places:[]});await tick();assert.match($('#site-pin-status').textContent,/Retry/);assert.equal(button.disabled,true);
+  const retry=$('#site-pin-status').nextElementSibling;assert.equal(retry.hidden,false);retry.click();
+  lookups[2]({places:[{label:'Parian, Cebu City, Cebu'}],barangay:reference.barangays[0]});await tick();
+  assert.equal(input.value,'Parian, Cebu City, Cebu');assert.equal(button.disabled,false);assert.equal(retry.hidden,true);
+  dialog.querySelector('[name=name]').value='Coastal survey';
+  const form=dialog.querySelector('form');await form.onsubmit({preventDefault(){},target:form});
+  assert.equal(writes.length,1);assert.equal(writes[0].sitio_name,'Parian, Cebu City, Cebu');assert.equal(writes[0].center_lat,'10.3000000');
  }finally{dispose?.();clearTimeout(ui.toast.timer);}
 });
 
@@ -455,6 +480,7 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
       return {classification: classify(reference.criteria, body.observations), species: {best: reference.species[0]}, checklist_versions: body.checklist_versions};
     }
     if (path === 'submit-report.php') { submissions.push(JSON.parse(body.get('payload'))); return {report: {report_id: 123}, message: 'Report submitted.'}; }
+    if(path==='places.php')return {places:[{label:'Updated location'}]};
     throw new Error(`Unexpected API call: ${path}`);
   };
   ui.reportDraft.reset();
@@ -470,10 +496,10 @@ test('report form hides follow-ups, keeps edits, distinguishes approximate GPS, 
     gps({timestamp:Date.now(),coords: {latitude: 10.2833, longitude: 123.8833, accuracy: 180}});
     assert.equal(ui.reportDraft.fields.location_source, '');
     await submit(); assert.equal(ui.reportDraft.step, 1);
-    assert.match($('.error').textContent, /tap the map/);
+    assert.equal($('#next').disabled,true);
     globalThis.testMap.events.click({latlng: {lat: 10.2833, lng: 123.8833}});
     assert.equal(ui.reportDraft.fields.location_source, 'manual');
-    await submit(); assert.equal(ui.reportDraft.step, 2);
+    await new Promise(r=>setTimeout(r,300));await submit(); assert.equal(ui.reportDraft.step, 2);
     for(const k of ['root_type','leaf_shape','bark_texture'])$(`[name=${k}]`).click();
     for (const c of reference.criteria.filter(c => c.selection_mode === 'single')) {
       $(`[name=obs_${c.code}][value="${c.options[0].id}"]`).click();
@@ -508,7 +534,7 @@ test('report draft restores fields, photo, checklist and step after reload, isol
   globalThis.testApi = async (path, {body} = {}) => {
     if (path === 'report-form.php') return {criteria: reference.criteria, clusters: [], species: reference.species,
       traits: Object.fromEntries(['root_type','leaf_shape','bark_texture'].map(k => [k,[reference.species[0][k]]])), location:{barangay:reference.barangays[0]}};
-    if (path === 'places.php') return {places:[]};
+    if (path === 'places.php') return {places:[{label:'Saved coastal site'}]};
     if (path === 'report-preview.php') return {classification:classify(reference.criteria,body.observations),checklist_versions:body.checklist_versions};
     if (path === 'submit-report.php') { if (failSubmit) throw new Error('Connection interrupted. Try again.'); return {report:{report_id:456},message:'Report received.'}; }
     throw new Error(path);
@@ -531,7 +557,7 @@ test('report draft restores fields, photo, checklist and step after reload, isol
     oldGps({timestamp:Date.now(),coords:{latitude:10.25,longitude:123.85,accuracy:1}});
     assert.equal(ui.reportDraft.fields.location_source,'manual');
     assert.equal(Number(ui.reportDraft.fields.latitude),10.2833);
-    await submit();
+    await new Promise(r=>setTimeout(r,300));await submit();
     for(const k of ['root_type','leaf_shape','bark_texture'])$(`[name=${k}]`).click();
     for(const c of reference.criteria.filter(c=>c.selection_mode==='single'))$(`[name=obs_${c.code}][value="${c.options[0].id}"]`).click();
     await ui.reportDraft.flush(); dispose(); ui.reportDraft.reset();
@@ -571,7 +597,7 @@ test('uncounted new-site search survives Back, pin edits and drafts through fina
       assert.ok(Number.isFinite(query.bias_latitude));assert.ok(Number.isFinite(query.bias_longitude));
       return {places:[{name:'Pier 3',address:'Pier 3, Basak Pardo, Cebu City, Cebu',label:'Pier 3, Basak Pardo, Cebu City, Cebu',latitude:10.3012345,longitude:123.9012345}]};
     }
-    return {places:[]};
+    return query?.latitude?{places:[{label:'Cebu shoreline'}]}:{places:[]};
   };
   window.localStorage.clear();ui.reportDraft.reset();
   let dispose=await ui.reportWizard($('#page'),{}, {id:'place-user'});
@@ -582,7 +608,7 @@ test('uncounted new-site search survives Back, pin edits and drafts through fina
     set('observed_alive_count','3');$('#count-unknown').click();
     assert.equal($('.count-row').hidden,true);await submit();assert.equal(ui.reportDraft.step,1);
     assert.equal($('#place-search').value,'Pier');
-    await submit();assert.equal(ui.reportDraft.step,1);assert.match($('.error').textContent,/set your pin/);
+    await submit();assert.equal(ui.reportDraft.step,1);assert.equal($('#next').disabled,true);
     await new Promise(r=>setTimeout(r,750));await tick();assert.match($('#place-results').textContent,/Pier 3/);$('#place-results button').click();
     assert.equal(ui.reportDraft.fields.location_source,'manual');assert.deepEqual(testMap.center,[10.3012345,123.9012345]);
     assert.equal($('[name=latitude]').value,'10.3012345');assert.equal($('[name=longitude]').value,'123.9012345');
@@ -599,7 +625,7 @@ test('uncounted new-site search survives Back, pin edits and drafts through fina
     assert.equal(ui.reportDraft.fields.sitio_name,'Different landmark');
     await new Promise(r=>setTimeout(r,750));
     testMap.events.click({latlng:{lat:10.29,lng:123.9}});assert.equal(ui.reportDraft.fields.count_unknown,'1');
-    await submit();assert.equal(ui.reportDraft.step,2);
+    await new Promise(r=>setTimeout(r,300));await submit();assert.equal(ui.reportDraft.step,2);
     for(const key of ['root_type','leaf_shape','bark_texture'])$(`[name=${key}]`).click();
     await finishCategories();assert.equal(ui.reportDraft.step,3);assert.match($('.report-review').textContent,/Unable to count/);
     $('#field-confirm').click();const sending=submit();await tick();closeConfirm('confirm');await sending;
@@ -630,6 +656,7 @@ test('checklist live search covers choices and traits in report order without lo
 test('checklist editor retains names while adding, undoing and deleting choices, and saving photos', async () => {
   const original = structuredClone(reference.criteria[0]); let saved;
   globalThis.testApi = async (path, {body} = {}) => {
+    if(path==='trait-images.php')return {};
     assert.equal(path, 'checklist.php');
     if (!body) return {criteria: [original]};
     const input = JSON.parse(body.get('payload'));
@@ -638,7 +665,7 @@ test('checklist editor retains names while adding, undoing and deleting choices,
     return {criteria: [saved], message: 'Checklist saved.'};
   };
   await ui.checklistPage($('#page'));
-  set('name', 'Leaf appearance');
+  $('.checklist-editor [name=name]').value='Leaf appearance';
   $('.add').click();
   const added = $('[data-option="-1"]');
   added.querySelector('[name=label]').value = 'Mixed colors'; added.querySelector('[name=points]').value = '1';
@@ -646,7 +673,7 @@ test('checklist editor retains names while adding, undoing and deleting choices,
   $(`[data-option="${removable.id}"] .remove`).click();
   $(`[data-option="${removable.id}"] .restore`).click();
   $(`[data-option="${removable.id}"] .remove`).click();
-  assert.equal($('[name=name]').value, 'Leaf appearance');
+  assert.equal($('.checklist-editor [name=name]').value, 'Leaf appearance');
   assert.equal($('[data-option="-1"] [name=label]').value, 'Mixed colors');
   const fileInput = $('[data-image=option_image_-1]');
   Object.defineProperty(fileInput, 'files', {value: [new File(['photo'], 'guide.jpg', {type: 'image/jpeg'})]}); change(fileInput);
@@ -842,4 +869,43 @@ test('administrator saves certificate signer and refreshes signature controls',a
   const form=$('#certificate-settings');await form.onsubmit({preventDefault(){},target:form,submitter:form.querySelector('[type=submit]')});
   assert.equal(saved.signer_name,'Test Coordinator');assert.equal(saved.signer_title,'Project Coordinator');
   assert.ok($('[name=remove_signature]'));clearTimeout(ui.toast.timer);
+});
+
+
+test('an unresolved pin blocks Next, retries without losing details and rejects stale addresses',async()=>{
+ const requests=[];
+ globalThis.testApi=async path=>path==='report-form.php'?{criteria:reference.criteria,clusters:[],location:{},traits:{root_type:[],leaf_shape:[],bark_texture:[]}}:new Promise((resolve,reject)=>requests.push({resolve,reject}));
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,fields:{sitio_name:'Pinned location (10.28, 123.88)',place_query:'Pinned location (10.28, 123.88)',latitude:10.28,longitude:123.88,location_source:'manual',guardian_remarks:'Keep this note'}});
+ const dispose=await ui.reportWizard($('#page'),{});
+ try{
+  assert.equal($('#place-search').value,'');assert.equal($('#next').disabled,true);
+  assert.match($('#nearby-address').textContent,/Finding the address/);
+  await submit();assert.equal(ui.reportDraft.step,1);
+  requests[0].resolve({places:[]});await tick();
+  assert.equal($('#next').disabled,true);assert.equal($('#retry-address').hidden,false);
+  assert.match($('#nearby-address').textContent,/Retry or search/);assert.equal(ui.reportDraft.fields.sitio_name,'');
+  $('#retry-address').click();requests[1].resolve({places:[{label:'Parian, Cebu City'}],barangay:{name:'Parian',city_municipality:'Cebu City'}});await tick();
+  assert.equal($('#next').disabled,false);assert.equal($('#place-search').value,'Parian, Cebu City');
+  testMap.events.click({latlng:{lat:10.29,lng:123.89}});assert.equal($('#next').disabled,true);assert.equal($('#place-search').value,'');
+  await new Promise(r=>setTimeout(r,280));
+  testMap.events.click({latlng:{lat:10.30,lng:123.90}});await new Promise(r=>setTimeout(r,280));
+  requests[2].resolve({places:[{label:'Old place'}]});await tick();assert.equal($('#next').disabled,true);assert.equal($('#place-search').value,'');
+  requests[3].reject(new Error('offline'));await tick();assert.equal($('#next').disabled,true);
+  $('#retry-address').click();requests[4].resolve({places:[{label:'New coast, Cebu City'}]});await tick();
+  assert.equal($('#next').disabled,false);assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep this note');
+  await submit();assert.equal(ui.reportDraft.step,2);
+ }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('admins can save trait headings and add a category with answer choices',async()=>{
+  const writes=[];const data={traits:{leaf_shape:['Elliptic']},trait_categories:{leaf_shape:{name:'Leaf shape',question_text:'What shape?'}},category_order:['leaf_shape']};
+  globalThis.testApi=async(path,{body}={})=>{if(body){writes.push({path,body});return {criteria:[]};}return path==='trait-images.php'?data:{criteria:[]};};
+  await ui.checklistPage($('#page'));
+  let form=$('.trait-category-form');form.elements.name.value='Leaf outline';form.elements.question_text.value='Which shape matches?';
+  await form.onsubmit({preventDefault(){}});
+  assert.deepEqual(writes[0].body,{action:'category',trait:'leaf_shape',name:'Leaf outline',question_text:'Which shape matches?'});
+  form=$('.checklist-create form');form.elements.name.value='Water';form.elements.question_text.value='Is it clear?';form.elements.choices.value='Clear\nCloudy';
+  await form.onsubmit({preventDefault(){},target:form});
+  assert.equal(writes[1].body.action,'create');assert.equal(writes[1].body.options.length,3);assert.equal(writes[1].body.options[2].kind,'unknown');
+  clearTimeout(ui.toast.timer);
 });

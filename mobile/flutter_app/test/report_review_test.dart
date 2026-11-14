@@ -446,6 +446,76 @@ Future<void> openLocation(WidgetTester tester) async {
 
 void main() {
   testWidgets(
+    'address lookup blocks Next until retry resolves the current pin',
+    (tester) async {
+      final old = GeolocatorPlatform.instance, gps = _LiveGps();
+      GeolocatorPlatform.instance = gps;
+      addTearDown(() async {
+        GeolocatorPlatform.instance = old;
+        await gps.positions.close();
+      });
+      final api = _AddressApi(), drafts = _Drafts();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftOwner: 'failed-address',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await openLocation(tester);
+      gps.send(9);
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      final next = find.byKey(const ValueKey('location-next'));
+      expect(tester.widget<FilledButton>(next).onPressed, isNull);
+      expect(
+        tester
+            .widget<TextField>(field('Search a barangay or landmark'))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      api.lookups.single.complete({'places': []});
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Address not found. Retry or search a place.'),
+        findsOneWidget,
+      );
+      expect(tester.widget<FilledButton>(next).onPressed, isNull);
+      await tap(tester, find.text('Retry address'));
+      expect(tester.widget<FilledButton>(next).onPressed, isNull);
+      api.lookups.last.complete({
+        'places': [
+          {'label': 'Parian, Cebu City'},
+        ],
+        'barangay': {'name': 'Parian', 'city_municipality': 'Cebu City'},
+      });
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(next).onPressed, isNotNull);
+      expect(
+        tester
+            .widget<TextField>(field('Search a barangay or landmark'))
+            .controller!
+            .text,
+        'Parian, Cebu City',
+      );
+      expect(find.text('Barangay: Parian, Cebu City'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
     'previously submitted photos fail during selection and can be replaced without losing location',
     (tester) async {
       final messenger =
@@ -526,6 +596,7 @@ void main() {
       final drafts = _Drafts(), scope = '${api.baseUrl}:late-photo';
       drafts.saved[scope] = {
         'flow_version': 2,
+        'address_ready': true,
         'step': 3,
         'form': await api.reportForm(),
         'sitio_name': 'Coast',
@@ -676,7 +747,7 @@ void main() {
         tester,
         find.widgetWithText(CheckboxListTile, 'Unable to count'),
       );
-      await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
+      await tap(tester, find.byKey(const ValueKey('location-next')));
       expect(find.text('3. Traits and Conditions'), findsOneWidget);
       await tap(tester, find.text('Previous'));
       expect(find.text('2. Location'), findsOneWidget);
@@ -688,7 +759,7 @@ void main() {
             .value['count_unknown'],
         '1',
       );
-      await tap(tester, find.widgetWithText(FilledButton, 'Continue').first);
+      await tap(tester, find.byKey(const ValueKey('location-next')));
       for (final answer in ['Green', 'Crabs', 'None of the above']) {
         await chooseObservation(tester, answer);
         await tap(tester, find.text('Next'));
@@ -849,7 +920,7 @@ void main() {
             .widget<TextField>(field('Search a barangay or landmark'))
             .controller!
             .text,
-        contains('Pinned location'),
+        isEmpty,
       );
       api.lookups[2].complete({
         'places': [
@@ -1145,7 +1216,7 @@ void main() {
       expect(find.text('Adjust pin'), findsOneWidget);
       expect(
         find.textContaining('Device location: 10.283300, 123.883300'),
-        findsOneWidget,
+        findsNothing,
       );
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
@@ -1203,7 +1274,7 @@ void main() {
       await tap(tester, find.text('Pier 3, Cebu City'));
       gps.send(1);
       await tester.pump();
-      expect(find.textContaining('Manual pin: 10.301'), findsOneWidget);
+      expect(find.textContaining('Manual pin: 10.301'), findsNothing);
       final saved = drafts.saved.entries
           .where((e) => !e.key.endsWith(':closeup'))
           .single
@@ -1217,13 +1288,13 @@ void main() {
         find.textContaining('Your selected pin is unchanged'),
         findsOneWidget,
       );
-      expect(find.textContaining('Manual pin: 10.301'), findsOneWidget);
+      expect(find.textContaining('Manual pin: 10.301'), findsNothing);
       GeolocatorPlatform.instance = gps;
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       await open();
       await tester.pumpAndSettle();
-      expect(find.textContaining('Manual pin: 10.301'), findsOneWidget);
+      expect(find.textContaining('Manual pin: 10.301'), findsNothing);
       await tester.enterText(
         field('Search a barangay or landmark'),
         'New landmark',
@@ -1231,7 +1302,7 @@ void main() {
       await tester.pump();
       expect(
         find.byKey(const ValueKey('report-location-summary')),
-        findsOneWidget,
+        findsNothing,
       );
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
@@ -1280,7 +1351,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(
         find.textContaining('Device location: 10.283300, 123.883300'),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         (drafts.saved.entries
@@ -1363,7 +1434,7 @@ void main() {
       await tester.enterText(field('Living mangroves observed'), '12');
       await tap(
         tester,
-        find.widgetWithText(FilledButton, 'Continue').first,
+        find.byKey(const ValueKey('location-next')),
         photoIO: true,
       );
       final preview = find.bySemanticsLabel('Preview Green');

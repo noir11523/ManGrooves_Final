@@ -59,3 +59,25 @@ test('photo clarity distinguishes tiny/blank photos from detailed photos',()=>{
   const detailed=flat.map((_,i)=>((i>>2)+Math.floor((i>>2)/192))%2?255:0);
   assert.equal(clarityProblem(800,600,detailed),'');
 });
+
+test('trait category metadata and order persist independently without changing species matching',async()=>{
+  const {service,admin,species}=fixture();
+  const before=await traitCatalog(service),order=[...before.category_order].reverse();
+  await editTraits(service,admin,{action:'category',trait:'leaf_shape',name:'Leaf outline',question_text:'Which shape matches?'});
+  await editTraits(service,admin,{action:'order',order});
+  let next=await traitCatalog(service);
+  assert.deepEqual(next.trait_categories.leaf_shape,{name:'Leaf outline',question_text:'Which shape matches?'});
+  assert.deepEqual(next.category_order,order);
+  assert.deepEqual(next.traits,before.traits);
+  assert.equal(matchSpecies(species,species[0]).best.id,1);
+  await assert.rejects(editTraits(service,admin,{action:'category',trait:'other',name:'x',question_text:'x'}));
+  await assert.rejects(editTraits(service,{...admin,role:'expert'},{action:'category',trait:'leaf_shape',name:'x',question_text:'x'}));
+  await assert.rejects(editTraits(service,admin,{action:'category',trait:'leaf_shape',name:'',question_text:'x'}));
+});
+test('form reuses loaded checklist and species instead of repeating database reads',async()=>{
+  const service=new Service({}),reads=[];
+  service.rows=async key=>{reads.push(key);return [];};service.get=async()=>null;
+  await service.form({id:1,role:'guardian',status:'active'});
+  assert.equal(reads.filter(k=>k==='criteria').length,1);
+  assert.equal(reads.filter(k=>k==='species').length,1);
+});

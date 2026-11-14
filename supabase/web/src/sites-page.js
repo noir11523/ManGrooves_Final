@@ -4,6 +4,7 @@ import {esc,field,select,toast,confirm,map} from './ui.js';
 import {editor} from './admin-lists.js';
 import {barangayPicker,bindBarangayPicker} from './address-fields.js';
 import {listFilters,bindListFilters,filterLocalList,matchesSearch} from './list-filters.js';
+import {namedAddress} from './report-address.js';
 
 export const catalogTabs=selected=>`<nav class="catalog-tabs" aria-label="Species and Sites"><a class="button ${selected==='species'?'':'outline'}" href="#species" ${selected==='species'?'aria-current="page"':''}>Species</a><a class="button ${selected==='sites'?'':'outline'}" href="#species?tab=sites" ${selected==='sites'?'aria-current="page"':''}>Sites</a></nav>`;
 export async function sitesPage(node,query,refresh,head) {
@@ -19,37 +20,47 @@ export async function sitesPage(node,query,refresh,head) {
       row.querySelector('[data-label="Status"]').textContent='Awaiting report verification';
   }
   const apply=()=>filterLocalList(node,query,rows,(s,q)=>matchesSearch([s.name,s.sitio_name,s.barangay_name],q)&&(!q.state||(q.state==='needs_pin'?!!s.location_pending:q.state==='archived'?Number(s.active)===0:!s.location_pending&&Number(s.active)!==0))&&(!q.visibility||(s.visibility||'shared')===q.visibility)&&(!q.barangay_id||String(s.barangay_id)===q.barangay_id));
-  bindListFilters(node,query,apply);apply();let canvas=null,searchTimer,request=0;
-  const cleanup=()=>{request++;clearTimeout(searchTimer);canvas?.remove();canvas=null;};
+  bindListFilters(node,query,apply);apply();let canvas=null,searchTimer,request=0,addressRequest=0;
+  const cleanup=()=>{request++;addressRequest++;clearTimeout(searchTimer);canvas?.remove();canvas=null;};
   node.siteCleanup=cleanup;
   const edit=site=>{
     cleanup();
+    site={...site,name:namedAddress(site.name)?site.name:'',sitio_name:namedAddress(site.sitio_name||site.name)?site.sitio_name||site.name:''};
+    let addressState=site.center_lat!=null&&namedAddress(site.sitio_name)?'ready':'empty';
     const dialog=editor(node,site.id?'Edit site':'Add site',`<div class="row">${field('name','Site name',site.name??'','text','required maxlength="120"')}${barangayPicker(barangays,site.barangay_id??'',{id:'site-barangay'})}${field('sitio_name','Location name',site.sitio_name??site.name??'','text','required maxlength="120"')}${field('radius_meters','Site radius (meters)',site.radius_meters??100,'number','required min="25" max="5000" step="1"')}</div><label class="field"><span>Find the site on the map</span><input id="site-search" type="search" placeholder="Address or landmark" autocomplete="off"></label><div id="site-results" class="list" role="status"></div><p id="site-pin-status" role="status">Search or tap the map to set the site location.</p><div id="site-map" class="map"></div><details><summary>Coordinates</summary><div class="row">${field('center_lat','Latitude',site.center_lat??'','number','step="any" min="-90" max="90" required readonly')}${field('center_lng','Longitude',site.center_lng??'','number','step="any" min="-180" max="180" required readonly')}</div></details>`,async values=>{
       if(values.center_lat===''||values.center_lng==='')throw new Error('Choose the site location on the map.');
+      if(addressState!=='ready'||!namedAddress(values.sitio_name))throw new Error('Choose an address before saving.');
       const result=await api('sites.php',{body:{...values,id:site.id,active:site.location_pending?1:site.active??1,version:site.version??''}});cleanup();toast(result.message);await refresh();
     });
     bindBarangayPicker(dialog,barangays);
     dialog.addEventListener('close',cleanup,{once:true});let marker=null;
+    const status=dialog.querySelector('#site-pin-status'),saveButton=dialog.querySelector('[type=submit]'),addressInput=dialog.querySelector('[name=sitio_name]');
+    const retry=document.createElement('button');retry.type='button';retry.className='outline';retry.textContent='Retry';retry.hidden=true;status.after(retry);
+    const setAddressState=state=>{addressState=state;saveButton.disabled=state!=='ready';addressInput.readOnly=state==='pending';retry.hidden=state!=='error';status.textContent=state==='pending'?'Finding the address...':state==='error'?'Address not found. Retry or search a place.':state==='ready'?'Check the pin before saving.':'Search or tap the map to set the site location.';};
     const pin=(lat,lng,label)=>{
       if(!marker){marker=L.marker([lat,lng],{draggable:true,icon:L.divIcon({html:'<span style="display:block;background:#245b2b;border:3px solid white;border-radius:50%;width:22px;height:22px;box-shadow:0 1px 5px #0008"></span>',className:'',iconSize:[22,22],iconAnchor:[11,11]})}).addTo(canvas);marker.on('dragend',()=>{const p=marker.getLatLng();void selectPin(p.lat,p.lng);});}else marker.setLatLng([lat,lng]);
       dialog.querySelector('[name=center_lat]').value=Number(lat).toFixed(7);dialog.querySelector('[name=center_lng]').value=Number(lng).toFixed(7);
       if(label)dialog.querySelector('[name=sitio_name]').value=label.slice(0,120);
-      dialog.querySelector('#site-pin-status').textContent='Site pin selected. Check the location before saving.';
     };
     const selectPin=async(lat,lng)=>{
-      const fallback=`Pinned location (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)})`;
-      pin(lat,lng,fallback);
+      const generation=++addressRequest;
+      pin(lat,lng);addressInput.value='';setAddressState('pending');
       try {
-        const {places}=await api('places.php',{query:{latitude:lat,longitude:lng}});
-        const name=dialog.querySelector('[name=sitio_name]');
-        if(dialog.open&&name.value===fallback&&places?.[0]?.label)name.value=places[0].label.slice(0,120);
-      }catch{/* Coordinates stay usable when no street name is available. */}
+        const {places,barangay}=await api('places.php',{query:{latitude:lat,longitude:lng}});
+        if(!dialog.open||generation!==addressRequest)return;
+        if(!namedAddress(places?.[0]?.label)){setAddressState('error');return;}
+        addressInput.value=places[0].label.slice(0,120);
+        if(barangay?.id&&barangays.some(b=>String(b.id)===String(barangay.id))){const field=dialog.querySelector('[name=barangay_id]');field.value=String(barangay.id);field.setCustomValidity('');}
+        setAddressState('ready');
+      }catch{if(dialog.open&&generation===addressRequest)setAddressState('error');}
     };
+    retry.onclick=()=>{const p=marker?.getLatLng();if(p)void selectPin(p.lat,p.lng);};
     const mapElement=dialog.querySelector('#site-map');
     canvas=map(mapElement,[],{onClick:event=>void selectPin(event.latlng.lat,event.latlng.lng)});
     mapElement.tabIndex=0;mapElement.setAttribute('aria-label','Site map. Use arrow keys to move and Enter to place a pin.');
     mapElement.onkeydown=event=>{if(event.key==='Enter'&&event.target===mapElement){event.preventDefault();const p=canvas.getCenter();void selectPin(p.lat,p.lng);}};
-    if(site.center_lat!=null){pin(site.center_lat,site.center_lng);canvas.setView([site.center_lat,site.center_lng],17);}
+    setAddressState(addressState);
+    if(site.center_lat!=null){pin(site.center_lat,site.center_lng);canvas.setView([site.center_lat,site.center_lng],17);if(addressState!=='ready')void selectPin(site.center_lat,site.center_lng);}
     dialog.querySelector('[data-address-barangay]').addEventListener('change',()=>{
       const b=barangays.find(b=>String(b.id)===dialog.querySelector('[name=barangay_id]').value);if(b)canvas.setView([b.center_lat,b.center_lng],14);
     });
@@ -58,7 +69,7 @@ export async function sitesPage(node,query,refresh,head) {
       searchTimer=setTimeout(async()=>{try{
         const {places}=await api('places.php',{query:{q}});if(generation!==request||!dialog.open)return;
         target.innerHTML=places.length?places.map((p,i)=>`<button type="button" class="outline" data-index="${i}">${esc(p.label)}</button>`).join(''):'No places found. Tap the map instead.';
-        target.querySelectorAll('button').forEach(button=>button.onclick=()=>{const p=places[Number(button.dataset.index)];request++;pin(p.latitude,p.longitude,p.label);canvas.setView([p.latitude,p.longitude],17);target.replaceChildren();});
+        target.querySelectorAll('button').forEach(button=>button.onclick=()=>{const p=places[Number(button.dataset.index)];if(!namedAddress(p.label))return;request++;addressRequest++;pin(p.latitude,p.longitude,p.label);setAddressState('ready');canvas.setView([p.latitude,p.longitude],17);target.replaceChildren();});
       }catch(error){if(generation===request&&dialog.open)target.textContent=friendly(error);}},500);
     };
   };

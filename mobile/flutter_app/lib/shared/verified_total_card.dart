@@ -22,7 +22,7 @@ class VerifiedTotalCard extends StatelessWidget {
         child: SizedBox(
           width: (constraints.maxWidth - spacing * (count - 1)) / count,
           child: Card(
-            color: const Color(0xFFEAF3E5),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: onTap,

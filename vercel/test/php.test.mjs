@@ -260,3 +260,10 @@ test('saved themes reach the PHP shell without invalid nested document selectors
   assert.match(css,/html\[data-theme=.?dark/);
   assert.doesNotMatch(await readFile(root+'/dist/assets/cloud/cloud.css','utf8'),/\.cloud-panel html\[data-theme/);
 });
+
+test('signed-in visitors see dashboard links instead of sign-in or registration links on home',async()=>{
+  const {b}=await login();const {text}=await b.request('/index.php');const doc=new JSDOM(text).window.document;
+  assert.equal(doc.querySelector('.hero-actions a[href="/login.php"]'),null);
+  assert.equal(doc.querySelector('.public-footer a[href="/login.php"]'),null);
+  assert.ok(doc.querySelector('.hero-actions a[href="/dashboard.php"]'));
+});

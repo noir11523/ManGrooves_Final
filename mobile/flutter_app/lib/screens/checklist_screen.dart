@@ -115,6 +115,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     ),
                   ),
                   if (_error != null) Text(_error!),
+                  if (widget.api.supportsCloudAccounts)
+                    FilledButton.icon(
+                      onPressed: _addCategory,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add category'),
+                    ),
                   const Text('Categories in report order'),
                   if (_filteredCriteria.isEmpty && !_matchingTraits)
                     const Text('No matches. Try a category or choice.'),
@@ -137,6 +143,111 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             ),
           ),
   );
+
+  String _traitName(String key) =>
+      (_traitData?['trait_categories'] as Map?)?[key]?['name']?.toString() ??
+      _traitHeadings[key] ??
+      key;
+
+  Future<void> _addCategory() async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _ChecklistEditor(
+          api: widget.api,
+          criterion: {
+            'action': 'create',
+            'id': 0,
+            'version': 'new',
+            'name': '',
+            'question_text': '',
+            'selection_mode': 'single',
+            'score_group': 'context',
+            'options': [
+              {'id': -1, 'kind': 'standard', 'label': 'Yes', 'points': 0},
+              {'id': -2, 'kind': 'standard', 'label': 'No', 'points': 0},
+              {
+                'id': -3,
+                'kind': 'unknown',
+                'code': 'unknown',
+                'label': 'Not Sure',
+                'points': 0,
+              },
+            ],
+          },
+        ),
+      ),
+    );
+    if (saved == true) await _load();
+  }
+
+  Future<void> _editTraitCategory(String key) async {
+    var name = _traitName(key);
+    var question =
+        (_traitData?['trait_categories'] as Map?)?[key]?['question_text']
+            ?.toString() ??
+        '';
+    final form = GlobalKey<FormState>();
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Edit category'),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Form(
+              key: form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    initialValue: name,
+                    maxLength: 120,
+                    decoration: const InputDecoration(
+                      labelText: 'Category name',
+                    ),
+                    onChanged: (v) => name = v,
+                    validator: (v) =>
+                        v == null || v.trim().isEmpty ? 'Enter a name.' : null,
+                  ),
+                  TextFormField(
+                    initialValue: question,
+                    maxLength: 255,
+                    maxLines: 2,
+                    decoration: const InputDecoration(labelText: 'Question'),
+                    onChanged: (v) => question = v,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Enter a question.'
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState!.validate()) {
+                Navigator.pop(dialog, {
+                  'action': 'category',
+                  'trait': key,
+                  'name': name.trim(),
+                  'question_text': question.trim(),
+                });
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) await _traitAction(result);
+  }
 
   Widget _criterionTile(Map<String, dynamic> criterion) => Card(
     child: ListTile(
@@ -282,10 +393,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 return ListTile(
                   key: ValueKey(key),
                   title: Text(
-                    _traitHeadings[key] ??
-                        (_criteria ?? [])
-                            .firstWhere((c) => c['code'] == key)['name']
-                            .toString(),
+                    _traitHeadings.containsKey(key)
+                        ? _traitName(key)
+                        : (_criteria ?? [])
+                              .firstWhere((c) => c['code'] == key)['name']
+                              .toString(),
                   ),
                   leading: Text('${i + 1}'),
                   trailing: ReorderableDragStartListener(
@@ -319,7 +431,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   };
   bool get _matchingTraits => (_traitData?['traits'] as Map? ?? {}).entries.any(
     (entry) => _matches([
-      _traitHeadings[entry.key],
+      _traitName(entry.key),
       ...(entry.value as List),
       ...((_traitData?['trait_labels'] as Map?)?[entry.key] as Map? ?? {})
           .values,
@@ -338,7 +450,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         for (final entry in traits.entries)
           if (entry.key == category &&
               _matches([
-                _traitHeadings[entry.key],
+                _traitName(entry.key),
                 ...(entry.value as List),
                 ...((_traitData?['trait_labels'] as Map?)?[entry.key] as Map? ??
                         {})
@@ -349,10 +461,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 key: ValueKey('${entry.key}|$_query'),
                 initiallyExpanded: _query.isNotEmpty,
                 title: Text(
-                  _traitHeadings[entry.key] ?? entry.key,
+                  _traitName(entry.key),
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 children: [
+                  TextButton.icon(
+                    onPressed: () => _editTraitCategory(entry.key),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit category and question'),
+                  ),
                   TextButton.icon(
                     onPressed: () => _editTrait(entry.key),
                     icon: const Icon(Icons.add),
@@ -577,6 +694,9 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
       return;
     }
     setState(() {
+      while (_options.any((o) => o['id'] == _nextId)) {
+        _nextId--;
+      }
       _options.add({
         'id': _nextId--,
         'code': kind,
@@ -770,7 +890,13 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
       }
     },
     child: Scaffold(
-      appBar: AppBar(title: Text('${widget.criterion['name']}')),
+      appBar: AppBar(
+        title: Text(
+          _data['action'] == 'create'
+              ? 'Add category'
+              : '${widget.criterion['name']}',
+        ),
+      ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: EdgeInsets.symmetric(
@@ -854,6 +980,29 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                   setState(() => _dirty = true);
                 },
               ),
+              if (_data['action'] == 'create') ...[
+                DropdownButtonFormField<String>(
+                  initialValue: _data['selection_mode'],
+                  decoration: const InputDecoration(labelText: 'Answers'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'single',
+                      child: Text('Choose one'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'multiple',
+                      child: Text('Choose several'),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _data['selection_mode'] = v;
+                    _dirty = true;
+                  }),
+                ),
+                const Text(
+                  'Added under Site Conditions. Does not change condition scoring.',
+                ),
+              ],
               const Text('JPG, PNG, or WebP. Up to 5 MB.'),
               const SizedBox(height: 16),
               ..._options.map((raw) {
