@@ -58,14 +58,14 @@ html[data-theme="dark"] .table {--bs-table-color:#eef3ee;--bs-table-hover-color:
 html[data-theme="dark"] .table thead th {background:#344438;color:#d6ead2}
 html[data-theme="dark"] .btn-outline-success {--bs-btn-color:#a6d3a0;--bs-btn-border-color:#a6d3a0;--bs-btn-hover-bg:#a6d3a0;--bs-btn-hover-color:#17231c}
 
-/* Keep the location task compact, with search and map together on wider screens. */
+/* Keep the address controls above a full-width map at every screen size. */
 .report-task[data-step="1"]{padding:16px}
-.report-location{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px;align-items:start}
+.report-location{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
 .report-location .location-tools{min-width:0;display:grid;gap:10px}
 .report-location h2,.report-location p,.report-location .field,.report-location .list{margin:0}
 .report-location .list:empty,.report-location p:empty,.report-location .address-status:empty{display:none}
 .report-location .location-actions{display:flex;flex-wrap:wrap;gap:8px}
-.report-location .location-actions button{flex:1 1 125px;padding:10px;min-height:44px}
+.report-location .location-actions button{flex:0 1 auto;padding:10px 18px;min-height:44px}
 .report-location #location-map{height:350px;min-height:280px;margin:0;border-radius:12px;overflow:hidden}
 .report-location .address-status{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:.9rem}
 .report-location .address-status button{padding:8px 12px;min-height:40px}
@@ -76,8 +76,25 @@ html[data-theme="dark"] .btn-outline-success {--bs-btn-color:#a6d3a0;--bs-btn-bo
 
 /* Compact category editing and theme-aware controls in the shared shell. */
 .trait-category-form{padding:12px 0 18px;border-bottom:1px solid var(--border);margin-bottom:16px}
-.checklist-create>form{max-width:760px}.checklist-create textarea{min-height:90px}
-.checklist-page .checklist-order{padding:16px}.checklist-page .order-row{padding:4px 0}
+.checklist-tools{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.checklist-create,.checklist-order{margin:12px 0;padding:16px}
+.checklist-create .field{min-width:0;margin-bottom:12px}
+.category-types{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:0 0 16px}
+.category-types legend{font-weight:650;margin-bottom:8px}
+.category-types label{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border:1px solid var(--border);border-radius:10px;cursor:pointer}
+.category-types label:has(input:checked){background:var(--sage,#e5f0e1);border-color:var(--green)}
+.category-choices{display:grid;gap:8px;margin:12px 0}
+.category-choice{display:grid;grid-template-columns:minmax(0,1fr) 88px auto;gap:8px;align-items:end}
+.category-choice .field{margin:0}.category-choice button{min-height:44px;padding:8px 12px}
+.checklist-create[data-kind="trait"] .category-choice{grid-template-columns:minmax(0,1fr) auto}
+.checklist-page .order-row{padding:4px 0}.order-row span{overflow-wrap:anywhere}
+.checklist-create h2,.checklist-order h2{margin:0 0 12px}
+.filters.analytics-filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));width:100%;gap:12px}
+.filters.analytics-filters .field{width:100%;min-width:0;max-width:none;margin:0}
+.analytics-filters input,.analytics-filters select{width:100%;min-width:0;max-width:100%}
+.analytics-filters .actions{margin-top:0}
+@media(max-width:900px){.filters.analytics-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-filters .field:last-of-type{grid-column:1/-1}}
+@media(max-width:480px){.filters.analytics-filters{grid-template-columns:minmax(0,1fr)}.category-choice{grid-template-columns:minmax(0,1fr) 72px auto}.category-choice button{padding:8px}.report-location .location-actions button{flex:1 1 125px}}
 html[data-theme="dark"] .user-menu,html[data-theme="dark"] .user-menu:hover{background:transparent;color:#eef3ee}
 html[data-theme="dark"] .user-menu :is(strong,small,i){color:#d6ead2}
 html[data-theme="dark"] :is(.password-toggle,.password-field .password-toggle){background:transparent;color:#d6ead2;border-color:#526856}

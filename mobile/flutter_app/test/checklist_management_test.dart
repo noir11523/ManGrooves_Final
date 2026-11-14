@@ -163,6 +163,10 @@ void main() {
   testWidgets(
     'new Traits save through the shared trait catalog and reload as a trait group',
     (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       final api = _CloudApi();
       await tester.pumpWidget(MaterialApp(home: ChecklistScreen(api: api)));
       await tester.pumpAndSettle();
@@ -172,11 +176,16 @@ void main() {
         _field('Question'),
         'What colour are the flowers?',
       );
-      await _tap(tester, find.byType(DropdownButtonFormField<String>).first);
-      await _tap(tester, find.text('Traits').last);
+      expect(find.byType(SegmentedButton<String>), findsOneWidget);
+      expect(find.text('Points'), findsNothing);
       expect(find.text('Answers'), findsNothing);
       await tester.enterText(_field('Choice').first, 'White');
-      await tester.enterText(_field('Choice').last, 'Red');
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('-2-standard')),
+        160,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(find.byKey(const ValueKey('-2-standard')), 'Red');
       await _tap(tester, find.text('Save changes'));
       await _tap(tester, find.text('Save'));
       expect(api.traitCreation?['choices'], ['White', 'Red']);
@@ -210,6 +219,7 @@ void main() {
       expect(find.text('Leaf outline'), findsOneWidget);
       expect(api.metadata['question_text'], 'Which outline matches?');
       await _tap(tester, find.text('Add category'));
+      await _tap(tester, find.text('Site Conditions'));
       await tester.enterText(_field('Name'), 'Water observations');
       await tester.enterText(_field('Question'), 'Is the water clear?');
       await _tap(tester, find.text('Save changes'));

@@ -128,7 +128,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     OutlinedButton.icon(
                       onPressed: _changeOrder,
                       icon: const Icon(Icons.reorder),
-                      label: const Text('Question order'),
+                      label: const Text('Reorder'),
                     ),
                   for (final key in _orderedKeys)
                     if ((_traitData?['traits'] as Map? ?? _traitHeadings)
@@ -158,6 +158,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           api: widget.api,
           criterion: {
             'action': 'create',
+            'category_type': 'trait',
             'id': 0,
             'version': 'new',
             'name': '',
@@ -167,13 +168,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             'options': [
               {'id': -1, 'kind': 'standard', 'label': 'Yes', 'points': 0},
               {'id': -2, 'kind': 'standard', 'label': 'No', 'points': 0},
-              {
-                'id': -3,
-                'kind': 'unknown',
-                'code': 'unknown',
-                'label': 'Not Sure',
-                'points': 0,
-              },
             ],
           },
         ),
@@ -975,6 +969,55 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                     style: const TextStyle(color: Colors.red),
                   ),
                 ),
+              if (_data['action'] == 'create') ...[
+                const Text('Type'),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'trait', label: Text('Traits')),
+                    ButtonSegment(
+                      value: 'condition',
+                      label: Text('Site Conditions'),
+                    ),
+                  ],
+                  selected: {_data['category_type'] ?? 'trait'},
+                  onSelectionChanged: _busy
+                      ? null
+                      : (values) => setState(() {
+                          final value = values.single;
+                          _data['category_type'] = value;
+                          _dirty = true;
+                          if (value == 'trait') {
+                            _data['selection_mode'] = 'single';
+                            _options.removeWhere(
+                              (o) => [
+                                'unknown',
+                                'all_of_the_above',
+                                'none_of_the_above',
+                              ].contains(o['code'] ?? o['kind']),
+                            );
+                          } else if (!_options.any(
+                            (o) => (o['code'] ?? o['kind']) == 'unknown',
+                          )) {
+                            _options.add({
+                              'id':
+                                  _options.fold<int>(
+                                    0,
+                                    (lowest, o) => o['id'] < lowest
+                                        ? o['id'] as int
+                                        : lowest,
+                                  ) -
+                                  1,
+                              'kind': 'unknown',
+                              'code': 'unknown',
+                              'label': 'Not Sure',
+                              'points': 0,
+                            });
+                          }
+                        }),
+                ),
+                const SizedBox(height: 16),
+              ],
               TextFormField(
                 initialValue: '${_data['name']}',
                 enabled: !_busy,
@@ -1002,33 +1045,6 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                 },
               ),
               if (_data['action'] == 'create') ...[
-                DropdownButtonFormField<String>(
-                  initialValue: _data['category_type'] ?? 'condition',
-                  decoration: const InputDecoration(labelText: 'Category type'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'condition',
-                      child: Text('Site Conditions'),
-                    ),
-                    DropdownMenuItem(value: 'trait', child: Text('Traits')),
-                  ],
-                  onChanged: _busy
-                      ? null
-                      : (value) => setState(() {
-                          _data['category_type'] = value;
-                          _dirty = true;
-                          if (value == 'trait') {
-                            _data['selection_mode'] = 'single';
-                            _options.removeWhere(
-                              (o) => [
-                                'unknown',
-                                'all_of_the_above',
-                                'none_of_the_above',
-                              ].contains(o['code'] ?? o['kind']),
-                            );
-                          }
-                        }),
-                ),
                 if (!_newTrait)
                   DropdownButtonFormField<String>(
                     initialValue: _data['selection_mode'],
@@ -1049,9 +1065,7 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                     }),
                   ),
                 Text(
-                  _newTrait
-                      ? 'Syncs with Species and Submit Report. Assign a choice to each species.'
-                      : 'Added under Site Conditions. Does not change condition scoring.',
+                  _newTrait ? 'Also appears in Species and Submit Report.' : 'Points are saved for this question. Overall condition uses leaf color, pests, and roots.',
                 ),
               ],
               Text(

@@ -904,9 +904,11 @@ test('admins can save trait headings and add a category with answer choices',asy
   let form=$('.trait-category-form');form.elements.name.value='Leaf outline';form.elements.question_text.value='Which shape matches?';
   await form.onsubmit({preventDefault(){}});
   assert.deepEqual(writes[0].body,{action:'category',trait:'leaf_shape',name:'Leaf outline',question_text:'Which shape matches?'});
-  form=$('.checklist-create form');form.elements.name.value='Water';form.elements.question_text.value='Is it clear?';form.elements.choices.value='Clear\nCloudy';
+  form=$('.checklist-create form');$('[name=category_type][value=condition]').click();form.elements.name.value='Water';form.elements.question_text.value='Is it clear?';
+  const labels=form.querySelectorAll('.choice-label'),points=form.querySelectorAll('.choice-points input');labels[0].value='Clear';labels[1].value='Cloudy';points[0].value='2';points[1].value='-1';
+  assert.equal(form.querySelector('.choice-points').hidden,false);
   await form.onsubmit({preventDefault(){},target:form});
-  assert.equal(writes[1].body.action,'create');assert.equal(writes[1].body.options.length,3);assert.equal(writes[1].body.options[2].kind,'unknown');
+  assert.equal(writes[1].body.action,'create');assert.equal(writes[1].body.options.length,3);assert.equal(writes[1].body.options[2].kind,'unknown');assert.deepEqual(writes[1].body.options.map(o=>o.points),[2,-1,0]);
   clearTimeout(ui.toast.timer);
 });
 
@@ -923,9 +925,9 @@ test('a custom Trait syncs from Add category to species selection and report ste
   return {...catalog,clusters:[],location:{}};
  };
  await ui.checklistPage($('#page'));
- let form=$('.checklist-create form');form.elements.category_type.value='trait';change(form.elements.category_type);
+ let form=$('.checklist-create form');assert.equal(form.elements.category_type.value,'trait');
  assert.equal(form.elements.selection_mode.closest('label').hidden,true);
- form.elements.name.value=meta.name;form.elements.question_text.value=meta.question_text;form.elements.choices.value='White';
+ form.elements.name.value=meta.name;form.elements.question_text.value=meta.question_text;form.querySelector('.choice-label').value='White';form.querySelectorAll('.category-choice button')[1].click();
  await form.onsubmit({preventDefault(){},target:form});assert.equal(created,true);
  await ui.adminPage($('#page'),'species',{});$('.edit-item').click();
  const choice=$(`[name=${key}]`);assert.equal(choice.tagName,'SELECT');assert.equal(choice.options[1].textContent,'White');choice.value=value;
@@ -938,4 +940,21 @@ test('a custom Trait syncs from Add category to species selection and report ste
   $(`[name=${key}]`).click();for(let i=0;i<4;i++)await submit();
   assert.equal(ui.reportDraft.step,3);assert.equal(preview[key],value);assert.match($('#step-body').textContent,/Flower colour: White/);
  }finally{dispose();ui.reportDraft.reset();clearTimeout(ui.toast.timer);}
+});
+
+
+test('category tools preserve edits, reject duplicate choices and save reordered questions',async()=>{
+ const writes=[];globalThis.testApi=async(path,{body}={})=>{if(body){writes.push(body);return {};}return path==='trait-images.php'?{traits:{root_type:[],leaf_shape:[]},category_order:['root_type','leaf_shape']}:{criteria:[]};};
+ await ui.checklistPage($('#page'));
+ $('[aria-controls=create-category]').click();assert.equal($('.checklist-create').hidden,false);
+ const form=$('.checklist-create form');form.elements.name.value='Flower';form.elements.question_text.value='Which flower?';
+ const labels=form.querySelectorAll('.choice-label');labels[0].value='White';labels[1].value='white';
+ await form.onsubmit({preventDefault(){},target:form});assert.equal(writes.length,0);assert.match(form.querySelector('[role=status]').textContent,/different name/);
+ $('[aria-controls=order-categories]').click();assert.equal($('.checklist-create').hidden,true);assert.equal($('.checklist-order').hidden,false);
+ $('[aria-controls=create-category]').click();assert.equal(form.elements.name.value,'Flower');
+ $('[name=category_type][value=condition]').click();form.querySelector('.choice-points input').value='1.5';labels[1].value='Red';
+ await form.onsubmit({preventDefault(){},target:form});assert.equal(writes.length,0);assert.match(form.querySelector('[role=status]').textContent,/whole-number/);
+ $('[aria-controls=order-categories]').click();$('.order-row [data-step="1"]').click();
+ await $('.checklist-order .actions button').onclick({target:$('.checklist-order .actions button')});
+ assert.deepEqual(writes[0],{action:'order',order:['leaf_shape','root_type']});clearTimeout(ui.toast.timer);
 });
