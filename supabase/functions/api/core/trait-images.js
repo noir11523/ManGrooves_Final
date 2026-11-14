@@ -5,7 +5,8 @@ import {photoCredits} from './reference-photos.js';
 
 export async function traitImages(service,user,input,files={}) {
   requireRole(user,'system_admin');
-  if(input&&['category','order','add_choice','rename_choice','delete_choice'].includes(input.action)){await editTraits(service,user,input);input=null;}
+  let editResult;
+  if(input&&['create_category','category','order','add_choice','rename_choice','delete_choice'].includes(input.action)){editResult=await editTraits(service,user,input);input=null;}
   const catalog=await traitCatalog(service),traits=catalog.traits;
   if(input) {
     const key=input.trait, value=text(input.value,'the feature',255);
@@ -23,5 +24,5 @@ export async function traitImages(service,user,input,files={}) {
       });
     } catch(error) {if(upload)await service.bucket.file(upload.path).delete().catch(()=>{});throw error;}
   }
-  return {...catalog,photo_credits:photoCredits,trait_images:(await service.get('meta','trait_images'))??{},message:input?'Feature image saved.':null};
+  return {...catalog,photo_credits:photoCredits,trait_images:(await service.get('meta','trait_images'))??{},message:input?'Feature image saved.':null,...editResult};
 }

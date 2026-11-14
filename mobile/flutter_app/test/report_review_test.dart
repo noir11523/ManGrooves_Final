@@ -270,6 +270,39 @@ class _SearchApi extends _Api {
   };
 }
 
+const _flowerKey = 'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+class _CustomTraitsApi extends _Api {
+  Map<String, dynamic>? previewInput;
+  @override
+  Future<Map<String, dynamic>> reportForm() async {
+    final form = await super.reportForm();
+    return {
+      ...form,
+      'traits': {
+        ...form['traits'] as Map,
+        _flowerKey: ['white', 'red'],
+      },
+      'trait_labels': {
+        _flowerKey: {'white': 'White', 'red': 'Red'},
+      },
+      'trait_categories': {
+        _flowerKey: {
+          'name': 'Flower colour',
+          'question_text': 'Which colour matches?',
+        },
+      },
+      'category_order': [...form['category_order'] as List, _flowerKey],
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> reportPreview(Map<String, dynamic> input) async {
+    previewInput = input;
+    return super.reportPreview(input);
+  }
+}
+
 class _LiveGps extends _Gps {
   final positions = StreamController<Position>.broadcast();
   @override
@@ -445,6 +478,80 @@ Future<void> openLocation(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'new trait validates, saves in the draft, previews and submits using the shared choice',
+    (tester) async {
+      final api = _CustomTraitsApi(),
+          drafts = _Drafts(),
+          scope = '${_CustomTraitsApi().baseUrl}:custom-trait';
+      drafts.saved[scope] = {
+        'flow_version': 2,
+        'address_ready': true,
+        'step': 3,
+        'category': 6,
+        'form': await api.reportForm(),
+        'sitio_name': 'Coast',
+        'observed_alive_count': '4',
+        'root_type': 'Prop',
+        'leaf_shape': 'Oval',
+        'bark_texture': 'Smooth',
+        'observations': {
+          'leaf_color': [1],
+          'bio_indicators': [2],
+          'negative_signs': [5],
+        },
+        'location': {
+          'latitude': '10.2833',
+          'longitude': '123.8833',
+          'location_source': 'manual',
+        },
+        'photo_path': File(
+          '../../public/assets/img/observations/v1-intact-prop-roots.jpg',
+        ).absolute.path,
+      };
+      drafts.saved['$scope:closeup'] = {
+        'photo_path': File(
+          '../../public/assets/img/observations/v1-green-leaf.jpg',
+        ).absolute.path,
+      };
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftOwner: 'custom-trait',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Flower colour'), findsOneWidget);
+      await tap(tester, find.text('Next'));
+      expect(find.text('Choose an answer for Flower colour.'), findsOneWidget);
+      expect(tester.widget<Stepper>(find.byType(Stepper)).currentStep, 2);
+      await tap(tester, find.byKey(const ValueKey('choice-circle-White')));
+      await tap(tester, find.text('Next'));
+      expect(tester.widget<Stepper>(find.byType(Stepper)).currentStep, 3);
+      expect(api.previewInput?[_flowerKey], 'white');
+      expect(drafts.saved[scope]?[_flowerKey], 'white');
+      await tester.ensureVisible(find.text('Flower colour'));
+      expect(find.text('White'), findsOneWidget);
+      await tap(tester, find.text('These details are from this visit.'));
+      await tap(tester, find.text('Submit report'), photoIO: true);
+      await tap(
+        tester,
+        find.widgetWithText(FilledButton, 'Submit'),
+        photoIO: true,
+      );
+      expect(api.sent?[_flowerKey], 'white');
+      expect(api.submissions, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'address lookup blocks Next until retry resolves the current pin',
     (tester) async {
@@ -1527,7 +1634,7 @@ void main() {
         await tap(tester, find.text('Next'));
         expect(
           find.text(
-            'Choose ${choice.key.split('(').last.replaceAll(')', '')}.',
+            'Choose an answer for ${choice.key.split('(').last.replaceAll(')', '')}.',
           ),
           findsOneWidget,
         );

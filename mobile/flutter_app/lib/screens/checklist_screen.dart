@@ -131,7 +131,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       label: const Text('Question order'),
                     ),
                   for (final key in _orderedKeys)
-                    if (_traitHeadings.containsKey(key))
+                    if ((_traitData?['traits'] as Map? ?? _traitHeadings)
+                        .containsKey(key))
                       _traitEditor(key)
                     else
                       for (final criterion in _filteredCriteria.where(
@@ -277,7 +278,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   List<String> get _orderedKeys =>
       ((_traitData?['category_order'] as List?) ??
               [
-                ..._traitHeadings.keys,
+                ...(_traitData?['traits'] as Map? ?? _traitHeadings).keys.map(
+                  (k) => '$k',
+                ),
                 ...(_criteria ?? []).map((c) => c['code']),
               ])
           .map((key) => '$key')
@@ -393,7 +396,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 return ListTile(
                   key: ValueKey(key),
                   title: Text(
-                    _traitHeadings.containsKey(key)
+                    (_traitData?['traits'] as Map? ?? _traitHeadings)
+                            .containsKey(key)
                         ? _traitName(key)
                         : (_criteria ?? [])
                               .firstWhere((c) => c['code'] == key)['name']
@@ -731,6 +735,8 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
   final Map<String, String> _images = {};
   bool _busy = false, _dirty = false;
   String? _error;
+  bool get _newTrait =>
+      _data['action'] == 'create' && _data['category_type'] == 'trait';
   List<dynamic> get _options => _data['options'] as List;
   Future<void> _pick(String key) async {
     try {
@@ -804,7 +810,22 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
       for (final option in _options.where((o) => o['delete'] == true)) {
         images.remove('option_image_${option['id']}');
       }
-      await widget.api.saveChecklist(_data, images);
+      if (_newTrait) {
+        await widget.api.cloudRequest(
+          'trait-images.php',
+          body: {
+            'action': 'create_category',
+            'name': _data['name'],
+            'question_text': _data['question_text'],
+            'choices': _options
+                .where((o) => o['delete'] != true)
+                .map((o) => o['label'])
+                .toList(),
+          },
+        );
+      } else {
+        await widget.api.saveChecklist(_data, images);
+      }
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -916,7 +937,7 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                 icon: const Icon(Icons.add),
                 label: const Text('Add choice'),
               ),
-              if (_missingSpecials.isNotEmpty)
+              if (!_newTrait && _missingSpecials.isNotEmpty)
                 PopupMenuButton<String>(
                   tooltip: 'Restore a special choice',
                   enabled: !_busy,
@@ -982,28 +1003,62 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
               ),
               if (_data['action'] == 'create') ...[
                 DropdownButtonFormField<String>(
-                  initialValue: _data['selection_mode'],
-                  decoration: const InputDecoration(labelText: 'Answers'),
+                  initialValue: _data['category_type'] ?? 'condition',
+                  decoration: const InputDecoration(labelText: 'Category type'),
                   items: const [
                     DropdownMenuItem(
-                      value: 'single',
-                      child: Text('Choose one'),
+                      value: 'condition',
+                      child: Text('Site Conditions'),
                     ),
-                    DropdownMenuItem(
-                      value: 'multiple',
-                      child: Text('Choose several'),
-                    ),
+                    DropdownMenuItem(value: 'trait', child: Text('Traits')),
                   ],
-                  onChanged: (v) => setState(() {
-                    _data['selection_mode'] = v;
-                    _dirty = true;
-                  }),
+                  onChanged: _busy
+                      ? null
+                      : (value) => setState(() {
+                          _data['category_type'] = value;
+                          _dirty = true;
+                          if (value == 'trait') {
+                            _data['selection_mode'] = 'single';
+                            _options.removeWhere(
+                              (o) => [
+                                'unknown',
+                                'all_of_the_above',
+                                'none_of_the_above',
+                              ].contains(o['code'] ?? o['kind']),
+                            );
+                          }
+                        }),
                 ),
-                const Text(
-                  'Added under Site Conditions. Does not change condition scoring.',
+                if (!_newTrait)
+                  DropdownButtonFormField<String>(
+                    initialValue: _data['selection_mode'],
+                    decoration: const InputDecoration(labelText: 'Answers'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'single',
+                        child: Text('Choose one'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'multiple',
+                        child: Text('Choose several'),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() {
+                      _data['selection_mode'] = v;
+                      _dirty = true;
+                    }),
+                  ),
+                Text(
+                  _newTrait
+                      ? 'Syncs with Species and Submit Report. Assign a choice to each species.'
+                      : 'Added under Site Conditions. Does not change condition scoring.',
                 ),
               ],
-              const Text('JPG, PNG, or WebP. Up to 5 MB.'),
+              Text(
+                _newTrait
+                    ? 'Add photos after saving.'
+                    : 'JPG, PNG, or WebP. Up to 5 MB.',
+              ),
               const SizedBox(height: 16),
               ..._options.map((raw) {
                 final option = raw as Map<String, dynamic>;
@@ -1076,7 +1131,7 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                             setState(() => _dirty = true);
                           },
                         ),
-                        if (reserved)
+                        if (!_newTrait && reserved)
                           Text(
                             option['code'] == 'unknown'
                                 ? 'Not Sure rule: unscored; needs review.'
@@ -1086,7 +1141,7 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                                       : 'All choices rule: totals regular choices.')
                                 : 'Adds 0 points.',
                           )
-                        else
+                        else if (!_newTrait)
                           DropdownButtonFormField<int>(
                             initialValue: option['points'] as int,
                             decoration: const InputDecoration(
@@ -1116,12 +1171,13 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                                     _dirty = true;
                                   }),
                           ),
-                        _photo(
-                          'option_image_${option['id']}',
-                          option['image_path'] as String?,
-                          option,
-                          'remove_image',
-                        ),
+                        if (!_newTrait)
+                          _photo(
+                            'option_image_${option['id']}',
+                            option['image_path'] as String?,
+                            option,
+                            'remove_image',
+                          ),
                       ],
                     ),
                   ),

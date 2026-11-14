@@ -1,5 +1,5 @@
 import {isNamedSite} from './site-access.js';
-import {traitCatalog} from './trait-catalog.js';
+import {traitCatalog,selectedCustomTraits} from './trait-catalog.js';
 import {photoError, reportPhotoHashes} from './report-photos.js';
 import {withPhotoCredits, photoCredits} from './reference-photos.js';
 import {followUpAvailable, followUpState, observationHistory} from './follow-up.js';
@@ -114,7 +114,9 @@ export class Service extends Store {
     if (!input.checklist_versions || criteria.some(c => input.checklist_versions[c.id] !== c.version)) {
       throw new AppError('The checklist changed. Reopen this form to see the latest choices.', 409);
     }
-    return {classification: classify(criteria, input.observations), species: matchSpecies(await this.species(), input),
+    const species=await this.species(),traits=await traitCatalog(this,{criteria,species});
+    selectedCustomTraits(traits,input);
+    return {classification: classify(criteria, input.observations), species: matchSpecies(species, input),
       checklist_versions: Object.fromEntries(criteria.map(c => [c.id, c.version]))};
   }
   async dashboard(user) {
@@ -217,6 +219,7 @@ export class Service extends Store {
     if (!input.checklist_versions || criteria.some(c => input.checklist_versions[c.id] !== c.version)) {
       throw new AppError('The checklist changed. Review your answers again before submitting.', 409);
     }
+    const traits=await traitCatalog(this,{criteria,species:catalog}),custom=selectedCustomTraits(traits,input);
     const classification = classify(criteria, input.observations), matching = matchSpecies(catalog, input);
     const barangay=await this.findBarangay(input.latitude,input.longitude,barangays);
     if(!barangay || barangay.province!=='Cebu')throw new AppError('Place the pin inside a Cebu barangay.');
@@ -232,7 +235,8 @@ export class Service extends Store {
     const fields = {sitio_name: text(input.sitio_name ?? '', 'the location name', 120),
       guardian_remarks: text(input.guardian_remarks ?? '', 'remarks', 5000, false),
       root_type: text(input.root_type, 'the root type', 190), leaf_shape: text(input.leaf_shape, 'the leaf shape', 190),
-      bark_texture: text(input.bark_texture, 'the bark texture', 255)};
+      bark_texture: text(input.bark_texture, 'the bark texture', 255),...custom,
+      trait_observations:Object.entries(custom).map(([key,value])=>({key,value,name:traits.trait_categories[key].name,label:traits.trait_labels[key][value]}))};
     if (!Buffer.isBuffer(photo)) throw new AppError('Add a photo from this visit.');
     if (input.photo_views === '2' && !Buffer.isBuffer(closeupPhoto)) throw new AppError('Add both a site overview and a close-up photo.');
     if (!Array.isArray(extraPhotos) || extraPhotos.length > 4 || extraPhotos.some(p=>!Buffer.isBuffer(p))) throw new AppError('Add up to four additional photos.');
@@ -287,6 +291,7 @@ export class Service extends Store {
           const fresh = await tx.get(this.ref('criteria', c.id));
           if (fresh.data()?.version !== c.version) throw new AppError('The checklist changed. Review your answers again.', 409);
         }
+        if(Object.keys(custom).length){const choices=(await tx.get(this.ref('meta','trait_catalog'))).data();for(const [key,value] of Object.entries(custom))if(!choices?.[key]?.some(c=>!c.deleted_at&&c.value===value))throw new AppError('A trait changed. Reopen the checklist.',409);}
         // Every observation requires an independent staff review.
         const time = now(), best = matching.best;
         if (!cluster) cluster = {id: clusterId, cluster_code: `MGC-${clusterId}`, name: fields.sitio_name, visibility:'personal', created_by:user.id, created_by_name:user.full_name, active:1, barangay_id: barangay.id,

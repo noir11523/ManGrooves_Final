@@ -1,4 +1,4 @@
-import {traitCatalog,traitKeys} from './trait-catalog.js';
+import {traitCatalog,traitKeys,customTrait} from './trait-catalog.js';
 import {AppError,integer,text,now,requireRole} from './domain.js';
 
 export async function manageSpecies(service,user,input) {
@@ -13,7 +13,8 @@ export async function manageSpecies(service,user,input) {
   const fields=['local_name','common_name','scientific_name','family','iucn_code','iucn_label','population_trend','root_type','leaf_shape','bark_texture'];
   const data=removing?null:{id,active:input.active===0||input.active==='0'?0:1,
     ...Object.fromEntries(fields.map(k=>[k,text(input[k]??'',k.replaceAll('_',' '),255,['scientific_name','common_name','root_type','leaf_shape','bark_texture'].includes(k))]))};
-  if(data){const {traits}=await traitCatalog(service);for(const key of traitKeys)if(!traits[key].includes(data[key]))throw new AppError('Choose '+key.replaceAll('_',' ')+' from the checklist.');}
+  if(data){const {traits}=await traitCatalog(service);for(const key of traitKeys)if(!traits[key].includes(data[key]))throw new AppError('Choose '+key.replaceAll('_',' ')+' from the checklist.');
+    for(const key of Object.keys(input).filter(customTrait)){if(input[key]&&!traits[key]?.includes(input[key]))throw new AppError('Choose a trait from the checklist.');data[key]=input[key]||null;}}
   return service.db.runTransaction(async tx=>{
     requireRole((await tx.get(service.ref('users',user.uid))).data(),'system_admin','expert');
     const ref=service.ref('species',id),previous=(await tx.get(ref)).data();
@@ -26,7 +27,7 @@ export async function manageSpecies(service,user,input) {
     }
     // Read the catalog in the same transaction so deleting a choice cannot race a species edit.
     const choices=(await tx.get(service.ref('meta','trait_catalog'))).data();
-    for(const key of traitKeys)if(choices?.[key]&&!choices[key].some(c=>!c.deleted_at&&c.value===data[key]))throw new AppError('This trait changed. Reload the species editor.',409);
+    for(const key of [...traitKeys,...Object.keys(data).filter(customTrait)])if(data[key]&&choices?.[key]&&!choices[key].some(c=>!c.deleted_at&&c.value===data[key]))throw new AppError('This trait changed. Reload the species editor.',409);
     tx.set(ref,data,{merge:true});
     service.audit(tx,user,'admin.species_updated','species',id);
     return {message:'Species saved.',species:data};

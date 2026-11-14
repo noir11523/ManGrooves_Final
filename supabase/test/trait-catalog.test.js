@@ -81,3 +81,24 @@ test('form reuses loaded checklist and species instead of repeating database rea
   assert.equal(reads.filter(k=>k==='criteria').length,1);
   assert.equal(reads.filter(k=>k==='species').length,1);
 });
+
+
+test('new trait categories retain stable choices, order and conservative species matching',async()=>{
+ const {service,admin,species}=fixture();
+ const created=await editTraits(service,admin,{action:'create_category',name:'Flowers',question_text:'What colour are the flowers?',choices:['White','Red']});
+ let catalog=await traitCatalog(service);const key=created.trait,[white,red]=catalog.traits[key];
+ assert.match(key,/^trait_category_[a-f0-9]{32}$/);assert.equal(catalog.trait_categories[key].name,'Flowers');
+ assert.equal(catalog.category_order[3],key);assert.equal(catalog.trait_labels[key][white],'White');
+ assert.equal(matchSpecies(species,{...species[0],[key]:white}).best,null,'an unmapped trait must not invent a match');
+ species[0][key]=white;
+ assert.equal(matchSpecies(species,{...species[0],[key]:white}).best.id,1);
+ assert.equal(matchSpecies(species,{...species[0],[key]:red}).best,null);
+ await editTraits(service,admin,{action:'rename_choice',trait:key,value:white,label:'Cream-white'});
+ await editTraits(service,admin,{action:'category',trait:key,name:'Flower colour',question_text:'Which colour?'});
+ catalog=await traitCatalog(service);assert.equal(catalog.trait_labels[key][white],'Cream-white');
+ assert.equal(matchSpecies(species,{...species[0],[key]:white}).best.id,1);
+ await assert.rejects(editTraits(service,admin,{action:'delete_choice',trait:key,value:white}),/Update species/);
+ await assert.rejects(editTraits(service,admin,{action:'create_category',name:'Flower colour',question_text:'Which?',choices:['One']}),/already exists/);
+ await assert.rejects(editTraits(service,admin,{action:'create_category',name:'Other',question_text:'Which?',choices:['Same','same']}),/different choice/);
+ await assert.rejects(editTraits(service,{...admin,role:'expert'},{action:'create_category',name:'Other',question_text:'Which?',choices:['One']}));
+});

@@ -909,3 +909,33 @@ test('admins can save trait headings and add a category with answer choices',asy
   assert.equal(writes[1].body.action,'create');assert.equal(writes[1].body.options.length,3);assert.equal(writes[1].body.options[2].kind,'unknown');
   clearTimeout(ui.toast.timer);
 });
+
+
+test('a custom Trait syncs from Add category to species selection and report step 3',async()=>{
+ const key='trait_category_'+'a'.repeat(32),value='choice_white';let created=false,speciesSaved,preview;
+ const meta={name:'Flower colour',question_text:'What colour are the flowers?'};
+ const traits={root_type:[reference.species[0].root_type],leaf_shape:[reference.species[0].leaf_shape],bark_texture:[reference.species[0].bark_texture],[key]:[value]};
+ const catalog={traits,trait_categories:{[key]:meta},trait_labels:{[key]:{[value]:'White'}},category_order:[key,'root_type','leaf_shape','bark_texture'],species:[reference.species[0]],criteria:[]};
+ globalThis.testApi=async(path,{body}={})=>{
+  if(path==='trait-images.php'&&body){assert.equal(body.action,'create_category');assert.deepEqual(body.choices,['White']);created=true;return {...catalog,trait:key};}
+  if(path==='species.php'&&body){speciesSaved=body;return {};}
+  if(path==='report-preview.php'){preview=body;return {classification:{status:'Healthy',health_score:6},species:{},checklist_versions:{}};}
+  return {...catalog,clusters:[],location:{}};
+ };
+ await ui.checklistPage($('#page'));
+ let form=$('.checklist-create form');form.elements.category_type.value='trait';change(form.elements.category_type);
+ assert.equal(form.elements.selection_mode.closest('label').hidden,true);
+ form.elements.name.value=meta.name;form.elements.question_text.value=meta.question_text;form.elements.choices.value='White';
+ await form.onsubmit({preventDefault(){},target:form});assert.equal(created,true);
+ await ui.adminPage($('#page'),'species',{});$('.edit-item').click();
+ const choice=$(`[name=${key}]`);assert.equal(choice.tagName,'SELECT');assert.equal(choice.options[1].textContent,'White');choice.value=value;
+ form=$('#admin-editor form');await form.onsubmit({preventDefault(){},target:form});assert.equal(speciesSaved[key],value);
+ ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,owner:undefined,step:3,fields:{...reference.species[0],sitio_name:'Cebu shore',latitude:10.28,longitude:123.88,location_source:'manual'}});resolvedAddress(ui.reportDraft.fields);
+ const dispose=await ui.reportWizard($('#page'),{});
+ try{
+  assert.equal(ui.reportDraft.step,2);assert.equal($('#step-body h2').textContent,'Traits');assert.match($('fieldset:not([hidden])').textContent,/Flower colour/);
+  await submit();assert.equal(ui.reportDraft.category,0);assert.match($('#report-form .error').textContent,/Flower colour/);
+  $(`[name=${key}]`).click();for(let i=0;i<4;i++)await submit();
+  assert.equal(ui.reportDraft.step,3);assert.equal(preview[key],value);assert.match($('#step-body').textContent,/Flower colour: White/);
+ }finally{dispose();ui.reportDraft.reset();clearTimeout(ui.toast.timer);}
+});

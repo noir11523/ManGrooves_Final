@@ -192,6 +192,8 @@ class _ManagementScreenState extends State<ManagementScreen> {
             child: DropdownButtonFormField<String>(
               initialValue: options.containsKey('${values[key]}')
                   ? '${values[key]}'
+                  : key.startsWith('trait_category_')
+                  ? ''
                   : null,
               isExpanded: true,
               decoration: InputDecoration(
@@ -366,19 +368,29 @@ class _ManagementScreenState extends State<ManagementScreen> {
                             'root_type',
                             'leaf_shape',
                             'bark_texture',
+                            ...(_catalog['traits'] as Map? ?? {}).keys
+                                .map((k) => '$k')
+                                .where((k) => k.startsWith('trait_category_')),
                           ])
                             if ([
-                              'root_type',
-                              'leaf_shape',
-                              'bark_texture',
-                            ].contains(key))
-                              choice(key, key.replaceAll('_', ' '), {
-                                for (final value
-                                    in (_catalog['traits']?[key] as List? ??
-                                        []))
-                                  '$value':
-                                      '${_catalog['trait_labels']?[key]?[value] ?? value}',
-                              })
+                                  'root_type',
+                                  'leaf_shape',
+                                  'bark_texture',
+                                ].contains(key) ||
+                                key.startsWith('trait_category_'))
+                              choice(
+                                key,
+                                '${(_catalog['trait_categories'] as Map?)?[key]?['name'] ?? key.replaceAll('_', ' ')}',
+                                {
+                                  if (key.startsWith('trait_category_'))
+                                    '': 'Not set',
+                                  for (final value
+                                      in (_catalog['traits']?[key] as List? ??
+                                          []))
+                                    '$value':
+                                        '${_catalog['trait_labels']?[key]?[value] ?? value}',
+                                },
+                              )
                             else
                               input(
                                 key,
@@ -980,6 +992,14 @@ class _ManagementScreenState extends State<ManagementScreen> {
             'Bark',
             '${(_catalog['trait_labels'] as Map?)?['bark_texture']?[item['bark_texture']] ?? item['bark_texture'] ?? ''}',
           ),
+          for (final key
+              in (_catalog['traits'] as Map? ?? {}).keys
+                  .map((k) => '$k')
+                  .where((k) => k.startsWith('trait_category_')))
+            CatalogDetail(
+              '${(_catalog['trait_categories'] as Map?)?[key]?['name'] ?? key}',
+              '${(_catalog['trait_labels'] as Map?)?[key]?[item[key]] ?? 'Not set'}',
+            ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 12,

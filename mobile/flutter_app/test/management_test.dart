@@ -36,7 +36,19 @@ class _Api extends ApiClient {
       'traits': {
         'root_type': ['Pneumatophores'],
         'leaf_shape': ['Oval'],
-        'bark_texture': [],
+        'bark_texture': ['Smooth'],
+        'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': ['white', 'red'],
+      },
+      'trait_categories': {
+        'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': {
+          'name': 'Flower colour',
+        },
+      },
+      'trait_labels': {
+        'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': {
+          'white': 'White',
+          'red': 'Red',
+        },
       },
       'species': deleted
           ? []
@@ -48,6 +60,7 @@ class _Api extends ApiClient {
                 'scientific_name': 'Avicennia marina',
                 'root_type': 'Pneumatophores',
                 'leaf_shape': 'Oval',
+                'bark_texture': 'Smooth',
                 'active': 1,
               },
             ],
@@ -72,6 +85,41 @@ class _Api extends ApiClient {
 }
 
 void main() {
+  testWidgets(
+    'species editor saves a new checklist trait using its stable value',
+    (tester) async {
+      final api = _Api();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ManagementScreen(api: api, page: 'species'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byTooltip('Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit'));
+      await tester.pumpAndSettle();
+      final dropdown = find.widgetWithText(
+        DropdownButtonFormField<String>,
+        'Flower colour',
+      );
+      await tester.ensureVisible(dropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('White').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+      expect(
+        api.writes.single['trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+        'white',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'species names are local-first and deletion can cancel, fail, retry and refresh',
     (tester) async {

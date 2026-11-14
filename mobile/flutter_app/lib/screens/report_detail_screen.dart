@@ -224,6 +224,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 (_report!['display_leaf_shape'] ?? _report!['leaf_shape']),
             'Bark texture':
                 (_report!['display_bark_texture'] ?? _report!['bark_texture']),
+            for (final trait in (_report!['trait_observations'] as List? ?? []))
+              '${trait['name']}': trait['label'],
           },
         ),
         const SizedBox(height: 18),

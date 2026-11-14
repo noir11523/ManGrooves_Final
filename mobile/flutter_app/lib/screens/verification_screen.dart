@@ -485,6 +485,9 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                 Text(
                   'Traits: ${(_report!['display_root_type'] ?? _report!['root_type'])} / ${(_report!['display_leaf_shape'] ?? _report!['leaf_shape'])} / ${(_report!['display_bark_texture'] ?? _report!['bark_texture'])}',
                 ),
+                for (final trait
+                    in (_report!['trait_observations'] as List? ?? []))
+                  Text('${trait['name']}: ${trait['label']}'),
               ],
             ),
           ),

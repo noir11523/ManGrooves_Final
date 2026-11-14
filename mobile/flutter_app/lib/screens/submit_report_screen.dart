@@ -69,6 +69,37 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   String? _rootType;
   String? _leafShape;
   String? _barkTexture;
+  final Map<String, String> _extraTraits = {};
+  List<String> get _traitKeys =>
+      ((_form?['traits'] as Map?)?.keys ??
+              ['root_type', 'leaf_shape', 'bark_texture'])
+          .map((k) => '$k')
+          .toList();
+  String? _traitValue(String key) => switch (key) {
+    'root_type' => _rootType,
+    'leaf_shape' => _leafShape,
+    'bark_texture' => _barkTexture,
+    _ => _extraTraits[key],
+  };
+  void _setTrait(String key, String? value) {
+    setState(() {
+      switch (key) {
+        case 'root_type':
+          _rootType = value;
+        case 'leaf_shape':
+          _leafShape = value;
+        case 'bark_texture':
+          _barkTexture = value;
+        default:
+          if (value == null) {
+            _extraTraits.remove(key);
+          } else {
+            _extraTraits[key] = value;
+          }
+      }
+    });
+  }
+
   XFile? _photo;
   XFile? _closeupPhoto;
   final List<XFile> _extraPhotos = [];
@@ -77,18 +108,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   int _category = 0;
   List<String> get _categoryOrder =>
       ((_form?['category_order'] as List?) ??
-              [
-                'root_type',
-                'leaf_shape',
-                'bark_texture',
-                ..._criteria.map((c) => c['code']),
-              ])
+              [..._traitKeys, ..._criteria.map((c) => c['code'])])
           .map((v) => '$v')
           .toList();
   String get _categoryKey =>
       _categoryOrder[_category.clamp(0, _categoryOrder.length - 1)];
-  bool get _isTrait =>
-      ['root_type', 'leaf_shape', 'bark_texture'].contains(_categoryKey);
+  bool get _isTrait => _traitKeys.contains(_categoryKey);
   String _submissionToken = List.generate(
     24,
     (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -165,6 +190,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     'root_type': _rootType,
     'leaf_shape': _leafShape,
     'bark_texture': _barkTexture,
+    ..._extraTraits,
     'cluster_id': _clusterId,
     'parent_report_id': _parentReportId,
     'followup': _followup,
@@ -277,6 +303,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _rootType = draft['root_type'] as String?;
       _leafShape = draft['leaf_shape'] as String?;
       _barkTexture = draft['bark_texture'] as String?;
+      _extraTraits.addEntries(
+        draft.entries
+            .where(
+              (e) => e.key.startsWith('trait_category_') && e.value is String,
+            )
+            .map((e) => MapEntry(e.key, e.value as String)),
+      );
       _clusterId = draft['cluster_id'] as int?;
       _parentReportId = draft['parent_report_id'] as int?;
       _followup = draft['followup'] == true;
@@ -400,7 +433,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     try {
       _form = await widget.api.reportForm();
       if (!mounted) return;
-      _category = _category.clamp(0, _criteria.length + 2);
+      _category = _category.clamp(0, _categoryOrder.length - 1);
       for (final c in _criteria) {
         final options = (c['options'] as List).map((o) => o['id']).toSet();
         _observations['${c['code']}']?.removeWhere(
@@ -416,6 +449,19 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (!_traits('root_type').contains(_rootType)) _rootType = null;
       if (!_traits('leaf_shape').contains(_leafShape)) _leafShape = null;
       if (!_traits('bark_texture').contains(_barkTexture)) _barkTexture = null;
+      _extraTraits.removeWhere((key, value) => !_traits(key).contains(value));
+      final missingTrait = _categoryOrder.indexWhere(
+        (key) =>
+            key.startsWith('trait_category_') &&
+            !_traits(key).contains(_traitValue(key)),
+      );
+      if (_step == 3 && missingTrait >= 0) {
+        _step = 2;
+        _category = missingTrait;
+        _preview = null;
+        _draftStatus.value =
+            'The checklist changed. Answer the new trait before submitting.';
+      }
       final clusterExists = _clusters.any((item) => item['id'] == _clusterId);
       if (!clusterExists) {
         if (_parentReportId != null) {
@@ -1325,7 +1371,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _showCategory(_category - 1);
       return;
     }
-    if (_step == 3) _category = _criteria.length + 2;
+    if (_step == 3) _category = _categoryOrder.length - 1;
     if (_step > 0) {
       _editStep(_step - 1);
     } else {
@@ -1342,7 +1388,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
 
   void _showCategory(int index, {String? error}) {
     setState(() {
-      _category = index.clamp(0, _criteria.length + 2);
+      _category = index.clamp(0, _categoryOrder.length - 1);
       _error = error;
     });
     _draftEdited();
@@ -1351,17 +1397,16 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
 
   String? _categoryError(int index) {
     final key = _categoryOrder[index];
-    if (!['root_type', 'leaf_shape', 'bark_texture'].contains(key)) {
+    if (!_traitKeys.contains(key)) {
       final c = _criteria.firstWhere((c) => c['code'] == key);
       final count = (_observations[c['code']] ?? []).length;
       if (count == 0 || (c['selection_mode'] == 'single' && count != 1)) {
         return 'Choose an answer for ${c['name']}.';
       }
     } else {
-      final values = [_rootType, _leafShape, _barkTexture];
-      final names = ['Root Type', 'Leaf Shape', 'Bark Texture'];
-      final i = ['root_type', 'leaf_shape', 'bark_texture'].indexOf(key);
-      if (values[i] == null || values[i]!.isEmpty) return 'Choose ${names[i]}.';
+      if (!_traits(key).contains(_traitValue(key))) {
+        return 'Choose an answer for ${(_form?['trait_categories'] as Map?)?[key]?['name'] ?? const {'root_type': 'Root Type', 'leaf_shape': 'Leaf Shape', 'bark_texture': 'Bark Texture'}[key] ?? key}.';
+      }
     }
     return null;
   }
@@ -1372,7 +1417,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _showCategory(_category, error: error);
       return;
     }
-    if (_category < _criteria.length + 2) {
+    if (_category < _categoryOrder.length - 1) {
       _showCategory(_category + 1);
       return;
     }
@@ -1396,7 +1441,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   void _review() async {
-    for (var i = 0; i < _criteria.length + 3; i++) {
+    for (var i = 0; i < _categoryOrder.length; i++) {
       final error = _categoryError(i);
       if (error != null) {
         _showCategory(i, error: error);
@@ -1496,6 +1541,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         'root_type': _rootType!,
         'leaf_shape': _leafShape!,
         'bark_texture': _barkTexture!,
+        ..._extraTraits,
         'observed_alive_count': _countUnknown ? '' : _aliveCount.text,
         'count_unknown': _countUnknown ? '1' : '0',
         'submission_token': _submissionToken,
@@ -1633,6 +1679,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     _rootType = null;
     _leafShape = null;
     _barkTexture = null;
+    _extraTraits.clear();
     _photo = null;
     _closeupPhoto = null;
     _extraPhotos.clear();
@@ -2295,33 +2342,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (_isTrait)
         _Section(
           title: 'Species traits',
-          subtitle: 'Choose the roots, leaves and bark you see.',
-          child: Column(
-            children: [
-              if (_categoryKey == 'root_type')
-                _traitDropdown(
-                  'Root type',
-                  _rootType,
-                  _traits('root_type'),
-                  (value) => setState(() => _rootType = value),
-                ),
-              const SizedBox(height: 12),
-              if (_categoryKey == 'leaf_shape')
-                _traitDropdown(
-                  'Leaf shape',
-                  _leafShape,
-                  _traits('leaf_shape'),
-                  (value) => setState(() => _leafShape = value),
-                ),
-              const SizedBox(height: 12),
-              if (_categoryKey == 'bark_texture')
-                _traitDropdown(
-                  'Bark texture',
-                  _barkTexture,
-                  _traits('bark_texture'),
-                  (value) => setState(() => _barkTexture = value),
-                ),
-            ],
+          subtitle: 'Choose the feature you see.',
+          child: _traitDropdown(
+            _categoryKey,
+            _traitValue(_categoryKey),
+            _traits(_categoryKey),
+            (value) => _setTrait(_categoryKey, value),
           ),
         ),
       if (_category == _categoryOrder.length - 1)
@@ -2520,9 +2546,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           }).toList(),
         ),
         _reviewCard('Details', 2, [
-          _reviewValue('Roots', _rootType ?? 'Not selected'),
-          _reviewValue('Leaves', _leafShape ?? 'Not selected'),
-          _reviewValue('Bark', _barkTexture ?? 'Not selected'),
+          for (final key in _traitKeys)
+            _reviewValue(
+              '${(_form?['trait_categories'] as Map?)?[key]?['name'] ?? const {'root_type': 'Roots', 'leaf_shape': 'Leaves', 'bark_texture': 'Bark'}[key] ?? key}',
+              '${(_form?['trait_labels'] as Map?)?[key]?[_traitValue(key)] ?? _traitValue(key) ?? 'Not selected'}',
+            ),
           _reviewValue(
             'Notes',
             _remarks.text.trim().isEmpty ? 'None' : _remarks.text.trim(),
@@ -2578,21 +2606,16 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Text(
-        (_form?['trait_categories'] as Map?)?[{
-                  'Root type': 'root_type',
-                  'Leaf shape': 'leaf_shape',
-                  'Bark texture': 'bark_texture',
-                }[label]]?['name']
-                ?.toString() ??
-            traitHeadings[label] ??
+        (_form?['trait_categories'] as Map?)?[label]?['name']?.toString() ??
+            traitHeadings[const {
+              'root_type': 'Root type',
+              'leaf_shape': 'Leaf shape',
+              'bark_texture': 'Bark texture',
+            }[label]] ??
             label,
         style: Theme.of(context).textTheme.titleMedium,
       ),
-      if ((_form?['trait_categories'] as Map?)?[{
-            'Root type': 'root_type',
-            'Leaf shape': 'leaf_shape',
-            'Bark texture': 'bark_texture',
-          }[label]]?['question_text']
+      if ((_form?['trait_categories'] as Map?)?[label]?['question_text']
           case final String question)
         Padding(padding: const EdgeInsets.only(top: 8), child: Text(question)),
       const SizedBox(height: 12),
@@ -2611,12 +2634,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               width: (space.maxWidth - 12 * (columns - 1)) / columns,
               child: ObservationChoice(
                 label:
-                    ((_form?['trait_labels'] as Map?)?[{
-                              'Root type': 'root_type',
-                              'Leaf shape': 'leaf_shape',
-                              'Bark texture': 'bark_texture',
-                            }[label]]
-                            as Map?)?[item]
+                    ((_form?['trait_labels'] as Map?)?[label] as Map?)?[item]
                         ?.toString() ??
                     traitLabels[item] ??
                     item,
@@ -2637,11 +2655,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   );
 
   String? _traitPath(String label, String value) {
-    final key = {
-      'Root type': 'root_type',
-      'Leaf shape': 'leaf_shape',
-      'Bark texture': 'bark_texture',
-    }[label];
+    final key = label;
     return (_form?['trait_images'] as Map?)?[key]?[value]?.toString();
   }
 
@@ -2815,6 +2829,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         'root_type': _rootType,
         'leaf_shape': _leafShape,
         'bark_texture': _barkTexture,
+        ..._extraTraits,
       });
       if (!mounted || request != _previewRequest) return false;
       setState(() {

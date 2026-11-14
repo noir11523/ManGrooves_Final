@@ -127,9 +127,10 @@ function similarCharacters(a, b) {
   return best ? best + similarCharacters(a.slice(0, ai), b.slice(0, bi)) + similarCharacters(a.slice(ai + best), b.slice(bi + best)) : 0;
 }
 export function matchSpecies(catalog, traits) {
-  const keys = ['root_type', 'leaf_shape', 'bark_texture'];
+  const keys = ['root_type', 'leaf_shape', 'bark_texture',...Object.keys(traits).filter(key=>/^trait_category_[a-f0-9]{32}$/.test(key))];
   const ranked = catalog.filter(s => s.active !== 0).map(species => {
     const trait_scores = Object.fromEntries(keys.map(key => {
+      if(key.startsWith('trait_category_'))return [key,traits[key]&&traits[key]===species[key]?100:0];
       const a = normalizeTrait(traits[key]), b = normalizeTrait(species[key]);
       if (!a || !b) return [key, 0];
       if (a === b) return [key, 100];
@@ -138,7 +139,7 @@ export function matchSpecies(catalog, traits) {
       const characters = 2 * similarCharacters(a, b) / (a.length + b.length);
       return [key, Math.round(Math.max(a.includes(b) || b.includes(a) ? .9 : 0, jaccard * .7 + characters * .3) * 10000) / 100];
     }));
-    return {...species, trait_scores, confidence: Math.round(Object.values(trait_scores).reduce((a, b) => a + b, 0) / 3 * 100) / 100};
+    return {...species, trait_scores, confidence: Math.round(Object.values(trait_scores).reduce((a, b) => a + b, 0) / keys.length * 100) / 100};
   }).sort((a, b) => b.confidence - a.confidence || a.scientific_name.localeCompare(b.scientific_name));
   const best = keys.every(k => String(traits[k] ?? '').trim()) && ranked[0]?.confidence === 100 && ranked[0]?.confidence !== ranked[1]?.confidence ? ranked[0] : null;
   return {best, ranked: ranked.slice(0, 5)};

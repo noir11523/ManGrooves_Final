@@ -48,7 +48,7 @@ export async function reportWizard(node, query, user = null) {
         draft.extraPhotos=(await Promise.all(extraStorage.map(s=>s.load()))).map(s=>s?.photo).filter(Boolean);
         draft.closeupPhoto=(await closeupStorage.load())?.photo??null;
         Object.assign(draft, {fields: saved.fields, observations: saved.observations, photo: saved.photo,
-          step: Math.max(0, Math.min(3, Number(saved.step) || 0)), category: Math.max(0,Math.min(data.criteria.length+2,Number(saved.category)||0)), followup: Boolean(saved.followup), dirty: true});
+          step: Math.max(0, Math.min(3, Number(saved.step) || 0)), category: Math.max(0,Math.min(data.criteria.length+Object.keys(data.traits??traitHeadings).length-1,Number(saved.category)||0)), followup: Boolean(saved.followup), dirty: true});
         const changedChecklist = data.criteria.some(c => saved.checklistVersions?.[c.id] !== c.version);
         for (const c of data.criteria) draft.observations[c.code] = (saved.observations[c.code] ?? []).filter(id => c.options.some(o => o.id === id));
         if (changedChecklist && draft.step > 1) { draft.step = 2; draftMessage = 'Draft restored. The checklist changed; check your answers again.'; }
@@ -62,7 +62,8 @@ export async function reportWizard(node, query, user = null) {
   draft.fields.submission_token ||= crypto.randomUUID();
   draft.owner = scope;
   let showObservationCategory = () => {};
-  const categoryOrder=data.category_order??[...Object.keys(traitHeadings),...data.criteria.map(c=>c.code)];
+  const reportTraits=Object.keys(data.traits??traitHeadings);
+  const categoryOrder=data.category_order??[...reportTraits,...data.criteria.map(c=>c.code)];
   const categoryCount=categoryOrder.length;
   const categoryError=index=>{
     const criterion=data.criteria.find(c=>c.code===categoryOrder[index]);
@@ -71,10 +72,12 @@ export async function reportWizard(node, query, user = null) {
       if(!answers.length || (criterion.selection_mode==='single'&&answers.length!==1))return `Choose an answer for ${criterion.name}.`;
     }else{
       const key=categoryOrder[index];
-      if(key&&!draft.fields[key])return `Choose an answer for ${data.trait_categories?.[key]?.name??traitHeadings[key]}.`;
+      if(key&&!(data.traits?.[key]??[]).includes(draft.fields[key]))return `Choose an answer for ${data.trait_categories?.[key]?.name??traitHeadings[key]}.`;
     }
     return '';
   };
+  const missingTrait=categoryOrder.findIndex(key=>key.startsWith('trait_category_')&&!data.traits[key]?.includes(draft.fields[key]));
+  if(draft.step===3&&missingTrait>=0){draft.step=2;draft.category=missingTrait;draft.preview=null;draftMessage='The checklist changed. Answer the new trait before submitting.';}
   const scrollToQuestion=()=>(window.requestAnimationFrame??(fn=>setTimeout(fn,0)))(()=>{
     const target=node.querySelector('.observation-categories')??node.querySelector('.steps');
     target?.scrollIntoView({block:'start',behavior:'smooth'});
@@ -122,7 +125,7 @@ export async function reportWizard(node, query, user = null) {
   const save = form => {
     if (!form) return;
     const values = formValues(form);
-    for(const key of Object.keys(traitHeadings))if(form.querySelector(`[name="${key}"]`))draft.fields[key]=form.querySelector(`[name="${key}"]:checked`)?.value??'';
+    for(const key of reportTraits)if(form.querySelector(`[name="${key}"]`))draft.fields[key]=form.querySelector(`[name="${key}"]:checked`)?.value??'';
     for (const [key, value] of Object.entries(values)) if (key !== 'closeup_photo' && key !== 'photo' && key !== 'extra_photos' && key !== 'count_unknown' && !key.startsWith('obs_') && key !== 'followup') draft.fields[key] = value;
     if (form.querySelector('#followup')) draft.followup = form.querySelector('#followup').checked;
   };
@@ -553,17 +556,17 @@ export async function reportWizard(node, query, user = null) {
       (draft.observations.bio_indicators??[]).includes(o.id)&&!['unknown','none_of_the_above'].includes(o.code));
     if(sighting)resolveAnimalChoices(data.criteria,draft.observations,'bio_indicators',sighting.code);
     $('#step-body').innerHTML = `<h2>What can you see?</h2><p>Choose what you see. Tap a photo to enlarge it.</p>${data.criteria.map(c => `<fieldset class="choice-group"><legend>${esc(c.name)} <small>${c.score_group === 'health' ? 'Condition score' : 'Other details'}</small></legend><p>${esc(c.question_text)}</p><div class="choice-grid">${c.options.map(o => `<label class="choice"><input type="${c.selection_mode === 'multiple' ? 'checkbox' : 'radio'}" name="obs_${esc(c.code)}" value="${o.id}" data-code="${esc(o.code)}" ${draft.observations[c.code]?.includes(o.id) ? 'checked' : ''}>${o.image_path ? `<img src="${esc(asset(o.image_path))}" alt="">` : ''}<span>${esc(o.label)}</span></label>`).join('')}</div></fieldset>`).join('')}`;
-    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. Photos show examples; compare them with what you see at the site.</p>${Object.entries(traitHeadings).map(([key,label])=>`<fieldset class="choice-group"><legend>${esc(data.trait_categories?.[key]?.name??label)}</legend><p>${esc(data.trait_categories?.[key]?.question_text??'')}</p><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}>${data.trait_images?.[key]?.[value]?`<img src="${esc(asset(data.trait_images[key][value]))}" alt="">`:''}<span>${esc(data.trait_labels?.[key]?.[value]||traitLabels[value]||value)}</span></label>`).join('')}</div></fieldset>`).join('')}`);
+    $('#step-body').insertAdjacentHTML('beforeend', `<h2>Identify the mangrove</h2><p>Choose the closest visible feature. Photos show examples; compare them with what you see at the site.</p>${reportTraits.map(key=>{const label=traitHeadings[key]??key;return `<fieldset class="choice-group"><legend>${esc(data.trait_categories?.[key]?.name??label)}</legend><p>${esc(data.trait_categories?.[key]?.question_text??'')}</p><div class="choice-grid">${data.traits[key].map(value=>`<label class="choice"><input type="radio" name="${key}" value="${esc(value)}" ${draft.fields[key]===value?'checked':''}>${data.trait_images?.[key]?.[value]?`<img src="${esc(asset(data.trait_images[key][value]))}" alt="">`:''}<span>${esc(data.trait_labels?.[key]?.[value]||traitLabels[value]||value)}</span></label>`).join('')}</div></fieldset>`;}).join('')}`);
     const headings=$$('#step-body h2');headings[0].textContent='Traits and site conditions';headings[1].textContent='Mangrove identification traits';
     const body=$('#step-body'), originalGroups=[...body.querySelectorAll('fieldset.choice-group')];
-    const originalKeys=[...data.criteria.map(c=>c.code),...Object.keys(traitHeadings)];
+    const originalKeys=[...data.criteria.map(c=>c.code),...reportTraits];
     const groups=categoryOrder.map(key=>originalGroups[originalKeys.indexOf(key)]).filter(Boolean);
     groups.forEach(group=>body.append(group));headings[1].hidden=true;headings[1].nextElementSibling.hidden=true;
     body.classList.add('observation-catalog');
     const showCategory=(index,scroll=false)=>{
       draft.category=Math.max(0,Math.min(index,groups.length-1));draft.dirty=true;
       groups.forEach((g,i)=>{g.hidden=i!==draft.category;g.querySelector('legend').tabIndex=-1;});
-      headings[0].textContent=Object.hasOwn(traitHeadings,categoryOrder[draft.category])?'Traits':'Site Conditions';
+      headings[0].textContent=reportTraits.includes(categoryOrder[draft.category])?'Traits':'Site Conditions';
       $('#next').textContent='Next';
       $('#previous').textContent='Previous';
       $('#report-form .error').textContent='';void persist();if(scroll)scrollToQuestion();
@@ -613,7 +616,7 @@ export async function reportWizard(node, query, user = null) {
   }
   function summary() {
     const c = draft.preview?.classification, species = draft.preview?.species?.best;
-    $('#step-body').innerHTML = `<h2>Review your report</h2><p>Check everything below. You can still make changes.</p><section class="summary-card report-review"><h3>Details <button type="button" class="link edit" data-step="0">Edit</button></h3><div class="review-photos"><figure><img id="summary-photo" class="inline-photo" alt="Site overview"><figcaption>Site overview</figcaption></figure><figure><img id="summary-closeup" class="inline-photo" alt="Close-up"><figcaption>Close-up</figcaption></figure></div><dl class="summary"><dt>Location name</dt><dd>${esc(draft.fields.sitio_name)}</dd><dt>Living mangroves</dt><dd>${draft.fields.count_unknown==='1'?'Unable to count':esc(draft.fields.observed_alive_count)}</dd><dt>Species name</dt><dd>${speciesNames(species)}</dd><dt>Notes</dt><dd>${esc(draft.fields.guardian_remarks || 'None')}</dd>${draft.fields.parent_report_id ? `<dt>Follow-up</dt><dd>${esc(draft.fields.parent_report_code || 'Previous visit')}</dd>` : ''}</dl></section><section class="summary-card"><h3>Location <button type="button" class="link edit" data-step="1">Edit</button></h3><p>${esc(draft.fields.latitude)}, ${esc(draft.fields.longitude)} · ${draft.fields.location_source === 'gps' ? `Device location (about ${Math.round(Number(draft.fields.location_accuracy))} m)` : 'Manual pin'}</p></section><section class="summary-card"><h3>Observations <button type="button" class="link edit" data-step="2">Edit</button></h3>${pill(c?.status ?? 'Unknown')}<p>${c?.health_score == null ? 'An expert will review the uncertain answers.' : `${c.health_score} / 6 condition points. An expert will review this report.`}</p>${data.criteria.map(criterion => `<p><strong>${esc(criterion.name)}:</strong> ${criterion.options.filter(o => draft.observations[criterion.code]?.includes(o.id)).map(o => esc(o.label)).join(', ') || 'None selected'}</p>`).join('')}</section><label class="check"><input type="checkbox" id="field-confirm" required><span>This photo, location, and observations describe my field visit.</span></label>`;
+    $('#step-body').innerHTML = `<h2>Review your report</h2><p>Check everything below. You can still make changes.</p><section class="summary-card report-review"><h3>Details <button type="button" class="link edit" data-step="0">Edit</button></h3><div class="review-photos"><figure><img id="summary-photo" class="inline-photo" alt="Site overview"><figcaption>Site overview</figcaption></figure><figure><img id="summary-closeup" class="inline-photo" alt="Close-up"><figcaption>Close-up</figcaption></figure></div><dl class="summary"><dt>Location name</dt><dd>${esc(draft.fields.sitio_name)}</dd><dt>Living mangroves</dt><dd>${draft.fields.count_unknown==='1'?'Unable to count':esc(draft.fields.observed_alive_count)}</dd><dt>Species name</dt><dd>${speciesNames(species)}</dd><dt>Notes</dt><dd>${esc(draft.fields.guardian_remarks || 'None')}</dd>${draft.fields.parent_report_id ? `<dt>Follow-up</dt><dd>${esc(draft.fields.parent_report_code || 'Previous visit')}</dd>` : ''}</dl></section><section class="summary-card"><h3>Location <button type="button" class="link edit" data-step="1">Edit</button></h3><p>${esc(draft.fields.latitude)}, ${esc(draft.fields.longitude)} · ${draft.fields.location_source === 'gps' ? `Device location (about ${Math.round(Number(draft.fields.location_accuracy))} m)` : 'Manual pin'}</p></section><section class="summary-card"><h3>Observations <button type="button" class="link edit" data-step="2">Edit</button></h3>${pill(c?.status ?? 'Unknown')}<p>${c?.health_score == null ? 'An expert will review the uncertain answers.' : `${c.health_score} / 6 condition points. An expert will review this report.`}</p>${reportTraits.map(key=>`<p><strong>${esc(data.trait_categories?.[key]?.name??traitHeadings[key]??key)}:</strong> ${esc(data.trait_labels?.[key]?.[draft.fields[key]]??draft.fields[key]??'')}</p>`).join('')}${data.criteria.map(criterion => `<p><strong>${esc(criterion.name)}:</strong> ${criterion.options.filter(o => draft.observations[criterion.code]?.includes(o.id)).map(o => esc(o.label)).join(', ') || 'None selected'}</p>`).join('')}</section><label class="check"><input type="checkbox" id="field-confirm" required><span>This photo, location, and observations describe my field visit.</span></label>`;
     if (draft.photo) { if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = URL.createObjectURL(draft.photo); $('#summary-photo').src = photoUrl; }
     if(draft.closeupPhoto){if(closeupUrl)URL.revokeObjectURL(closeupUrl);closeupUrl=URL.createObjectURL(draft.closeupPhoto);$('#summary-closeup').src=closeupUrl;}
     extraUrls.forEach(URL.revokeObjectURL);extraUrls=draft.extraPhotos.map(p=>URL.createObjectURL(p));

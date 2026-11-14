@@ -103,6 +103,7 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 }
 
 class _CloudApi extends _Api {
+  Map<String, dynamic>? traitCreation;
   Map<String, dynamic> metadata = {
     'name': 'Leaf shape',
     'question_text': 'What shape?',
@@ -111,9 +112,31 @@ class _CloudApi extends _Api {
   bool get supportsCloudAccounts => true;
   @override
   Future<Map<String, dynamic>> traitImages() async => {
-    'traits': {'leaf_shape': <String>[]},
-    'trait_categories': {'leaf_shape': metadata},
-    'category_order': ['leaf_shape', 'leaf_color'],
+    'traits': {
+      'leaf_shape': <String>[],
+      if (traitCreation != null)
+        'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': ['white', 'red'],
+    },
+    'trait_categories': {
+      'leaf_shape': metadata,
+      if (traitCreation != null)
+        'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': {
+          'name': traitCreation!['name'],
+          'question_text': traitCreation!['question_text'],
+        },
+    },
+    'trait_labels': {
+      'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': {
+        'white': 'White',
+        'red': 'Red',
+      },
+    },
+    'category_order': [
+      'leaf_shape',
+      if (traitCreation != null)
+        'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'leaf_color',
+    ],
   };
   @override
   Future<Map<String, dynamic>> cloudRequest(
@@ -122,6 +145,10 @@ class _CloudApi extends _Api {
     Map<String, String>? query,
     bool anonymous = false,
   }) async {
+    if (body?['action'] == 'create_category') {
+      expect(path, 'trait-images.php');
+      traitCreation = Map<String, dynamic>.from(body!);
+    }
     if (body?['action'] == 'category') {
       metadata = {
         'name': body!['name'],
@@ -133,6 +160,42 @@ class _CloudApi extends _Api {
 }
 
 void main() {
+  testWidgets(
+    'new Traits save through the shared trait catalog and reload as a trait group',
+    (tester) async {
+      final api = _CloudApi();
+      await tester.pumpWidget(MaterialApp(home: ChecklistScreen(api: api)));
+      await tester.pumpAndSettle();
+      await _tap(tester, find.text('Add category'));
+      await tester.enterText(_field('Name'), 'Flower colour');
+      await tester.enterText(
+        _field('Question'),
+        'What colour are the flowers?',
+      );
+      await _tap(tester, find.byType(DropdownButtonFormField<String>).first);
+      await _tap(tester, find.text('Traits').last);
+      expect(find.text('Answers'), findsNothing);
+      await tester.enterText(_field('Choice').first, 'White');
+      await tester.enterText(_field('Choice').last, 'Red');
+      await _tap(tester, find.text('Save changes'));
+      await _tap(tester, find.text('Save'));
+      expect(api.traitCreation?['choices'], ['White', 'Red']);
+      expect(
+        api.traitCreation?['question_text'],
+        'What colour are the flowers?',
+      );
+      await tester.scrollUntilVisible(
+        find.text('Flower colour'),
+        150,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Flower colour'), findsOneWidget);
+      await _tap(tester, find.text('Flower colour'));
+      expect(find.text('White'), findsOneWidget);
+      expect(api.saves, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'cloud checklist supports editable trait questions and new categories',
     (tester) async {
