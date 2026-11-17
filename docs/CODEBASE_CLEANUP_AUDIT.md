@@ -111,3 +111,10 @@ The requested publication also includes the previously completed checklist/photo
 
 - Android release build **2.0.0+77 passed**. Package manifest confirms `org.mangrooves.mobile`, version code 77, version name 2.0.0. The previous APK and metadata were copied to the ignored `backups/release-before-2.0.0-77/` folder before replacement.
 - Existing headless browser map-layout regression: **28 layouts passed** across embedded/standalone pages and 320/390/768/1280-pixel viewports, including long labels, keyboard interaction and overflow checks. The first restricted run timed out connecting to Chrome; the permitted retry passed.
+
+- **28 packaged PHP/web tests passed** against the fresh APK/website package.
+- APK signature verified and matches the previous release certificate.
+- Published feature/cleanup commit `b796e87` to GitHub `main`.
+- Production Vercel website and Android 2.0.0+77 download published; matching Supabase API version **151 ACTIVE**.
+- **12 read-only live checks passed**, including full APK download checksum. Details and deployment URL are in `RELEASE_2_0_0_77.md`.
+- No production database migration was run. Unrelated local JPGs, diagram artifacts, generated analytics edits, editor settings and the uncertain core.zip archive were left untouched and excluded from the release commit.

@@ -26,4 +26,14 @@ APK SHA-256: `933838cf816e914af5b027170b921a71b4911423b0d0ea783d3bdec5221ace8b`.
 
 ## Publication
 
-Prepared for GitHub, Vercel and the existing Supabase project. Deployment outcome will be recorded after publishing.
+Published **17 November 2026 (Asia/Manila)**.
+
+- Feature/cleanup commit: `b796e87` on `main`, pushed to `https://github.com/noir11523/ManGrooves_Final`.
+- Production website: https://mangrooves-php.vercel.app
+- Vercel release: https://mangrooves-j4rqy6kn3-clements-projects-5174d0c3.vercel.app
+- Supabase project: `rsjwlhqzzvtakcbrzqgi`; Edge function `api` **version 151 ACTIVE**. Existing schema, credentials and Auth settings were retained. The normal publish workflow updated allowed website origins and deployed the API; no database migration was run.
+- Android download: https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk
+- **12 read-only live checks passed**: public PHP pages, new bundled feature markers, Supabase configuration, public summary, unauthenticated access guards, production upload CORS and a full downloaded-APK SHA-256 match.
+
+The live checks created no users, reports, emails or checklist records. Real phone camera/gallery tests remain outstanding. The production supporting-choice migration remains manual and unapplied.
+

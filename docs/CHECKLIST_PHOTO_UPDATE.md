@@ -60,7 +60,7 @@ The exact attached light-trail photograph was not available as a local file for 
 
 ## Validation limitations
 
-Automated DOM/widget tests do not replace physical Android camera/gallery or mobile-browser testing. No live database migration or production deployment was performed for this update. Test/build outcomes are recorded in the completion message; production rollout and real-device acceptance remain separate checks.
+Automated DOM/widget tests do not replace physical Android camera/gallery or mobile-browser testing. Initial local verification preceded deployment. The later production release is recorded below; no live database migration was run.
 
 ## Verification results (17 November 2026)
 
@@ -74,4 +74,10 @@ Automated DOM/widget tests do not replace physical Android camera/gallery or mob
 - Deno HTTP smoke test: **1 passed**, covering routing, CORS, authentication, PDFs and raster uploads.
 - Whitespace/diff check: **passed** (Git only noted normal Windows line-ending conversion warnings).
 
-These results cover automated tests and local builds. Physical phone camera/gallery testing, production deployment and the manual production migration have not been performed.
+These initial results cover automated tests and local builds. Physical phone camera/gallery testing and the manual production migration remain outstanding.
+
+## Published release
+
+Release **2.0.0+77** was published on **17 November 2026 (Asia/Manila)** to the existing Vercel website and Supabase API (version **151 ACTIVE**). The new signed APK is available from the website. Post-cleanup checks passed: 202 backend/shared-web tests, 101 API checks, 173 Flutter tests (one opt-in test skipped), 28 packaged PHP/web tests, 49 legacy JavaScript tests and 28 browser map layouts. Dart analysis, web/Android builds and Edge checks passed. Twelve read-only live checks confirmed the pages, access guards, upload CORS and the full APK checksum.
+
+See [release notes](RELEASE_2_0_0_77.md) for URLs and checksum, and [cleanup audit](CODEBASE_CLEANUP_AUDIT.md) for retained files and the stopped local MySQL test limitation. Real-device camera/gallery and the exact user-attached blurry photo were not tested. The manual production migration remains unapplied.
