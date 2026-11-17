@@ -6,7 +6,7 @@ import {saveImage} from './uploads.js';
 // Staff creation is an administrator action; public registration keeps its OTP flow.
 export async function createStaff(service, actor, input, files={}) {
   requireRole(actor, 'system_admin');
-  if (!['expert', 'system_admin'].includes(input.role)) throw new AppError('Choose Expert or Administrator.');
+  if (input.role !== 'expert') throw new AppError('Only Expert accounts can be created here.');
   const first_name=text(input.first_name,'a first name',80),last_name=text(input.last_name,'a last name',80);
   const email=emailAddress(input.email),pass=password(input.password);
   if(pass!==input.password_confirmation)throw new AppError('The passwords do not match.');

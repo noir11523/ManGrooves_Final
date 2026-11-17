@@ -197,7 +197,12 @@ void main() {
       expect(find.text('Suggested condition: Stressed'), findsOneWidget);
       expect(find.text('Pending review'), findsOneWidget);
       await _tap(tester, find.text('View report'));
-      expect(find.text('Condition score: 4 / 6'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Total condition score: 4 / 6'),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Total condition score: 4 / 6'), findsOneWidget);
       await tester.tap(find.byType(BackButton));
       await tester.pumpAndSettle();
       tester
@@ -289,6 +294,11 @@ void main() {
           {'id': 1, 'common_name': 'One', 'scientific_name': 'Species one'},
         ],
       ),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Decision'),
+      180,
+      scrollable: find.byType(Scrollable).first,
     );
     await _tap(tester, find.byType(DropdownButtonFormField<String>).first);
     await _tap(tester, find.text('Correction').last);

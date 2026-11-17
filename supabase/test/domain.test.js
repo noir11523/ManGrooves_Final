@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { classify, matchSpecies, updateCriterion, validateLocation, password, manilaDate, wireDates } from '../functions/api/core/domain.js';
 import { analyticsForUser, dashboardStats, badgeMetrics, reportList, verifiedNeedsAttention } from '../functions/api/core/analytics.js';
 import {compareApplications} from '../functions/api/core/registration.js';
+import {conditionSummary,canConfirmSuggestions} from '../functions/api/core/condition-score.js';
 const reference = JSON.parse(readFileSync(new URL('../data/reference.json', import.meta.url)));
 const criteria = reference.criteria;
 
@@ -58,13 +59,41 @@ test('all 27 ordinary health combinations keep the 6-point thresholds', () => {
 test('all-of-the-above health uses minimum; context does not alter health', () => {
   assert.equal(classify(criteria, {...healthy(), leaf_color: [choose('leaf_color', 'all_of_the_above')]}).health_score, 4);
   assert.equal(classify(criteria, {...healthy(), bark_trunk: [choose('bark_trunk', 'all_of_the_above')]}).health_score, 6);
-  assert.equal(classify(criteria, {...healthy(), bio_indicators: [choose('bio_indicators', 'all_of_the_above')]}).environmental_score, 5);
+  assert.equal(classify(criteria, {...healthy(), bio_indicators: [choose('bio_indicators', 'all_of_the_above')]}).environmental_score, 0);
 });
-test('Not Sure in any group is unscored and requires review', () => {
+test('only Not Sure in a scored check makes the condition unknown', () => {
   for (const c of criteria) {
     const result = classify(criteria, {...healthy(), [c.code]: [choose(c.code, 'unknown')]});
-    assert.equal(result.status, 'Unknown'); assert.equal(result.health_score, null); assert.equal(result.needs_review, true);
+    const scored=['leaf_color','pests','roots'].includes(c.code);
+    assert.equal(result.status, scored?'Unknown':'Healthy'); assert.equal(result.health_score, scored?null:6); assert.equal(result.needs_review, scored);
   }
+});
+test('historical totals use saved points, zero counts, and incomplete answers never become zero',()=>{
+ const rows=classify(criteria,healthy()).observations;
+ assert.equal(conditionSummary(rows).score,6);
+ assert.equal(conditionSummary(rows.map(r=>r.criteria_code==='roots'?{...r,points:0}:r)).score,4);
+ for(const value of [null,undefined,NaN,'2',3,-1]) {
+  const result=conditionSummary(rows.map(r=>r.criteria_code==='roots'?{...r,points:value}:r));
+  assert.equal(result.score,null);assert.equal(result.answered,2);
+ }
+ assert.equal(conditionSummary(rows.filter(r=>r.criteria_code!=='pests')).score,null);
+ assert.equal(conditionSummary([...rows,rows[0]]).score,null);
+ assert.equal(conditionSummary(rows.map(r=>r.criteria_code==='roots'?{...r,option_code:'unknown',points:0}:r)).score,null);
+ assert.equal(conditionSummary([]).score,null);
+});
+test('confirmation requires both known suggestions and an available species',()=>{
+ const catalog=[{id:1,scientific_name:'Avicennia marina',active:1}];
+ for(const condition of ['Healthy','Stressed','At Risk','Unknown',null,''])for(const id of [1,null,0,99]) {
+  assert.equal(canConfirmSuggestions({suggested_health:condition,suggested_species_id:id},catalog),['Healthy','Stressed','At Risk'].includes(condition)&&id===1);
+ }
+ assert.equal(canConfirmSuggestions({suggested_health:'Healthy',suggested_species_id:1},[{...catalog[0],active:0}]),false);
+});
+test('invalid or duplicate scoring definitions fail instead of generating a misleading total',()=>{
+ assert.throws(()=>classify([...criteria,criteria[0]],healthy()));
+ for(const points of [null,'2',NaN,3,-1]){
+  const altered=structuredClone(criteria);altered[0].options[0].points=points;
+  assert.throws(()=>classify(altered,healthy()));
+ }
 });
 test('exclusive choices, forged IDs, and conflicting animal selections fail', () => {
   assert.throws(() => classify(criteria, {...healthy(), pests: [9999]}));

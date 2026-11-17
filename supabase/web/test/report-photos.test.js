@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validateReportPhotos,checkReportPhotos,photoConflictMessage} from '../src/report-photos.js';
 const photo=(content,name='photo.jpg')=>new File([content],name,{type:'image/jpeg'});
+test('ten distinct photos are accepted by preflight; eleven are rejected',async()=>{
+ const photos=Array.from({length:10},(_,i)=>photo(`photo-${i}`));
+ await checkReportPhotos(photos,async(path,{body})=>{assert.equal(body.get('photo_9').name,'photo.jpg');},'draft');
+ await assert.rejects(validateReportPhotos([...photos,photo('eleven')]),/10 photos/);
+});
 test('renamed duplicate photos are rejected across overview, close-up and additional views',async()=>{
  const original=photo('first photograph');
  await assert.rejects(validateReportPhotos([original,photo('first photograph','renamed.jpg')]),/already added/);

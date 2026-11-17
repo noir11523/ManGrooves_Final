@@ -1,3 +1,4 @@
+import '../shared/condition_score.dart';
 import '../shared/species_names.dart';
 import 'follow_up_screen.dart';
 
@@ -135,7 +136,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   );
 
   Widget _content(BuildContext context) {
-    final observations = (_report!['observations'] as List? ?? const [])
+    final observations = ((_report!['ordered_observations'] ?? _report!['observations']) as List? ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
     final photo = _report!['photo_url']?.toString();
@@ -215,7 +216,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ),
         const SizedBox(height: 12),
         SpeciesNames(_report!),
-        _InfoCard(
+        if (_report!['ordered_observations'] == null) _InfoCard(
           title: 'Species features',
           rows: {
             'Root type':
@@ -230,18 +231,12 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         ),
         const SizedBox(height: 18),
         Text(
-          _report!['health_score'] == null
-              ? 'Not scored. Needs review.'
-              : 'Condition score: ${_report!['health_score']} / ${_report!['health_max_score']}',
-        ),
-        const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
-        const SizedBox(height: 8),
-        Text(
           'Observations',
           style: Theme.of(context).textTheme.titleLarge
               ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
+        ConditionScore(_report!),
         ...observations.map((criterion) {
           final options = (criterion['options'] as List? ?? const [])
               .map((item) => Map<String, dynamic>.from(item as Map))

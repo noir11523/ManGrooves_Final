@@ -1,4 +1,4 @@
-import {residentialAddressFields,formattedAddress,bindBarangayPicker,contactFields,barangayName} from './address-fields.js';
+import {residentialAddressFields,formattedAddress,bindBarangayPicker,barangayName} from './address-fields.js';
 import {api,friendly} from './client.js';
 import {esc,field,select,formValues,errorBox,showError,toast,confirm,pager,pill} from './ui.js';
 import {listFilters,bindListFilters,listRoute,filterLocalList,matchesSearch} from './list-filters.js';
@@ -69,14 +69,11 @@ export async function adminList(node,page,query,data,refresh,heading) {
       catch(error){toast(friendly(error));}finally{button.disabled=false;}
     });
     node.querySelector('#add').onclick=()=>{
-      const dialog=editor(node,'Create staff account',`<p class="muted">Create approved staff access. Share the sign-in details securely.</p><div class="row">${field('first_name','First name','','text','required maxlength="80" autocomplete="given-name"')}${field('last_name','Last name','','text','required maxlength="80" autocomplete="family-name"')}${field('email','Email','','email','required maxlength="190" autocomplete="email"')}${contactFields()}${select('role','Role',roles.slice(1),'expert')}${residentialAddressFields(data.barangays??[],{},'staff-barangay')}${field('password','Initial password','','password','required minlength="8" maxlength="25" autocomplete="new-password"')}${field('password_confirmation','Confirm password','','password','required minlength="8" maxlength="25" autocomplete="new-password"')}</div><div id="staff-credential"><label class="field"><span>Work or professional ID photo</span><input type="file" name="id_photo" accept="image/jpeg,image/png,image/webp" required><small>Private · JPG, PNG or WebP up to 5 MB. Verify the credentials before granting access.</small></label></div>`,async values=>{
+      const dialog=editor(node,'Create staff account',`<p class="muted">Create approved staff access. Share the sign-in details securely.</p><div class="row">${field('first_name','First name','','text','required maxlength="80" autocomplete="given-name"')}${field('last_name','Last name','','text','required maxlength="80" autocomplete="family-name"')}${field('email','Email','','email','required maxlength="190" autocomplete="email"')}${field('phone','Mobile number','','tel','required maxlength="30" autocomplete="tel"')}${select('role','Role',[['expert','Expert']],'expert')}${residentialAddressFields(data.barangays??[],{},'staff-barangay')}${field('password','Initial password','','password','required minlength="8" maxlength="25" autocomplete="new-password"')}${field('password_confirmation','Confirm password','','password','required minlength="8" maxlength="25" autocomplete="new-password"')}</div><div id="staff-credential"><label class="field"><span>Work or professional ID photo</span><input type="file" name="id_photo" accept="image/jpeg,image/png,image/webp" required><small>Private · JPG, PNG or WebP up to 5 MB. Verify the credentials before granting access.</small></label></div>`,async values=>{
         const file=dialog.querySelector('[name=id_photo]').files[0];delete values.id_photo;const body=new FormData();body.set('payload',JSON.stringify({...values,action:'create_staff'}));if(values.role==='expert'&&file)body.set('id_photo',file);const result=await api('users.php',{body});toast(result.message);await refresh();
       });
       bindBarangayPicker(dialog,data.barangays??[]);
       dialog.querySelector('button[type=submit]').textContent='Create staff account';
-      dialog.querySelector('[name=role]').onchange=event=>{
-        const expert=event.target.value==='expert';dialog.querySelector('#staff-credential').hidden=!expert;dialog.querySelector('[name=id_photo]').required=expert;dialog.querySelector('[name=id_photo]').disabled=!expert;
-      };
     };
     return;
   }

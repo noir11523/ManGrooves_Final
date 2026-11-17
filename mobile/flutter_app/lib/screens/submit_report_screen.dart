@@ -1,3 +1,4 @@
+import '../core/prepare_photo.dart';
 import '../shared/species_names.dart';
 import '../shared/content_width.dart';
 import '../shared/observation_choice.dart';
@@ -241,7 +242,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           _closeupPhoto = XFile(_draftStore.photoPath('$scope:closeup')!);
         }
       }
-      for (var i = 0; i < 4; i++) {
+      for (var i = 0; i < 8; i++) {
         if (i < _extraPhotos.length) {
           await _draftStore.save('$scope:extra$i', {
             'photo_path': _extraPhotos[i].path,
@@ -286,7 +287,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           draft['submission_token']?.toString() ?? _submissionToken;
       for (
         var i = 0;
-        i < (draft['extra_count'] as int? ?? 0).clamp(0, 4);
+        i < (draft['extra_count'] as int? ?? 0).clamp(0, 8);
         i++
       ) {
         final extra = await _draftStore.load('${_draftScope!}:extra$i');
@@ -368,7 +369,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (draft['picking_photo'] == true && Platform.isAndroid) {
         final lost = await _picker.retrieveLostData();
         if (lost.files?.isNotEmpty == true) {
-          final photo = lost.files!.first,
+          final photo = await preparePhoto(lost.files!.first),
               extra = draft['picking_extra'] == true,
               closeup = draft['picking_closeup'] == true;
           try {
@@ -379,7 +380,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
               ..._extraPhotos.map((p) => p.path),
               if (extra) photo.path,
             ]);
-            if (extra && _extraPhotos.length < 4) {
+            if (extra && _extraPhotos.length < 8) {
               _extraPhotos.add(photo);
             } else if (closeup) {
               _closeupPhoto = photo;
@@ -630,8 +631,8 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
 
   Future<void> _checkPhotos(List<String?> paths) async {
     final selected = paths.whereType<String>().toList();
-    await validateReportPhotos(selected);
     try {
+      await validateReportPhotos(selected);
       await widget.api.checkReportPhotos(selected, _submissionToken);
     } on ApiException catch (error) {
       final slots = paths
@@ -703,7 +704,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }) async {
     if (_pickingPhoto ||
         _checkingPhotos ||
-        (extra && _extraPhotos.length >= 4)) {
+        (extra && _extraPhotos.length >= 8)) {
       return;
     }
     _pickingExtra = extra;
@@ -711,13 +712,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     setState(() => _pickingPhoto = true);
     try {
       await _saveDraft();
-      final image = await _picker.pickImage(
+      final picked = await _picker.pickImage(
         source: source,
-        imageQuality: 85,
-        maxWidth: 2200,
-        maxHeight: 2200,
         requestFullMetadata: false,
       );
+      final image = picked == null ? null : await preparePhoto(picked);
       if (image != null && mounted) {
         setState(() {
           _checkingPhotos = true;
@@ -1581,7 +1580,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (_draftScope != null) {
         await _draftStore.clear(_draftScope!);
         await _draftStore.clear('${_draftScope!}:closeup');
-        for (var i = 0; i < 4; i++) {
+        for (var i = 0; i < 8; i++) {
           await _draftStore.clear('${_draftScope!}:extra$i');
         }
       }
@@ -1644,7 +1643,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (_draftScope != null) {
         await _draftStore.clear(_draftScope!);
         await _draftStore.clear('${_draftScope!}:closeup');
-        for (var i = 0; i < 4; i++) {
+        for (var i = 0; i < 8; i++) {
           await _draftStore.clear('${_draftScope!}:extra$i');
         }
       }
@@ -2122,13 +2121,13 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 ),
               ),
             OutlinedButton.icon(
-              onPressed: _extraPhotos.length >= 4
+              onPressed: _extraPhotos.length >= 8
                   ? null
                   : () => _pickPhoto(ImageSource.gallery, extra: true),
               icon: const Icon(Icons.add),
               label: const Text('Photo'),
             ),
-            if (_extraPhotos.isNotEmpty) Text('${_extraPhotos.length}/4'),
+            if (_extraPhotos.isNotEmpty) Text('${_extraPhotos.length}/8'),
           ],
         ),
       ),
@@ -2638,7 +2637,14 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _reviewCard(
           'Observations',
           2,
-          _criteria.map((criterion) {
+          _categoryOrder.map((key) {
+            if (_traitKeys.contains(key)) {
+              return _reviewValue(
+                '${(_form?['trait_categories'] as Map?)?[key]?['name'] ?? key}',
+                '${(_form?['trait_labels'] as Map?)?[key]?[_traitValue(key)] ?? _traitValue(key) ?? 'Not selected'}',
+              );
+            }
+            final criterion = _criteria.firstWhere((c) => c['code'] == key);
             final selected = _observations['${criterion['code']}'] ?? [];
             final labels = (criterion['options'] as List? ?? [])
                 .where((option) => selected.contains(option['id']))
@@ -2651,11 +2657,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           }).toList(),
         ),
         _reviewCard('Details', 2, [
-          for (final key in _traitKeys)
-            _reviewValue(
-              '${(_form?['trait_categories'] as Map?)?[key]?['name'] ?? const {'root_type': 'Roots', 'leaf_shape': 'Leaves', 'bark_texture': 'Bark'}[key] ?? key}',
-              '${(_form?['trait_labels'] as Map?)?[key]?[_traitValue(key)] ?? _traitValue(key) ?? 'Not selected'}',
-            ),
           _reviewValue(
             'Notes',
             _remarks.text.trim().isEmpty ? 'None' : _remarks.text.trim(),

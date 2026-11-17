@@ -1,3 +1,4 @@
+import {choiceOrder} from './choice-order.js';
 import {bindPhotoPreview} from './photo-preview.js';
 import {api,friendly} from './client.js';
 import {esc,toast,field} from './ui.js';
@@ -22,12 +23,15 @@ export function traitControls(root,data,criteria,reload) {
     group.querySelector('summary').after(edit);
     edit.onsubmit=async event=>{event.preventDefault();const button=edit.querySelector('button');button.disabled=true;try{await api('trait-images.php',{body:{action:'category',trait:key,name:edit.elements.name.value,question_text:edit.elements.question_text.value}});toast('Category saved.');await reload(key);}catch(e){edit.querySelector('[role=status]').textContent=friendly(e);}finally{button.disabled=false;}};
     group.querySelectorAll('.trait-image-editor').forEach((row,i)=>{
-      const value=values[i],label=document.createElement('label');label.className='field';label.innerHTML=`<span>Choice name</span><input maxlength="190" value="${esc(data.trait_labels?.[key]?.[value]??value)}">`;
+      const value=values[i];row.dataset.value=value;const label=document.createElement('label');label.className='field';label.innerHTML=`<span>Choice name</span><input maxlength="190" value="${esc(data.trait_labels?.[key]?.[value]??value)}">`;
       const save=document.createElement('button');save.type='button';save.textContent='Save name';
       const remove=document.createElement('button');remove.type='button';remove.className='outline';remove.textContent='Delete choice';
       const run=async action=>{try{await api('trait-images.php',{body:{action,trait:key,value,label:label.querySelector('input').value}});toast('Saved.');await reload(key);}catch(e){toast(friendly(e));}};
       save.onclick=()=>run('rename_choice');remove.onclick=()=>run('delete_choice');row.append(label,save,remove);
     });
+    const grid=group.querySelector('.trait-editor-grid');choiceOrder(grid,'.trait-image-editor');
+    const saveOrder=document.createElement('button');saveOrder.type='button';saveOrder.textContent='Save changes';group.append(saveOrder);
+    saveOrder.onclick=async()=>{saveOrder.disabled=true;try{await api('trait-images.php',{body:{action:'choice_order',trait:key,order:[...grid.children].map(row=>row.dataset.value)}});toast('Order saved.');await reload(key);}catch(e){toast(friendly(e));}finally{saveOrder.disabled=false;}};
     const form=document.createElement('form');form.className='trait-add-form';form.innerHTML='<label class="field"><span>New choice</span><input required maxlength="190"></label><button>Add choice</button>';
     form.onsubmit=async event=>{event.preventDefault();try{await api('trait-images.php',{body:{action:'add_choice',trait:key,label:form.querySelector('input').value}});await reload(key);}catch(e){toast(friendly(e));}};group.append(form);
   }
@@ -38,7 +42,7 @@ export function traitControls(root,data,criteria,reload) {
   create.querySelector('.cancel-category').onclick=()=>{create.hidden=true;tools.firstElementChild.setAttribute('aria-expanded','false');tools.firstElementChild.focus();};
   const answerType=create.querySelector('[name=selection_mode]'),choices=create.querySelector('.category-choices');
   const isTrait=()=>create.querySelector('[name=category_type]:checked').value==='trait';
-  const refreshType=()=>{const trait=isTrait();create.dataset.kind=trait?'trait':'condition';answerType.closest('label').hidden=trait;choices.querySelectorAll('.choice-points').forEach(el=>{el.hidden=trait;el.querySelector('input').disabled=trait;});create.querySelector('.category-help').textContent=trait?'Also appears in Species and Submit Report.':'Points are saved for this question. Overall condition uses leaf color, pests, and roots.';};
+  const refreshType=()=>{const trait=isTrait();create.dataset.kind=trait?'trait':'condition';answerType.closest('label').hidden=trait;choices.querySelectorAll('.choice-points').forEach(el=>{el.hidden=true;el.querySelector('input').disabled=true;});create.querySelector('.category-help').textContent=trait?'Also appears in Species and Submit Report.':'Supporting observations provide additional information for Expert review and do not affect mangrove condition scoring.';};
   const addChoice=()=>{if(choices.children.length>=29)return;const row=document.createElement('div');row.className='category-choice';row.innerHTML='<label class="field"><span>Choice</span><input class="choice-label" required maxlength="190"></label><label class="field choice-points"><span>Points</span><input type="number" value="0" min="-2" max="2" step="1" required></label><button type="button" class="outline" aria-label="Remove choice">&times;</button><label class="field choice-photo"><span>Photo (optional)</span><input type="file" accept="image/jpeg,image/png,image/webp"><small>JPG, PNG, or WebP &middot; Up to 5 MB</small><img class="choice-photo-preview" alt="Choice photo" hidden><button type="button" class="outline clear-choice-photo" hidden>Remove photo</button></label>';row.querySelector('button').onclick=()=>{row.remove();create.querySelector('.add-category-choice').disabled=false;};const file=row.querySelector('[type=file]'),preview=row.querySelector('img'),clear=row.querySelector('.clear-choice-photo');
     file.onchange=()=>{const photo=file.files[0];preview.hidden=true;clear.hidden=true;preview.removeAttribute('src');if(!photo)return;
       if(!['image/jpeg','image/png','image/webp'].includes(photo.type)||photo.size>5*1024*1024){file.value='';create.querySelector('[role=status]').textContent='Use JPG, PNG, or WebP up to 5 MB.';return;}
@@ -53,7 +57,7 @@ export function traitControls(root,data,criteria,reload) {
     if(new Set(labels.map(label=>label.toLowerCase())).size!==labels.length)throw Error('Use a different name for each choice.');
     const body=new FormData();rows.forEach((row,i)=>{const photo=row.querySelector('[type=file]').files[0];if(photo)body.set(isTrait()?`choice_image_${i}`:`option_image_${-(i+1)}`,photo);});
     if(isTrait()){body.set('payload',JSON.stringify({action:'create_category',name:form.elements.name.value,question_text:form.elements.question_text.value,choices:labels}));const saved=await api('trait-images.php',{body});toast('Trait added. Set its choices in Species.');await reload(saved.trait);return;}
-    const options=labels.map((label,i)=>{const unknown=label.toLowerCase()==='not sure',raw=rows[i].querySelector('.choice-points input').value,points=Number(raw);if(!unknown&&(raw===''||!Number.isInteger(points)||points< -2||points>2))throw Error('Use whole-number points from -2 to 2.');return {id:-(i+1),kind:unknown?'unknown':'standard',label,points:unknown?0:points};});
+    const options=labels.map((label,i)=>({id:-(i+1),kind:label.toLowerCase()==='not sure'?'unknown':'standard',label,points:0}));
     if(!labels.some(l=>l.toLowerCase()==='not sure'))options.push({id:-(options.length+1),kind:'unknown',label:'Not Sure',points:0});
     body.set('payload',JSON.stringify({action:'create',name:form.elements.name.value,question_text:form.elements.question_text.value,selection_mode:form.elements.selection_mode.value,options}));const saved=await api('checklist.php',{body});toast('Category added.');await reload(saved.criteria?.find(c=>c.name===form.elements.name.value.trim())?.code);
   }catch(e){form.querySelector('[role=status]').textContent=friendly(e);}finally{button.disabled=false;}};

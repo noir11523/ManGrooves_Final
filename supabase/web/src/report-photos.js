@@ -6,7 +6,7 @@ const sameBytes=(a,b)=>a.length===b.length&&a.every((value,index)=>value===b[ind
 // Check file contents, not names: renaming a duplicate must not make it new.
 export async function validateReportPhotos(photos) {
   const files=photos.filter(Boolean);
-  if(files.length>6)throw new Error('Use up to 6 photos.');
+  if(files.length>10)throw new Error('Use up to 10 photos.');
   if(files.some(f=>!['image/jpeg','image/png','image/webp'].includes(f.type)))throw Object.assign(Error('Unsupported image format. Please upload JPG, PNG, or WebP.'),{code:'photo_unclear'});
   if(files.some(f=>f.size>5*1024*1024))throw Object.assign(Error('Photo exceeds the 5 MB limit.'),{code:'photo_unclear'});
   if(files.reduce((sum,file)=>sum+file.size,0)>12*1024*1024)throw new Error('Photos must total 12 MB or less. Remove a photo or use smaller files.');

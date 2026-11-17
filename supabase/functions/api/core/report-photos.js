@@ -12,7 +12,7 @@ export function photoError(code, indices = []) {
 
 // Both preflight and final submission use the same metadata-free fingerprints.
 export function reportPhotoHashes(photos) {
-  if (!Array.isArray(photos) || !photos.length || photos.length > 6) throw new AppError('Choose 1 to 6 photos.');
+  if (!Array.isArray(photos) || !photos.length || photos.length > 10) throw new AppError('Choose 1 to 10 photos.');
   if(photos.some(p=>!Buffer.isBuffer(p)))throw Object.assign(new AppError('Could not read this photo. Please choose another.'),{code:'photo_unclear'});
   if (photos.reduce((sum,p) => sum + p.length, 0) > 12 * 1024 * 1024) throw new AppError('Keep all photos together under 12 MB.');
   // Sequential decoding bounds memory. Both preflight and final submission call

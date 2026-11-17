@@ -6,7 +6,7 @@ import {photoCredits} from './reference-photos.js';
 export async function traitImages(service,user,input,files={}) {
   requireRole(user,'system_admin');
   let editResult;
-  if(input&&['create_category','category','order','add_choice','rename_choice','delete_choice'].includes(input.action)){
+  if(input&&['choice_order','create_category','category','order','add_choice','rename_choice','delete_choice'].includes(input.action)){
     const uploads=[],choiceImages={};
     try {
       if(input.action==='create_category')for(const [name,bytes] of Object.entries(files)){

@@ -8,6 +8,9 @@ const fixture=name=>readFileSync(new URL(`./fixtures/quality/${name}`,import.met
 for(const name of ['clear.jpg','clear.png','clear.webp','close-up.jpg'])test(`quality accepts ${name}`,()=>{
   const metrics=validatePhotoQuality(fixture(name));assert.ok(metrics.contrast>9);assert.ok(metrics.laplacian>=45||metrics.sharpTiles>=2);
 });
+test('high-contrast motion trails are rejected even though ordinary Laplacian checks pass',()=>{
+  assert.throws(()=>validatePhotoQuality(fixture('motion-trails.jpg')),e=>e.code==='photo_unclear'&&e.message.startsWith('Photo is blurry.'));
+});
 for(const [name,message] of [['blur.jpg','Photo is blurry.'],['out-of-focus.jpg','Photo is blurry.'],['dark.jpg','Photo is too dark.'],['bright.jpg','Photo is too bright.'],['low-contrast.jpg','Photo quality is too low.'],['low-resolution.jpg','Photo resolution is too low.']])test(`quality rejects ${name}`,()=>{
   assert.throws(()=>reportPhotoHashes([fixture('clear.jpg'),fixture(name)]),error=>error.status===422&&error.code==='photo_unclear'&&error.photo_indices[0]===1&&error.message.startsWith(message));
 });

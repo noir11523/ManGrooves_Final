@@ -173,7 +173,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
         case 'photo.php': {
           only('GET'); const id = integer(req.query.id, 'report'), report = await service.get('reports', id);
           if (!report || (user.role === 'guardian' && report.user_id !== user.id)) throw new AppError('Photo not found.', 404);
-          return await sendImage(bucket, req.query.view === 'extra' ? (report.extra_photo_paths??[])[integer(req.query.index,'photo',0,3)] : req.query.view === 'closeup' ? report.closeup_photo_path : report.photo_path, res);
+          return await sendImage(bucket, req.query.view === 'extra' ? (report.extra_photo_paths??[])[integer(req.query.index,'photo',0,7)] : req.query.view === 'closeup' ? report.closeup_photo_path : report.photo_path, res);
         }
         case 'previous-reports.php': {
           only('GET'); requireRole(user, 'guardian', 'expert'); const clusterId = integer(req.query.cluster_id, 'cluster');

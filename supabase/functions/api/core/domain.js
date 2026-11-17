@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import {HEALTH_CODES} from './condition-score.js';
+export {HEALTH_CODES} from './condition-score.js';
 
 export class AppError extends Error {
   constructor(message, status = 422) { super(message); this.status = status; }
 }
-export const HEALTH_CODES = ['leaf_color', 'pests', 'roots'];
 export const SPECIAL_CODES = ['unknown', 'none_of_the_above', 'all_of_the_above'];
 export const ROLES = ['guardian', 'expert', 'system_admin'];
 export const HEALTH_VALUES = ['Healthy', 'Stressed', 'At Risk'];
@@ -45,7 +46,7 @@ export function publicUser(user) {
 }
 export function classify(criteria, selections) {
   if (!selections || typeof selections !== 'object' || Array.isArray(selections)) throw new AppError('Choose your checklist answers.');
-  if (HEALTH_CODES.some(code => !criteria.some(c => c.code === code))) throw new AppError('The condition checklist needs an administrator check.', 503);
+  if (HEALTH_CODES.some(code => criteria.filter(c => c.code === code).length !== 1)) throw new AppError('The condition checklist needs an administrator check.', 503);
   let health = 0, context = 0, environment = 0, unknown = false;
   const observations = [], breakdown = [], selectedCodes = {};
   for (const criterion of criteria) {
@@ -58,33 +59,34 @@ export function classify(criteria, selections) {
       const option = options.find(o => o.id === id && o.active !== 0);
       if (!option) throw new AppError(`An answer for ${criterion.name} changed. Reload the checklist.`);
       const isHealth = HEALTH_CODES.includes(code);
-      let points = option.points;
+      let points = isHealth ? option.points : 0;
       if (SPECIAL_CODES.includes(option.code)) {
         if (ids.length !== 1 || (option.code === 'none_of_the_above' && criterion.selection_mode !== 'multiple')) throw new AppError(`Choose ${option.label} on its own.`);
         points = 0;
-        if (option.code === 'unknown') unknown = true;
+        if (option.code === 'unknown' && isHealth) unknown = true;
         if (option.code === 'all_of_the_above') {
           const included = options.filter(o => o.active !== 0 && !SPECIAL_CODES.includes(o.code));
           if (!included.length) throw new AppError('This checklist needs an administrator check.', 503);
-          points = isHealth ? Math.min(...included.map(o => o.points)) : included.reduce((sum, o) => sum + o.points, 0);
+          if(isHealth && included.some(o=>!Number.isInteger(o.points)||o.points<0||o.points>2)) throw new AppError('Condition scoring needs an administrator check.',503);
+          points = isHealth ? Math.min(...included.map(o => o.points)) : 0;
           selectedCodes[code].push(...included.map(o => o.code));
         }
       } else selectedCodes[code].push(option.code);
       if (isHealth) {
-        if (criterion.selection_mode !== 'single' || points < 0 || points > 2) throw new AppError('Condition scoring needs an administrator check.', 503);
+        if (criterion.selection_mode !== 'single' || !Number.isInteger(points) || points < 0 || points > 2) throw new AppError('Condition scoring needs an administrator check.', 503);
         health += points;
         breakdown.push({name: criterion.name, answer: option.label, points: option.code === 'unknown' ? null : points, max_points: 2});
       } else if (criterion.score_group === 'environment') environment += points;
       else context += points;
       observations.push({criteria_id: criterion.id, criteria_code: code, criteria_name: criterion.name,
-        criteria_order: criterion.display_order, selection_mode: criterion.selection_mode, score_group: criterion.score_group,
+        criteria_order: criterion.display_order, selection_mode: criterion.selection_mode, score_group: isHealth ? 'health' : criterion.score_group === 'environment' ? 'environment' : 'context',
         option_id: id, option_code: option.code, option_label: option.label, option_order: option.display_order, points});
     }
   }
   if (selectedCodes.negative_signs?.includes('no_animals') && selectedCodes.bio_indicators?.length) throw new AppError('Choose either animal sightings or No Animals at All.');
   return {status: unknown ? 'Unknown' : health === 6 ? 'Healthy' : health >= 3 ? 'Stressed' : 'At Risk',
     health_score: unknown ? null : health, health_max_score: 6, context_score: context, environmental_score: environment,
-    needs_review: unknown, message: unknown ? 'An expert will check the uncertain answers.' : null,
+    needs_review: unknown, message: unknown ? 'Leaf color, pests, or roots could not be scored.' : null,
     breakdown, observations, guide: '6 Healthy · 3–5 Stressed · 0–2 At Risk'};
 }
 
@@ -163,12 +165,12 @@ export function updateCriterion(current, input, nextOptionId) {
     if (codes.has(code) || (code === 'none_of_the_above' && current.selection_mode !== 'multiple')) throw new AppError('This automatic answer is unavailable or already added.');
     codes.add(code);
     const special = SPECIAL_CODES.includes(code), health = HEALTH_CODES.includes(current.code);
-    const points = integer(submitted.points, 'score', health ? 0 : -2, 2);
+    const points = health ? integer(submitted.points, 'score', 0, 2) : 0;
     if (special && points !== 0) throw new AppError('Automatic choices keep their scoring rule.');
     const restored = archived.find(o => o.code === code);
     options.push({id: existing?.id ?? restored?.id ?? nextOptionId(), code, label: text(submitted.label, 'a choice label', 190), points,
       image_path: submitted.remove_image ? null : existing?.image_path ?? null,
-      display_order: existing?.display_order ?? options.length + 1, upload_id: id});
+      display_order: options.length + 1, upload_id: id});
   }
   if (current.options.some(o => !seen.has(o.id))) throw new AppError('A choice is missing. Reload the complete checklist.');
   const normal = options.filter(o => !SPECIAL_CODES.includes(o.code));

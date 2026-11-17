@@ -56,7 +56,7 @@ test('review and verified follow-up forms have one Feedback field and retain sav
   throw Error(path);
  };
  history.replaceState(null,'','#report/1?review=1');await globalThis.restoreTestAccount({id:'expert'});await tick();
- assert.equal(document.querySelectorAll('#review textarea').length,1);assert.equal($('[name=follow_up_note]'),null);assert.equal($('[name=expert_feedback]').value,'Inspect the roots.');assert.equal($('#corrections').hidden,true);
+ assert.equal(document.querySelectorAll('#review textarea').length,1);assert.equal($('[name=follow_up_note]'),null);assert.equal($('[name=expert_feedback]').value,'Inspect the roots.');assert.equal($('#corrections').hidden,false); // Missing species requires Correction.
  report.status='verified';await globalThis.restoreTestAccount({id:'expert'});await tick();
  assert.equal(document.querySelectorAll('section>h2').length>0,true);assert.equal($('#review-area').textContent.includes('rejecting'),false);assert.equal([...document.querySelectorAll('h2')].filter(h=>h.textContent==='Feedback').length,0);
  $('[name=expert_feedback]').value='Check the leaves on the next visit.';$('[name=needs_follow_up]').checked=true;
@@ -160,4 +160,23 @@ test('validation history displays the actual reviewer and saved health decision'
  };
  await globalThis.restoreTestAccount({id:'expert'});await tick();
  assert.equal($('#retry'),null);assert.match(document.body.textContent,/Clement/);assert.match(document.body.textContent,/Healthy/);assert.doesNotMatch(document.body.textContent,/undefined/);
+});
+
+
+test('review hides confirmation for either unknown suggestion and displays the total within Observations',async()=>{
+ for(const [condition,speciesId,allowed] of [['Unknown',1,false],['Healthy',null,false],['Unknown',null,false],['Healthy',1,true],['Stressed',1,true],['At Risk',1,true]]){
+  history.replaceState(null,'','#report/8');
+  globalThis.testApi=async path=>{
+   if(path==='me.php')return {user:{id:2,role:'expert',full_name:'Reviewer'}};
+   if(path==='species.php')return {species:[{id:1,scientific_name:'Avicennia marina',local_name:'Miapi',active:1}]};
+   if(path==='report.php')return {report:{id:8,user_id:3,report_code:'Report #8',status:'pending',suggested_health:condition,suggested_species_id:speciesId,
+    health_score:6,health_max_score:6,observations:[],verification_history:[]}};
+   return {};
+  };
+  await globalThis.restoreTestAccount({id:'expert'});await tick();
+  assert.equal(!!$('#review [name=action] option[value=confirm]'),allowed);
+  assert.equal($('#review [name=action]').value,allowed?'confirm':'correct');
+  assert.match($('.report-checklist .condition-total').textContent,/6 \/ 6/);
+  assert.doesNotMatch($('.report-overview').textContent,/Condition score|Needs expert review/);
+ }
 });

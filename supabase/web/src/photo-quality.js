@@ -20,7 +20,9 @@ export async function checkClarity(file,prepare=false){
     const context=canvas.getContext('2d',{willReadFrequently:true});if(!context)return file;
     context.fillStyle='#fff';context.fillRect(0,0,w,h);context.imageSmoothingQuality='medium';context.drawImage(bitmap,0,0,w,h);
     const failure=qualityProblem(imageQualityMetrics(context.getImageData(0,0,w,h).data,w,h));
-    if(failure)throw Object.assign(Error(failure),{code:'photo_unclear'});
+    // Browser decoders/resamplers differ. The mandatory server preflight makes
+    // the authoritative clarity decision using the exact bytes to be submitted.
+    void failure;
     if(prepare&&width*height>config.maxPixels){
       // Preserve aspect ratio and the minimum resolution while bounding server memory.
       const scale=Math.max(config.minSide/Math.min(width,height),Math.min(1,config.uploadSide/Math.max(width,height)));

@@ -11,7 +11,7 @@ const bundle=await build({entryPoints:[fileURLToPath(new URL('../../supabase/web
  b.onResolve({filter:/client\.js$/},()=>({path:'client',namespace:'stub'}));
  b.onResolve({filter:/\.css$/},()=>({path:'css',namespace:'stub'}));
  b.onResolve({filter:/^chart.js\/auto$/},()=>({path:'chart',namespace:'stub'}));
- b.onLoad({filter:/.*/,namespace:'stub'},({path})=>({contents:path==='client'?`export const initialize=async()=>{throw new Error('The standalone app must not boot in PHP.');};export const api=(...args)=>globalThis.testApi(...args);export const login=async()=>{};export const logout=async()=>{};export const changePassword=async()=>{};export const friendly=e=>e.message;export const apiUrl=p=>p;`:path==='chart'?'export default class Chart {constructor(){}destroy(){}}':'',loader:'js'}));
+ b.onLoad({filter:/.*/,namespace:'stub'},({path})=>({contents:path==='client'?`export const initialize=async()=>{throw new Error('The standalone app must not boot in PHP.');};export const api=(...args)=>globalThis.testApi(...args);export const login=async()=>{};export const logout=async()=>{};export const changePassword=async()=>{};export const friendly=e=>e.message;export const apiUrl=p=>p;`:path==='chart'?'export default class Chart {static instances={};static register(){}constructor(){}destroy(){}}':'',loader:'js'}));
 }}]});
 const {renderEmbedded}=await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const node=document.getElementById('cloud-content'),$=s=>document.querySelector(s);
@@ -58,13 +58,13 @@ test('embedded reports preserve attention filters and report details links',asyn
 test('PHP routes preserve IDs, filters and legacy timeline URLs',()=>{
  assert.equal(phpRoute('#report/9'),'/report-detail.php?id=9');assert.equal(phpRoute('#growth'),'/clusters.php?view=growth');assert.equal(phpRoute('#cluster/2?tab=growth'),'/cluster.php?tab=growth&id=2');assert.equal(phpRoute('#reports?needs_attention=1&page=2'),'/reports.php?needs_attention=1&page=2');assert.equal(phpRoute('#about'),null);assert.equal(phpRoute('#https://evil.test'),null);
 });
-test('PHP report map mounts immediately with location search and automatic filters',async()=>{
+test('PHP report map mounts with the current submitted-report filters',async()=>{
  globalThis.testApi=async path=>{assert.equal(path,'reports.php');return {items:[],pages:1,total:0};};
  await renderEmbedded('report-map',node,{status:'verified'},{role:'guardian'});
  await new Promise(resolve=>setImmediate(resolve));
- assert.ok($('#map-place'));assert.ok($('.leaflet-container'));assert.ok($('.leaflet-control-zoom'));
+ assert.equal($('#map-place'),null);assert.ok($('#map-filters [name=q]'));assert.ok($('.leaflet-container'));assert.ok($('.leaflet-control-zoom'));
  assert.equal($('[name=status]').value,'verified');assert.ok($('[name=health]'));
- assert.equal([...node.querySelectorAll('button')].some(button=>button.textContent==='Apply'),false);
+ assert.ok([...node.querySelectorAll('button')].some(button=>button.textContent==='Apply filters'));
  assert.match($('#map-empty').textContent,/No reports match/);
  await renderEmbedded('reports',node,{}, {role:'guardian'});
  assert.equal($('.leaflet-container'),null);

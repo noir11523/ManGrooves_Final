@@ -19,6 +19,7 @@ class ChecklistScreen extends StatefulWidget {
 class _ChecklistScreenState extends State<ChecklistScreen> {
   List<Map<String, dynamic>>? _criteria;
   Map<String, dynamic>? _traitData;
+  final Map<String, List<String>> _traitChoiceOrder = {};
   final _imagePicker = ImagePicker();
   String? _savingTrait;
   String? _error;
@@ -108,7 +109,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                         Padding(
                           padding: EdgeInsets.all(16),
                           child: Text(
-                            '6 Healthy | 3-5 Stressed | 0-2 At Risk\n\nLeaf color, pests, and roots add 0-2 points each. Not Sure is unscored and needs review.\n\nNone: 0. All: lowest score (0) for condition; total of regular choices for context and environment. Context and environment do not change condition.\n\nAdd, rename, or delete choices. Past reports stay unchanged. Keep a 0-point and a 2-point choice in each condition check.',
+                            '6 Healthy | 3-5 Stressed | 0-2 At Risk\n\nLeaf color, pests, and roots add 0-2 points each. Not Sure in these three checks leaves the total incomplete. Other observations do not change the total.\n\nSupporting observations provide additional information for Expert review and do not affect mangrove condition scoring.\n\nAdd, rename, or delete choices. Past reports stay unchanged. Keep a 0-point and a 2-point choice in each condition check.',
                           ),
                         ),
                       ],
@@ -286,7 +287,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         'trait-images.php',
         body: body,
       );
-      if (mounted) setState(() => _traitData = updated);
+      if (mounted) {
+        setState(() {
+          _traitData = updated;
+          if (body['trait'] is String) _traitChoiceOrder.remove(body['trait']);
+        });
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -440,6 +446,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final traits = Map<String, dynamic>.from(
       _traitData?['traits'] as Map? ?? const {},
     );
+    if (_traitChoiceOrder.containsKey(category)) {
+      traits[category] = _traitChoiceOrder[category];
+    }
     final images = Map<String, dynamic>.from(
       _traitData?['trait_images'] as Map? ?? const {},
     );
@@ -473,151 +482,179 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                     icon: const Icon(Icons.add),
                     label: const Text('Add choice'),
                   ),
-                  for (final value in entry.value as List)
-                    Builder(
-                      builder: (context) {
-                        final trait = entry.key,
-                            item = '$value',
-                            group = Map<String, dynamic>.from(
-                              images[trait] as Map? ?? const {},
-                            ),
-                            path = group[item]?.toString();
-                        final busy = _savingTrait == '$trait|$item';
-                        return ListTile(
-                          title: Column(
-                            children: [
-                              path == null
-                                  ? const Icon(Icons.image_outlined)
-                                  : Image.network(
-                                      widget.api
-                                          .resolve(
-                                            path.startsWith('img/')
-                                                ? '../assets/$path'
-                                                : path,
-                                          )
-                                          .toString(),
-                                      headers: widget.api.imageHeaders,
-                                      width: 180,
-                                      height: 140,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (_, _, _) => const Icon(
-                                        Icons.broken_image_outlined,
-                                      ),
-                                    ),
-                              const SizedBox(height: 8),
-                              Text(
-                                (_traitData?['trait_labels']
-                                            as Map?)?[trait]?[item]
-                                        ?.toString() ??
-                                    item,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                  ReorderableListView(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    onReorderItem: (old, next) => setState(() {
+                      final order = List<String>.from(entry.value as List);
+                      order.insert(next, order.removeAt(old));
+                      _traitChoiceOrder[entry.key] = order;
+                    }),
+                    children: [
+                      for (final value in entry.value as List)
+                        Builder(
+                          key: ValueKey('${entry.key}|$value'),
+                          builder: (context) {
+                            final trait = entry.key,
+                                item = '$value',
+                                group = Map<String, dynamic>.from(
+                                  images[trait] as Map? ?? const {},
+                                ),
+                                path = group[item]?.toString();
+                            final busy = _savingTrait == '$trait|$item';
+                            return ListTile(
+                              leading: ReorderableDragStartListener(
+                                index: (entry.value as List).indexOf(value),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Icon(
+                                    Icons.drag_handle,
+                                    semanticLabel: 'Drag choice',
+                                  ),
                                 ),
                               ),
-                            ],
-                          ),
-                          subtitle: Wrap(
-                            spacing: 8,
-                            children: [
-                              TextButton(
-                                onPressed: () => _editTrait(trait, value: item),
-                                child: const Text('Rename'),
-                              ),
-                              TextButton(
-                                onPressed: () => _deleteTrait(trait, item),
-                                child: const Text('Delete choice'),
-                              ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: 'Replace photo',
-                                onPressed: busy
-                                    ? null
-                                    : () async {
-                                        final file = await _imagePicker
-                                            .pickImage(
-                                              source: ImageSource.gallery,
-                                              imageQuality: 85,
-                                              maxWidth: 1600,
-                                              maxHeight: 1600,
-                                              requestFullMetadata: false,
-                                            );
-                                        if (file == null || !context.mounted) {
-                                          return;
-                                        }
-                                        setState(
-                                          () => _savingTrait = '$trait|$item',
-                                        );
-                                        try {
-                                          final updated = await widget.api
-                                              .saveTraitImage(
-                                                trait: trait,
-                                                value: item,
-                                                photoPath: file.path,
-                                              );
-                                          if (context.mounted) {
-                                            setState(
-                                              () => _traitData = updated,
-                                            );
-                                          }
-                                        } catch (error) {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      error is ApiException
-                                                          ? error.message
-                                                          : 'Could not save the sample picture.',
-                                                    ),
-                                                  ),
-                                                );
-                                          }
-                                        } finally {
-                                          if (context.mounted) {
-                                            setState(() => _savingTrait = null);
-                                          }
-                                        }
-                                      },
-                                icon: busy
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
+                              title: Column(
+                                children: [
+                                  path == null
+                                      ? const Icon(Icons.image_outlined)
+                                      : Image.network(
+                                          widget.api
+                                              .resolve(
+                                                path.startsWith('img/')
+                                                    ? '../assets/$path'
+                                                    : path,
+                                              )
+                                              .toString(),
+                                          headers: widget.api.imageHeaders,
+                                          width: 180,
+                                          height: 140,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (_, _, _) => const Icon(
+                                            Icons.broken_image_outlined,
+                                          ),
                                         ),
-                                      )
-                                    : const Icon(Icons.edit_outlined),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    (_traitData?['trait_labels']
+                                                as Map?)?[trait]?[item]
+                                            ?.toString() ??
+                                        item,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              if (path != null)
-                                IconButton(
-                                  tooltip: 'Remove photo',
-                                  onPressed: busy
-                                      ? null
-                                      : () async {
-                                          setState(
-                                            () => _savingTrait = '$trait|$item',
-                                          );
-                                          try {
-                                            final updated = await widget.api
-                                                .saveTraitImage(
-                                                  trait: trait,
-                                                  value: item,
-                                                  remove: true,
+                              subtitle: Wrap(
+                                spacing: 8,
+                                children: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        _editTrait(trait, value: item),
+                                    child: const Text('Rename'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => _deleteTrait(trait, item),
+                                    child: const Text('Delete choice'),
+                                  ),
+                                ],
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Replace photo',
+                                    onPressed: busy
+                                        ? null
+                                        : () async {
+                                            final file = await _imagePicker
+                                                .pickImage(
+                                                  source: ImageSource.gallery,
+                                                  imageQuality: 85,
+                                                  maxWidth: 1600,
+                                                  maxHeight: 1600,
+                                                  requestFullMetadata: false,
                                                 );
-                                            if (context.mounted) {
-                                              setState(
-                                                () => _traitData = updated,
-                                              );
+                                            if (file == null ||
+                                                !context.mounted) {
+                                              return;
                                             }
-                                          } catch (error) {
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
+                                            setState(
+                                              () =>
+                                                  _savingTrait = '$trait|$item',
+                                            );
+                                            try {
+                                              final updated = await widget.api
+                                                  .saveTraitImage(
+                                                    trait: trait,
+                                                    value: item,
+                                                    photoPath: file.path,
+                                                  );
+                                              if (context.mounted) {
+                                                setState(
+                                                  () => _traitData = updated,
+                                                );
+                                              }
+                                            } catch (error) {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          error is ApiException
+                                                              ? error.message
+                                                              : 'Could not save the sample picture.',
+                                                        ),
+                                                      ),
+                                                    );
+                                              }
+                                            } finally {
+                                              if (context.mounted) {
+                                                setState(
+                                                  () => _savingTrait = null,
+                                                );
+                                              }
+                                            }
+                                          },
+                                    icon: busy
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.edit_outlined),
+                                  ),
+                                  if (path != null)
+                                    IconButton(
+                                      tooltip: 'Remove photo',
+                                      onPressed: busy
+                                          ? null
+                                          : () async {
+                                              setState(
+                                                () => _savingTrait =
+                                                    '$trait|$item',
+                                              );
+                                              try {
+                                                final updated = await widget.api
+                                                    .saveTraitImage(
+                                                      trait: trait,
+                                                      value: item,
+                                                      remove: true,
+                                                    );
+                                                if (context.mounted) {
+                                                  setState(
+                                                    () => _traitData = updated,
+                                                  );
+                                                }
+                                              } catch (error) {
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
                                                     SnackBar(
                                                       content: Text(
                                                         error is ApiException
@@ -626,21 +663,32 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                                                       ),
                                                     ),
                                                   );
-                                            }
-                                          } finally {
-                                            if (context.mounted) {
-                                              setState(
-                                                () => _savingTrait = null,
-                                              );
-                                            }
-                                          }
-                                        },
-                                  icon: const Icon(Icons.restart_alt),
-                                ),
-                            ],
-                          ),
-                        );
-                      },
+                                                }
+                                              } finally {
+                                                if (context.mounted) {
+                                                  setState(
+                                                    () => _savingTrait = null,
+                                                  );
+                                                }
+                                              }
+                                            },
+                                      icon: const Icon(Icons.restart_alt),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                  if (_traitChoiceOrder.containsKey(entry.key))
+                    FilledButton(
+                      onPressed: () => _traitAction({
+                        'action': 'choice_order',
+                        'trait': entry.key,
+                        'order': _traitChoiceOrder[entry.key],
+                      }),
+                      child: const Text('Save changes'),
                     ),
                 ],
               ),
@@ -821,6 +869,11 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
               .toList(),
         }, photos);
       } else {
+        if (!['leaf_color', 'pests', 'roots'].contains(_data['code'])) {
+          for (final option in _options) {
+            option['points'] = 0;
+          }
+        }
         await widget.api.saveChecklist(_data, images);
       }
       if (!mounted) return;
@@ -1068,7 +1121,7 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                     }),
                   ),
                 Text(
-                  _newTrait ? 'Also appears in Species and Submit Report.' : 'Points are saved for this question. Overall condition uses leaf color, pests, and roots.',
+                  _newTrait ? 'Also appears in Species and Submit Report.' : 'Supporting observations provide additional information for Expert review and do not affect mangrove condition scoring.',
                 ),
               ],
               Text(
@@ -1077,128 +1130,156 @@ class _ChecklistEditorState extends State<_ChecklistEditor> {
                     : 'JPG, PNG, or WebP. Up to 5 MB.',
               ),
               const SizedBox(height: 16),
-              ..._options.map((raw) {
-                final option = raw as Map<String, dynamic>;
-                final reserved = [
-                  'unknown',
-                  'none_of_the_above',
-                  'all_of_the_above',
-                ].contains(option['code']);
-                if (option['delete'] == true) {
+              ReorderableListView(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
+                onReorderItem: (oldIndex, newIndex) {
+                  if (_busy) return;
+                  setState(() {
+                    final item = _options.removeAt(oldIndex);
+                    _options.insert(newIndex, item);
+                    _dirty = true;
+                  });
+                },
+                children: _options.map((raw) {
+                  final option = raw as Map<String, dynamic>;
+                  final reserved = [
+                    'unknown',
+                    'none_of_the_above',
+                    'all_of_the_above',
+                  ].contains(option['code']);
+                  if (option['delete'] == true) {
+                    return Card(
+                      key: ValueKey(option['id']),
+                      child: ListTile(
+                        title: Text('${option['label']}'),
+                        subtitle: const Text('Will be deleted on save'),
+                        trailing: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => setState(() {
+                                  option['delete'] = false;
+                                  _dirty = true;
+                                }),
+                          child: const Text('Undo delete'),
+                        ),
+                      ),
+                    );
+                  }
                   return Card(
                     key: ValueKey(option['id']),
-                    child: ListTile(
-                      title: Text('${option['label']}'),
-                      subtitle: const Text('Will be deleted on save'),
-                      trailing: TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => setState(() {
-                                option['delete'] = false;
-                                _dirty = true;
-                              }),
-                        child: const Text('Undo delete'),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ReorderableDragStartListener(
+                            index: _options.indexOf(raw),
+                            enabled: !_busy,
+                            child: const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: Icon(
+                                Icons.drag_handle,
+                                semanticLabel: 'Drag choice',
+                              ),
+                            ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: _busy
+                                  ? null
+                                  : () => setState(() {
+                                      if ((option['id'] as int) < 0) {
+                                        _images.remove(
+                                          'option_image_${option['id']}',
+                                        );
+                                        _options.remove(option);
+                                      } else {
+                                        option['delete'] = true;
+                                      }
+                                      _dirty = true;
+                                    }),
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('Delete choice'),
+                            ),
+                          ),
+                          TextFormField(
+                            initialValue: '${option['label']}',
+                            key: ValueKey(
+                              '${option['id']}-${option['kind'] ?? option['code']}',
+                            ),
+                            enabled: !_busy,
+                            maxLength: 190,
+                            decoration: const InputDecoration(
+                              labelText: 'Choice',
+                            ),
+                            validator: (v) => v == null || v.trim().isEmpty
+                                ? 'Enter a choice.'
+                                : null,
+                            onChanged: (v) {
+                              option['label'] = v;
+                              setState(() => _dirty = true);
+                            },
+                          ),
+                          if (!_newTrait &&
+                              [
+                                'leaf_color',
+                                'pests',
+                                'roots',
+                              ].contains(_data['code']) &&
+                              reserved)
+                            Text(
+                              option['code'] == 'unknown'
+                                  ? (_data['score_group'] == 'health'
+                                        ? 'No condition score.'
+                                        : 'Uncertain observation; no change to total.')
+                                  : option['code'] == 'all_of_the_above'
+                                  ? (_data['score_group'] == 'health'
+                                        ? 'All choices rule: lowest score (0).'
+                                        : 'All choices rule: totals regular choices.')
+                                  : 'Adds 0 points.',
+                            )
+                          else if (!_newTrait &&
+                              [
+                                'leaf_color',
+                                'pests',
+                                'roots',
+                              ].contains(_data['code']))
+                            DropdownButtonFormField<int>(
+                              initialValue: option['points'] as int,
+                              decoration: InputDecoration(
+                                labelText: 'Condition points',
+                              ),
+                              items: [0, 1, 2]
+                                  .map(
+                                    (n) => DropdownMenuItem(
+                                      value: n,
+                                      child: Text('$n'),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _busy
+                                  ? null
+                                  : (v) => setState(() {
+                                      option['points'] = v;
+                                      _dirty = true;
+                                    }),
+                            ),
+                          _photo(
+                            'option_image_${option['id']}',
+                            option['image_path'] as String?,
+                            option,
+                            'remove_image',
+                          ),
+                        ],
                       ),
                     ),
                   );
-                }
-                return Card(
-                  key: ValueKey(option['id']),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: _busy
-                                ? null
-                                : () => setState(() {
-                                    if ((option['id'] as int) < 0) {
-                                      _images.remove(
-                                        'option_image_${option['id']}',
-                                      );
-                                      _options.remove(option);
-                                    } else {
-                                      option['delete'] = true;
-                                    }
-                                    _dirty = true;
-                                  }),
-                            icon: const Icon(Icons.delete_outline),
-                            label: const Text('Delete choice'),
-                          ),
-                        ),
-                        TextFormField(
-                          initialValue: '${option['label']}',
-                          key: ValueKey(
-                            '${option['id']}-${option['kind'] ?? option['code']}',
-                          ),
-                          enabled: !_busy,
-                          maxLength: 190,
-                          decoration: const InputDecoration(
-                            labelText: 'Choice',
-                          ),
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Enter a choice.'
-                              : null,
-                          onChanged: (v) {
-                            option['label'] = v;
-                            setState(() => _dirty = true);
-                          },
-                        ),
-                        if (!_newTrait && reserved)
-                          Text(
-                            option['code'] == 'unknown'
-                                ? 'Not Sure rule: unscored; needs review.'
-                                : option['code'] == 'all_of_the_above'
-                                ? (_data['score_group'] == 'health'
-                                      ? 'All choices rule: lowest score (0).'
-                                      : 'All choices rule: totals regular choices.')
-                                : 'Adds 0 points.',
-                          )
-                        else if (!_newTrait)
-                          DropdownButtonFormField<int>(
-                            initialValue: option['points'] as int,
-                            decoration: const InputDecoration(
-                              labelText: 'Points',
-                            ),
-                            items:
-                                [
-                                      if (_data['score_group'] != 'health') ...[
-                                        -2,
-                                        -1,
-                                      ],
-                                      0,
-                                      1,
-                                      2,
-                                    ]
-                                    .map(
-                                      (n) => DropdownMenuItem(
-                                        value: n,
-                                        child: Text('$n'),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged: _busy
-                                ? null
-                                : (v) => setState(() {
-                                    option['points'] = v;
-                                    _dirty = true;
-                                  }),
-                          ),
-                        _photo(
-                          'option_image_${option['id']}',
-                          option['image_path'] as String?,
-                          option,
-                          'remove_image',
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
+                }).toList(),
+              ),
             ],
           ),
         ),

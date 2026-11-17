@@ -1,4 +1,6 @@
+import {orderedObservations} from './observation-order.js';
 import {isNamedSite} from './site-access.js';
+import {HEALTH_CODES, conditionSummary, canConfirmSuggestions} from './condition-score.js';
 import {traitCatalog,selectedCustomTraits} from './trait-catalog.js';
 import {photoError, reportPhotoHashes} from './report-photos.js';
 import {withPhotoCredits, photoCredits} from './reference-photos.js';
@@ -139,16 +141,26 @@ export class Service extends Store {
     const {photo_path, closeup_photo_path, extra_photo_paths, photo_sha256, photo_hashes, submission_digest, submission_token, uid, ...visible} = report;
     const groups = new Map();
     for (const o of report.observation_snapshots ?? []) {
-      if (!groups.has(o.criteria_code)) groups.set(o.criteria_code, {code: o.criteria_code, name: o.criteria_name, score_group: o.score_group, options: []});
+      if (!groups.has(o.criteria_code)) groups.set(o.criteria_code, {code: o.criteria_code, name: o.criteria_name, score_group: HEALTH_CODES.includes(o.criteria_code) ? 'health' : o.score_group === 'environment' ? 'environment' : 'context', options: []});
       groups.get(o.criteria_code).options.push({label: o.option_label, points: o.option_code === 'unknown' ? null : o.points});
     }
     delete visible.observation_snapshots;
     const speciesId=report.final_species_id??report.suggested_species_id;
     const species=speciesId?await this.get('species',speciesId):null;
-    return {...visible, expert_feedback:reviewFeedback(report)||null, follow_up_note:null, species_local_name:species?.local_name??report.species_local_name, species_common_name:species?.common_name??report.species_common_name,
+    // Reconstruct the total from the original answers, never today's edited checklist.
+    // Preserve recorded suggestions and expert decisions on historical reports.
+    const score = conditionSummary(report.observation_snapshots ?? []);
+    // Stored suggestion and total remain the record of the submitted assessment.
+    score.score = Object.hasOwn(report,'health_score') ? report.health_score : score.score;
+    const definitions=await this.criteria(), catalog=await traitCatalog(this,{criteria:definitions});
+    const ordered=orderedObservations(report,catalog,definitions);
+    const suggestedSpecies = report.suggested_species_id ? await this.get('species',report.suggested_species_id) : null;
+    return {...visible, health_score:score.score, health_max_score:score.max_score, condition_score_summary:score,
+      can_confirm_suggestions:canConfirmSuggestions(report,suggestedSpecies?[suggestedSpecies]:[]),
+      expert_feedback:reviewFeedback(report)||null, follow_up_note:null, species_local_name:species?.local_name??report.species_local_name, species_common_name:species?.common_name??report.species_common_name,
       can_follow_up:report.user_id===user.id && followUpAvailable(report), follow_up_state:followUpState(report),
       observation_history:observationHistory(report,await this.reportViews(user,await this.rows('reports',[['user_id','==',report.user_id]]))),
-      extra_photo_urls:(extra_photo_paths??[]).map((_,index)=>`photo.php?id=${id}&view=extra&index=${index}`), closeup_photo_url:closeup_photo_path ? `photo.php?id=${id}&view=closeup` : null, report_code:reportLabel(report), needs_attention:verifiedNeedsAttention(report)?1:0, observations: [...groups.values()], photo_url: photo_path ? `photo.php?id=${id}` : null,
+      extra_photo_urls:(extra_photo_paths??[]).map((_,index)=>`photo.php?id=${id}&view=extra&index=${index}`), closeup_photo_url:closeup_photo_path ? `photo.php?id=${id}&view=closeup` : null, report_code:reportLabel(report), needs_attention:verifiedNeedsAttention(report)?1:0, observations: [...groups.values()], ordered_observations:ordered, photo_url: photo_path ? `photo.php?id=${id}` : null,
       verification_history: (await this.rows('verification_logs', [['report_id', '==', id]])).sort((a, b) => a.created_at.localeCompare(b.created_at))};
   }
   async profile(user, input) {
@@ -239,7 +251,7 @@ export class Service extends Store {
       trait_observations:Object.entries(custom).map(([key,value])=>({key,value,name:traits.trait_categories[key].name,label:traits.trait_labels[key][value]}))};
     if (!Buffer.isBuffer(photo)) throw new AppError('Add a photo from this visit.');
     if (input.photo_views === '2' && !Buffer.isBuffer(closeupPhoto)) throw new AppError('Add both a site overview and a close-up photo.');
-    if (!Array.isArray(extraPhotos) || extraPhotos.length > 4 || extraPhotos.some(p=>!Buffer.isBuffer(p))) throw new AppError('Add up to four additional photos.');
+    if (!Array.isArray(extraPhotos) || extraPhotos.length > 8 || extraPhotos.some(p=>!Buffer.isBuffer(p))) throw new AppError('Add up to eight additional photos.');
     const photos = [photo,closeupPhoto,...extraPhotos].filter(Boolean);
     if (photos.reduce((n,p)=>n+p.length,0)>12*1024*1024) throw new AppError('Keep all photos together under 12 MB.');
     const hashes=reportPhotoHashes(photos);
@@ -363,7 +375,7 @@ export class Service extends Store {
       const parentRef = previous.parent_report_id ? this.ref('reports', previous.parent_report_id) : null;
       if (parentRef) await tx.get(parentRef);
       const health = action === 'correct' ? input.final_health : previous.suggested_health ?? 'Unknown';
-      if(action==='confirm' && health==='Unknown')throw new AppError('Choose Correction to review an Unknown condition.');
+      if(action==='confirm' && !canConfirmSuggestions(previous,catalog))throw new AppError('Condition or species is unknown. Choose Correction.');
       if (action !== 'reject' && ![...HEALTH_VALUES,'Unknown'].includes(health)) throw new AppError('Choose a condition result for this correction.');
       const speciesId = action === 'correct' ? (input.final_species_id ? integer(input.final_species_id, 'species') : null) : previous.suggested_species_id;
       const species = catalog.find(s => s.id === speciesId);

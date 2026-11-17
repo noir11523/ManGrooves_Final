@@ -18,3 +18,13 @@ close = source.filter(ImageFilter.GaussianBlur(12))
 box = (330, 263, 630, 563)
 close.paste(source.crop(box), box)
 close.save(here / 'close-up.jpg', quality=95)
+
+# High-contrast light trails over an out-of-focus scene (synthetic regression).
+import math
+from PIL import ImageDraw
+motion = source.filter(ImageFilter.GaussianBlur(14))
+draw = ImageDraw.Draw(motion)
+for y in range(80, motion.height-90, 170):
+    for x in range(50, motion.width-90, 160):
+        draw.line([(x+int(12*math.sin(t/25)), y+t) for t in range(110)], fill=(255,252,245), width=5)
+motion.save(here / 'motion-trails.jpg', quality=95)

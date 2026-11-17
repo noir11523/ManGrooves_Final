@@ -68,7 +68,11 @@ export async function editTraits(service, user, input, choiceImages={}) {
       const stored=(await tx.get(ref)).data()??{};
       const choices=stored[key]??current.traits[key].map(value=>({value,label:current.trait_labels[key][value]}));
       const index=choices.findIndex(c=>!c.deleted_at&&c.value===input.value);
-      if(input.action==='delete_choice') {
+      if(input.action==='choice_order') {
+        const active=choices.filter(c=>!c.deleted_at);
+        if(!Array.isArray(input.order)||input.order.length!==active.length||new Set(input.order).size!==active.length||input.order.some(v=>!active.some(c=>c.value===v)))throw new AppError('Reload the checklist before changing its order.',409);
+        choices.splice(0,choices.length,...input.order.map(v=>active.find(c=>c.value===v)),...choices.filter(c=>c.deleted_at));
+      } else if(input.action==='delete_choice') {
         if(index<0)throw new AppError('Choice not found. Refresh the checklist.',409);
         const species=await service.transactionRows(tx,'species');
         if(species.some(s=>!s.deleted_at&&s[key]===input.value))throw new AppError('Update species using this choice before deleting it.',409);

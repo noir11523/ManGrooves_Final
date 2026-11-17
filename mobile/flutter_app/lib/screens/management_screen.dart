@@ -282,7 +282,6 @@ class _ManagementScreenState extends State<ManagementScreen> {
                           item == null
                               ? {
                                   'expert': 'Expert',
-                                  'system_admin': 'Administrator',
                                 }
                               : roles,
                         ),

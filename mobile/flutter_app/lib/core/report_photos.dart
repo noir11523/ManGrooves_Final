@@ -6,15 +6,17 @@ import 'api_client.dart';
 import 'photo_quality.dart';
 
 Future<void> validateReportPhotos(List<String> paths) async {
-  if (paths.length > 6) throw const ApiException('Use up to 6 photos.');
+  if (paths.length > 10) throw const ApiException('Use up to 10 photos.');
   var total = 0;
   final contents = <Uint8List>[];
-  for (final path in paths) {
+  for (var index = 0; index < paths.length; index++) {
+    final path = paths[index];
     final file = File(path), size = await File(path).length();
     if (size > 5 * 1024 * 1024) {
-      throw const ApiException(
+      throw ApiException(
         'Photo exceeds the 5 MB limit.',
         code: 'photo_unclear',
+        photoIndices: [index],
       );
     }
     total += size;
@@ -25,15 +27,20 @@ Future<void> validateReportPhotos(List<String> paths) async {
     }
     final bytes = await file.readAsBytes();
     if (contents.any((previous) => listEquals(previous, bytes))) {
-      throw const ApiException(
+      throw ApiException(
         'Photo already added. Choose another.',
         code: 'photo_duplicate',
+        photoIndices: [index],
       );
     }
     contents.add(bytes);
   }
-  for (final bytes in contents) {
-    await checkPhotoClarity(bytes);
+  for (var index = 0; index < contents.length; index++) {
+    try {
+      await checkPhotoClarity(contents[index]);
+    } on ApiException catch (error) {
+      throw ApiException(error.message, code: error.code, statusCode: error.statusCode, photoIndices: [index]);
+    }
   }
 }
 

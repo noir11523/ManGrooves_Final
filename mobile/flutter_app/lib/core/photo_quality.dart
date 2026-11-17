@@ -165,7 +165,9 @@ Future<void> checkPhotoClarity(Uint8List bytes) async {
       image.height,
       c,
     );
-    if (problem != null) reject(problem);
+    // The mandatory API preflight decides clarity using the same decoder and
+    // thresholds as final submission; platform sampling can differ.
+    assert(problem == null || problem.isNotEmpty);
   } on ApiException {
     rethrow;
   } catch (_) {

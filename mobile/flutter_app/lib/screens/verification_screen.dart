@@ -1,3 +1,4 @@
+import '../shared/condition_score.dart';
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -295,7 +296,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
       final response = await widget.api.report(widget.reportId);
       _report = Map<String, dynamic>.from(response['report'] as Map);
       _health = _report!['suggested_health']?.toString() ?? 'Unknown';
-      if (_health == 'Unknown') _decision = 'correct';
+      _decision = canConfirmSuggestions(_report!, widget.species) ? 'confirm' : 'correct';
       _speciesId = _report!['suggested_species_id'] as int?;
       _rarity = _report!['rarity_level']?.toString() ?? 'Unassigned';
     } catch (error) {
@@ -398,7 +399,7 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
 
   Widget _content(BuildContext context) {
     final photo = _report!['photo_url']?.toString();
-    final observations = (_report!['observations'] as List? ?? const [])
+    final observations = ((_report!['ordered_observations'] ?? _report!['observations']) as List? ?? const [])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList();
     return ListView(
@@ -471,21 +472,15 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                 const Divider(height: 24),
                 Text('Suggested condition: ${_report!['suggested_health']}'),
                 Text(
-                  _report!['health_score'] == null
-                      ? 'Unknown: uncertain observations still need attention.'
-                      : 'Score: ${_report!['health_score']} / ${_report!['health_max_score']}',
-                ),
-                const Text('6 Healthy | 3-5 Stressed | 0-2 At Risk'),
-                Text(
                   'Species name: ${speciesNames(_report!).isEmpty ? 'Needs manual identification' : speciesNames(_report!)}',
                 ),
                 Text(
                   'Species trait match: ${_report!['species_confidence'] ?? 0}%. This is a suggestion.',
                 ),
-                Text(
+                if (_report!['ordered_observations'] == null) Text(
                   'Traits: ${(_report!['display_root_type'] ?? _report!['root_type'])} / ${(_report!['display_leaf_shape'] ?? _report!['leaf_shape'])} / ${(_report!['display_bark_texture'] ?? _report!['bark_texture'])}',
                 ),
-                for (final trait
+                if (_report!['ordered_observations'] == null) for (final trait
                     in (_report!['trait_observations'] as List? ?? []))
                   Text('${trait['name']}: ${trait['label']}'),
               ],
@@ -495,7 +490,8 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
         const SizedBox(height: 12),
         Card(
           child: ExpansionTile(
-            title: Text('Condition checklist (${observations.length})'),
+            title: const Text('Observations'),
+            subtitle: ConditionScore(_report!),
             children: observations.map((criterion) {
               final options = (criterion['options'] as List? ?? const [])
                   .map(
@@ -520,10 +516,10 @@ class _ReviewReportScreenState extends State<ReviewReportScreen> {
                   initialValue: _decision,
                   decoration: const InputDecoration(labelText: 'Decision'),
                   items: [
-                    if (_report!['suggested_health'] != 'Unknown')
+                    if (canConfirmSuggestions(_report!, widget.species))
                       const DropdownMenuItem(
                         value: 'confirm',
-                        child: Text('Confirm system suggestion'),
+                        child: Text('Confirm system suggestions'),
                       ),
                     DropdownMenuItem(
                       value: 'correct',

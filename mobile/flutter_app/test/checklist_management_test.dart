@@ -103,6 +103,8 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 }
 
 class _CloudApi extends _Api {
+  List<String> traitOrder = ['white', 'red'];
+  Map<String, dynamic>? savedOrder;
   @override
   Future<Map<String, dynamic>> cloudUpload(
     String path,
@@ -123,7 +125,7 @@ class _CloudApi extends _Api {
     'traits': {
       'leaf_shape': <String>[],
       if (traitCreation != null)
-        'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': ['white', 'red'],
+        'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': traitOrder,
     },
     'trait_categories': {
       'leaf_shape': metadata,
@@ -153,6 +155,10 @@ class _CloudApi extends _Api {
     Map<String, String>? query,
     bool anonymous = false,
   }) async {
+    if (body?['action'] == 'choice_order') {
+      savedOrder = Map<String, dynamic>.from(body!);
+      traitOrder = List<String>.from(body['order'] as List);
+    }
     if (body?['action'] == 'create_category') {
       expect(path, 'trait-images.php');
       traitCreation = Map<String, dynamic>.from(body!);
@@ -168,6 +174,27 @@ class _CloudApi extends _Api {
 }
 
 void main() {
+  testWidgets('trait choice drag saves stable values and keeps its order after reload', (tester) async {
+    final api = _CloudApi()..traitCreation = {'name': 'Flowers', 'question_text': 'Which colour?'};
+    await tester.pumpWidget(MaterialApp(home: ChecklistScreen(api: api)));
+    await tester.pumpAndSettle();
+    await _tap(tester, find.text('Flowers'));
+    final list = find.byType(ReorderableListView).last;
+    await tester.ensureVisible(list);
+    await tester.pumpAndSettle();
+    expect(find.byType(ReorderableDragStartListener), findsWidgets);
+    tester.widget<ReorderableListView>(list).onReorderItem!(0, 1);
+    await tester.pumpAndSettle();
+    expect(api.savedOrder, isNull);
+    await _tap(tester, find.text('Save changes'));
+    expect(api.savedOrder?['order'], ['red', 'white']);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(MaterialApp(home: ChecklistScreen(api: api)));
+    await tester.pumpAndSettle();
+    await _tap(tester, find.text('Flowers'));
+    expect(tester.getTopLeft(find.text('Red')).dy, lessThan(tester.getTopLeft(find.text('White')).dy));
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'new Traits save through the shared trait catalog and reload as a trait group',
     (tester) async {

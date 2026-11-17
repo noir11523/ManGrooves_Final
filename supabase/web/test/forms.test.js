@@ -425,13 +425,14 @@ test('staff creation is available in Users and requests credentials for expert a
   await ui.adminPage($('#page'),'users',{});$('#add').click();
   const dialog=$('#admin-editor'),form=dialog.querySelector('form');
   assert.equal(dialog.open,true);assert.equal(form.elements.id_photo.required,true);
-  form.elements.role.value='system_admin';change(form.elements.role);
-  assert.equal(form.elements.id_photo.required,false);assert.equal($('#staff-credential').hidden,true);
+  assert.deepEqual([...form.elements.role.options].map(o=>o.value),['expert']);
+  assert.equal(form.elements.id_photo.required,true);assert.equal($('#staff-credential').hidden,false);
+  Object.defineProperty(form.elements.id_photo,'files',{value:[new File(['image'],'id.jpg',{type:'image/jpeg'})]});
   const city=form.querySelector('[data-address-city]');city.value='Cebu City';change(city);
   for(const [key,value] of Object.entries({first_name:'Admin',last_name:'Staff',email:'staff@example.test',barangay_id:'1',password:'initialpass12',password_confirmation:'initialpass12'}))form.elements[key].value=value;
   change(form.elements.barangay_id);
   await form.onsubmit({preventDefault(){},target:form,submitter:form.querySelector('button[type=submit]')});
-  assert.equal(sent.action,'create_staff');assert.equal(sent.role,'system_admin');assert.equal(sent.barangay_id,'1');
+  assert.equal(sent.action,'create_staff');assert.equal(sent.role,'expert');assert.equal(sent.barangay_id,'1');
 });
 
 test('typed certificate signer preview reflects edits and requires save before PDF preview',async()=>{
@@ -650,7 +651,7 @@ test('checklist live search covers choices and traits in report order without lo
   find('nothing-matches');assert.equal($('.filter-empty').hidden,false);
   $('.clear-filters').click();assert.equal(first.hidden,false);assert.equal(first.open,true);assert.equal(label.value,'Emerald green');assert.equal($('.trait-editor-group').open,false);
   assert.match($('.result-count').textContent,/10 categories/);
-  const card=$('.trait-image-editor');assert.equal(card.children[0].tagName,'IMG');assert.equal(card.children[1].tagName,'STRONG');
+  const card=$('.trait-image-editor');assert.equal(card.children[0].tagName,'BUTTON');assert.equal(card.children[1].tagName,'IMG');
 });
 
 test('checklist editor retains names while adding, undoing and deleting choices, and saving photos', async () => {
@@ -906,9 +907,9 @@ test('admins can save trait headings and add a category with answer choices',asy
   assert.deepEqual(writes[0].body,{action:'category',trait:'leaf_shape',name:'Leaf outline',question_text:'Which shape matches?'});
   form=$('.checklist-create form');$('[name=category_type][value=condition]').click();form.elements.name.value='Water';form.elements.question_text.value='Is it clear?';
   const labels=form.querySelectorAll('.choice-label'),points=form.querySelectorAll('.choice-points input');labels[0].value='Clear';labels[1].value='Cloudy';points[0].value='2';points[1].value='-1';
-  assert.equal(form.querySelector('.choice-points').hidden,false);
+  assert.equal(form.querySelector('.choice-points').hidden,true);
   await form.onsubmit({preventDefault(){},target:form});
-  assert.equal(writes[1].body.action,'create');assert.equal(writes[1].body.options.length,3);assert.equal(writes[1].body.options[2].kind,'unknown');assert.deepEqual(writes[1].body.options.map(o=>o.points),[2,-1,0]);
+  assert.equal(writes[1].body.action,'create');assert.equal(writes[1].body.options.length,3);assert.equal(writes[1].body.options[2].kind,'unknown');assert.deepEqual(writes[1].body.options.map(o=>o.points),[0,0,0]);
   clearTimeout(ui.toast.timer);
 });
 
@@ -953,7 +954,7 @@ test('category tools preserve edits, reject duplicate choices and save reordered
  $('[aria-controls=order-categories]').click();assert.equal($('.checklist-create').hidden,true);assert.equal($('.checklist-order').hidden,false);
  $('[aria-controls=create-category]').click();assert.equal(form.elements.name.value,'Flower');
  $('[name=category_type][value=condition]').click();form.querySelector('.choice-points input').value='1.5';labels[1].value='Red';
- await form.onsubmit({preventDefault(){},target:form});assert.equal(writes.length,0);assert.match(form.querySelector('[role=status]').textContent,/whole-number/);
+ await form.onsubmit({preventDefault(){},target:form});assert.equal(writes.length,1);assert.ok(JSON.parse(writes.pop().get('payload')).options.every(o=>o.points===0));
  $('[aria-controls=order-categories]').click();$('.order-row [data-step="1"]').click();
  await $('.checklist-order .actions button').onclick({target:$('.checklist-order .actions button')});
  assert.deepEqual(writes[0],{action:'order',order:['leaf_shape','root_type']});clearTimeout(ui.toast.timer);
@@ -996,4 +997,15 @@ test('a coarse device fix offers a nearby pin even when a previous address was a
   $('#use-nearby-pin').click();assert.equal($('#use-nearby-pin').hidden,true);assert.equal(Number(ui.reportDraft.fields.latitude),10.3);assert.equal(ui.reportDraft.fields.location_source,'manual');assert.equal(ui.reportDraft.fields.sitio_name,'');assert.equal($('#next').disabled,true);
   assert.match($('#location-status').textContent,/Approximate location/);
  }finally{dispose();t.mock.timers.reset();ui.reportDraft.reset();}
+});
+
+
+test('create staff offers only Expert and has no sample mobile number',async()=>{
+ globalThis.testApi=async()=>({items:[],barangays:reference.barangays,page:1,pages:1,total:0});
+ await ui.adminPage($('#page'),'users',{});$('#add').click();
+ assert.deepEqual([...$('#admin-editor [name=role]').options].map(o=>o.value),['expert']);
+ assert.equal($('#admin-editor [name=phone]').value,'');
+ assert.equal($('#admin-editor [name=phone]').hasAttribute('placeholder'),false);
+ assert.equal($('#admin-editor [name=id_photo]').required,true);
+ $('#admin-editor').close();
 });

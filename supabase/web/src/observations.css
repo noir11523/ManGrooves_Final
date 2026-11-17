@@ -99,3 +99,9 @@ label.check > input[type=checkbox],label.check > input[type=radio] { flex:0 0 22
 .icon-button[data-notification-bell]{position:relative}
 .notification-count{position:absolute;top:-4px;right:-4px;min-width:19px;height:19px;border-radius:99px;background:#ad3535;color:#fff;font:600 11px/19px system-ui;text-align:center;padding:0 4px}
 .notification-count[hidden]{display:none!important}
+.condition-total { padding: 14px 16px; margin: 12px 0 16px; border: 1px solid var(--border, #c6d5c2); border-radius: 12px; }
+.condition-total > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.condition-total-value { font-size: 1.35rem; font-weight: 700; }
+.condition-total p { margin: 6px 0; }
+
+.choice-drag-handle{touch-action:none;user-select:none;cursor:grab;padding:6px 12px;align-self:flex-start;margin-bottom:8px}.choice-dragging{outline:3px solid var(--primary,#315c2b);opacity:.7}.choice-dragging *{user-select:none}.choice-drag-handle:active{cursor:grabbing}

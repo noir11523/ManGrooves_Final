@@ -378,6 +378,7 @@ try {
   const staffInput={action:'create_staff',first_name:'Staff',last_name:'Reviewer',email:'staff-reviewer@example.test',address_line:'Test Street',phone:'09123456789',barangay_id:1,role:'expert',password:'staffpassword12',password_confirmation:'staffpassword12',expert_id_code:'ORG-REVIEWER-2026'};
   await request('users.php',guardianSession,staffInput,403);await request('users.php',expert,staffInput,403);
   await request('users.php',admin,{...staffInput,role:'guardian'},422);
+  await request('users.php',admin,{...staffInput,role:'system_admin'},422);
   await request('users.php',admin,{...staffInput,password_confirmation:'different'},422);
   await request('users.php',admin,{...staffInput,expert_id_code:''},422);
   const staffBody=new FormData();staffBody.set('payload',JSON.stringify(staffInput));staffBody.set('id_photo',new Blob([fixture],{type:'image/jpeg'}),'id.jpg');
@@ -587,6 +588,22 @@ try {
   assert.equal(confirmedUnknown.final_health,'Unknown');assert.equal(Number(confirmedUnknown.needs_attention),1);
   assert.equal(confirmedUnknown.final_species_id,confirmedUnknown.suggested_species_id);
   pass('Unknown suggestions cannot be confirmed; explicit expert correction can record Unknown needing attention');
+  for (const health of ['Healthy','Unknown']) {
+    const id=health==='Healthy'?89001:89002;
+    await db.collection('reports').doc(String(id)).set({...uncertainBefore,id,status:'pending',suggested_health:health,suggested_species_id:null});
+    await request('review.php',expert,{report_id:id,action:'confirm',final_health:'Healthy',final_species_id:1},422);
+    assert.equal((await request(`report.php?id=${id}`,expert)).report.can_confirm_suggestions,false);
+  }
+  const supporting=await submission(guardianSession,{checklist_versions:versions,observations:{...healthy,negative_signs:[select('negative_signs','unknown')]}});
+  const supportingSaved=await request('submit-report.php',guardianSession,supporting.body,201);
+  const supportingReport=(await request(`report.php?id=${supportingSaved.report.report_id}`,expert)).report;
+  assert.equal(supportingReport.suggested_health,'Healthy');assert.equal(supportingReport.health_score,6);
+  assert.equal(supportingReport.condition_score_summary.score,6);assert.equal(supportingReport.can_confirm_suggestions,true);
+  await db.collection('reports').doc(String(supportingReport.id)).update({health_score:null,suggested_health:'Unknown'});
+  const historical=(await request(`report.php?id=${supportingReport.id}`,expert)).report;
+  assert.equal(historical.health_score,null);assert.equal(historical.suggested_health,'Unknown');assert.equal(historical.can_confirm_suggestions,false);
+  pass('supporting uncertainty preserves the six-point total; historical Unknown still requires correction; missing species blocks confirmation');
+
   const deletionTarget=await account(9101,'guardian');
   const savedReport={id:9102,user_id:deletionTarget.id,uid:deletionTarget.uid,status:'verified',guardian_name:'Historical author',submitted_at:'2026-10-21'};
   await db.collection('reports').doc('9102').set(savedReport);
@@ -664,7 +681,7 @@ try {
   await request('checklist.php',admin,{...newCategory,options:'invalid'},422);
   const categoryResult=await request('checklist.php',admin,newCategory);
   const custom=categoryResult.criteria.find(c=>c.name==='Water observations');
-  assert.ok(custom.custom);assert.equal(custom.score_group,'context');assert.deepEqual(custom.options.map(o=>o.points),[2,1]);
+  assert.ok(custom.custom);assert.equal(custom.score_group,'context');assert.deepEqual(custom.options.map(o=>o.points),[0,0]);
   const nextForm=await request('report-form.php',newMember);
   assert.ok(nextForm.criteria.some(c=>c.id===custom.id));assert.ok(nextForm.category_order.includes(custom.code));
   const latestVersions=Object.fromEntries(nextForm.criteria.map(c=>[c.id,c.version]));
@@ -689,6 +706,13 @@ try {
   assert.equal(traitResult.trait_categories[traitKey].name,'Flower colour');
   const speciesCatalog=await request('species.php',admin),baseSpecies=speciesCatalog.species.find(s=>Number(s.active)!==0);
   assert.deepEqual(speciesCatalog.traits[traitKey],[white,red]);
+  await request('trait-images.php',admin,{action:'choice_order',trait:traitKey,order:[red,white]});
+  assert.deepEqual((await request('trait-images.php',admin)).traits[traitKey],[red,white]);
+  assert.deepEqual((await request('report-form.php',newMember)).traits[traitKey],[red,white]);
+  assert.deepEqual((await request('species.php',admin)).traits[traitKey],[red,white]);
+  assert.equal((await request('trait-images.php',admin)).trait_images[traitKey][white],traitResult.trait_images[traitKey][white]);
+  await request('trait-images.php',admin,{action:'choice_order',trait:traitKey,order:[white,white]},409);
+  pass('saved trait choice order survives reload and synchronizes without moving labels or images');
   assert.equal((await request('report-form.php',newMember)).trait_categories[traitKey].question_text,'What colour are the flowers?');
   await request('species.php',admin,{...baseSpecies,[traitKey]:'forged'},422);
   await request('species.php',admin,{...baseSpecies,[traitKey]:white});
