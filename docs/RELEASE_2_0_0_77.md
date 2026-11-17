@@ -36,4 +36,3 @@ Published **17 November 2026 (Asia/Manila)**.
 - **12 read-only live checks passed**: public PHP pages, new bundled feature markers, Supabase configuration, public summary, unauthenticated access guards, production upload CORS and a full downloaded-APK SHA-256 match.
 
 The live checks created no users, reports, emails or checklist records. Real phone camera/gallery tests remain outstanding. The production supporting-choice migration remains manual and unapplied.
-

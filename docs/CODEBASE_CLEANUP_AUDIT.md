@@ -101,8 +101,6 @@ Tracked files before cleanup, grouped by top-level folder (uncommitted additions
 - Legacy PHP/MySQL tests were attempted with a uniquely named disposable database; connection failed because the configured local MySQL server is not listening. No database was created, dropped or changed. The legacy MySQL end-to-end suite shares that unavailable prerequisite and was not run.
 - Git diff whitespace check passed; normal Windows line-ending notices only.
 
-The earlier automatic approval review could not execute the Flutter dependency refresh because its usage limit was reached. The user requested continuation; the refresh then completed successfully. No approval restriction was bypassed.
-
 ## Release scope
 
 The requested publication also includes the previously completed checklist/photo/scoring work documented in `CHECKLIST_PHOTO_UPDATE.md`. Those feature changes are separate from this cleanup. Android release is incremented to **2.0.0+77** so installed apps can update. Production data and the manual supporting-choice migration are not modified by cleanup or publishing. The SQL cleanup remains manual until a verified backup and explicit migration approval are supplied.
