@@ -986,6 +986,59 @@ test('photo checking blocks Next; failed candidates never preview; accepted phot
  }finally{dispose();delete globalThis.testPhotoApi;ui.reportDraft.reset();}
 });
 
+test('mixed multi-photo selection retains clear photos and identifies only rejected candidates',async()=>{
+ globalThis.testApi=async()=>({criteria:[],clusters:[],location:{}});
+ const requests=[];
+ globalThis.testPhotoApi=async(path,{body})=>{
+  const names=[...body.entries()].filter(([key])=>key.startsWith('photo_')).map(([,file])=>file.name);
+  requests.push(names);
+  const bad=names.findIndex(name=>name==='blur.jpg'||name==='used.jpg');
+  if(bad>=0)throw Object.assign(Error(names[bad]==='blur.jpg'?'Photo is blurry. Please take a clearer photo.':'Photo already used.'),{code:names[bad]==='blur.jpg'?'photo_unclear':'photo_already_submitted',photo_indices:[bad]});
+  return {ok:true};
+ };
+ const owner='mixed-photos-'+Date.now();ui.reportDraft.reset();let dispose=await ui.reportWizard($('#page'),{},{id:owner});
+ const photo=(bytes,name,type='image/jpeg')=>new File([bytes],name,{type});
+ const choose=(selector,files)=>{const input=$(selector);Object.defineProperty(input,'files',{configurable:true,value:files});change(input);};
+ const wait=async fn=>{for(let n=0;n<200&&!fn();n++)await new Promise(r=>setTimeout(r,5));assert.ok(fn());};
+ try{
+  choose('[name=photo]',[photo('overview','overview.jpg')]);await wait(()=>ui.reportDraft.photo);
+  choose('[name=closeup_photo]',[photo('close','close.jpg')]);await wait(()=>ui.reportDraft.closeupPhoto);
+  set('guardian_remarks','Keep these notes');
+  choose('#extra-photos',[photo('blur','blur.jpg'),photo('a','clear-a.jpg'),photo('bad','unsupported.gif','image/gif'),photo('a','renamed.jpg'),photo('used','used.jpg'),photo('b','clear-b.jpg')]);
+  await wait(()=>$('#photo-status').textContent==='2 photos added. 4 rejected.');
+  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['clear-a.jpg','clear-b.jpg']);
+  assert.equal($('#extra-previews').querySelectorAll('img').length,2);assert.equal($('#next').disabled,false);
+  const error=$('#report-form .error').textContent;
+  for(const text of ['blur.jpg: Photo is blurry','unsupported.gif: Unsupported image format','renamed.jpg: Photo already added','used.jpg: Photo already used'])assert.ok(error.includes(text),error);
+  assert.doesNotMatch(error,/clear-a|clear-b/);
+  assert.deepEqual(requests.at(-1),['overview.jpg','close.jpg','clear-a.jpg','clear-b.jpg']);
+  const flush=ui.reportDraft.flush;dispose();await flush();ui.reportDraft.reset();dispose=await ui.reportWizard($('#page'),{},{id:owner});
+  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['clear-a.jpg','clear-b.jpg']);
+  assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep these notes');
+  choose('#extra-photos',[photo('c','replacement.jpg')]);await wait(()=>ui.reportDraft.extraPhotos.length===3);await tick();
+  assert.equal($('#report-form .error').textContent,'');
+ }finally{dispose();delete globalThis.testPhotoApi;ui.reportDraft.reset();}
+});
+
+test('batch selection skips oversized photos and retains available slots without exceeding the photo limit',async()=>{
+ globalThis.testApi=async()=>({criteria:[],clusters:[],location:{}});
+ globalThis.testPhotoApi=async()=>({ok:true});
+ ui.reportDraft.reset();const dispose=await ui.reportWizard($('#page'),{},{id:'batch-limits-'+Date.now()});
+ const photo=(bytes,name)=>new File([bytes],name,{type:'image/jpeg'});
+ const choose=files=>{const input=$('#extra-photos');Object.defineProperty(input,'files',{configurable:true,value:files});change(input);};
+ const wait=async fn=>{for(let n=0;n<200&&!fn();n++)await new Promise(r=>setTimeout(r,5));assert.ok(fn());};
+ try{
+  choose([photo(new Uint8Array(5*1024*1024+1),'large.jpg'),...Array.from({length:9},(_,i)=>photo(`distinct-${i}`,`clear-${i}.jpg`))]);
+  await wait(()=>$('#photo-status').textContent==='8 photos added. 2 rejected.');
+  assert.equal(ui.reportDraft.extraPhotos.length,8);assert.equal($('#add-photos').disabled,true);
+  assert.match($('#report-form .error').textContent,/large.jpg: Photo exceeds the 5 MB limit/);
+  assert.match($('#report-form .error').textContent,/clear-8.jpg: Add up to eight additional photos/);
+  $('[data-remove-photo="0"]').click();assert.equal(ui.reportDraft.extraPhotos.length,7);assert.equal($('#add-photos').disabled,false);
+  choose([photo('replacement','replacement.jpg')]);await wait(()=>ui.reportDraft.extraPhotos.length===8);await tick();
+  assert.equal($('#report-form .error').textContent,'');
+ }finally{dispose();delete globalThis.testPhotoApi;ui.reportDraft.reset();}
+});
+
 test('a coarse device fix offers a nearby pin even when a previous address was already selected',async t=>{
  globalThis.testApi=async path=>path==='report-form.php'?{criteria:reference.criteria,clusters:[],species:[],location:{}}:{places:[]};
  ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:1,owner:undefined,fields:{latitude:10.28,longitude:123.88,location_source:'manual',sitio_name:'Previous site'}});
