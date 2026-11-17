@@ -185,11 +185,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             Expanded(
               child: ListView(
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.dashboard_outlined),
-                    title: const Text('Dashboard'),
-                    onTap: () => Navigator.pop(context, 'dashboard'),
-                  ),
                   if (!admin)
                     ListTile(
                       leading: const Icon(Icons.add_a_photo_outlined),
