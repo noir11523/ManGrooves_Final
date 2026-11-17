@@ -265,32 +265,17 @@ export async function reportWizard(node, query, user = null) {
         const status=node.querySelector('#photo-status'),next=node.querySelector('#next'),wasDisabled=next.disabled;
         photoBusy=true;status.textContent='Checking photo quality...';status.hidden=false;next.disabled=true;
         node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=true);
-        try{status.textContent=await work()||'Photo quality passed.';}
+        try{await work();status.textContent='Photo quality passed.';}
         catch(error){const message=node.querySelector('#report-form .error');status.hidden=true;if(!stopped&&draft.step===0&&message)showError(message,isPhotoConflict(error)?photoConflictMessage(error):friendly(error));}
         finally{photoBusy=false;next.disabled=wasDisabled;node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=false);}
       });return photoWork;
     };
     const addPhotos=files=>changePhotos(async()=>{
-        const failures=[];let added=0;
-        // Commit each accepted candidate before checking the next. Retained
-        // photos still participate in duplicate and combined-size checks.
-        for(const file of files){
-          if(stopped||draft.step!==0)return;
-          try{
-            if(draft.extraPhotos.length>=8)throw new Error('Add up to eight additional photos (10 total).');
-            const photo=await prepareReportPhoto(file);
-            await checkPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos,photo]);
-            if(stopped||draft.step!==0)return;
-            draft.extraPhotos.push(photo);added++;changed();showPhoto();
-          }catch(error){failures.push(`${file.name}: ${isPhotoConflict(error)?photoConflictMessage(error):friendly(error)}`);}
-        }
-        const message=$('#report-form .error');
-        if(failures.length){
-          if(!added)throw new Error(failures.join('\n'));
-          showError(message,failures.join('\n'));
-          return `${added} ${added===1?'photo':'photos'} added. ${failures.length} rejected.`;
-        }
-        message.textContent='';
+        if(draft.extraPhotos.length+files.length>8)throw new Error('Add up to eight additional photos (10 total).');
+        const prepared=[];for(const photo of files)prepared.push(await prepareReportPhoto(photo));files=prepared;
+        await checkPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos,...files]);
+        if(stopped||draft.step!==0)return;
+        draft.extraPhotos.push(...files);changed();showPhoto();$('#report-form .error').textContent='';
     });
     const replacePhoto=(photo,closeup)=>changePhotos(async()=>{
       photo=await prepareReportPhoto(photo);
