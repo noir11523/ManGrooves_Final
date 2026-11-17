@@ -159,8 +159,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                               icon: Icon(
                                 _hidePassword
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
                               ),
                             ),
                           ),

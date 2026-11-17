@@ -180,13 +180,16 @@ void main() {
         find.text('Password length accepted. No special symbols required.'),
         findsOneWidget,
       );
+      expect(find.byIcon(Icons.visibility_off_outlined), findsNWidgets(2));
       await tap(tester, find.byTooltip('Show password'));
+      expect(find.byIcon(Icons.visibility_outlined), findsOneWidget);
       expect(tester.widget<TextField>(field('Password')).obscureText, isFalse);
       expect(
         tester.widget<TextField>(field('Confirm password')).obscureText,
         isTrue,
       );
       await tap(tester, find.byTooltip('Hide password'));
+      expect(find.byIcon(Icons.visibility_off_outlined), findsNWidgets(2));
       expect(tester.widget<TextField>(field('Password')).obscureText, isTrue);
       await tap(tester, find.text('Read privacy notice'));
       expect(find.byType(AlertDialog), findsOneWidget);

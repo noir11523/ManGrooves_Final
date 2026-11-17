@@ -168,8 +168,8 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
           }),
     icon: Icon(
       _visible.contains(key)
-          ? Icons.visibility_off_outlined
-          : Icons.visibility_outlined,
+          ? Icons.visibility_outlined
+          : Icons.visibility_off_outlined,
     ),
   );
 }

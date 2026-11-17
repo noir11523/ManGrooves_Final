@@ -80,7 +80,7 @@
             input.type = willShow ? 'text' : 'password';
             button.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
             const icon = button.querySelector('i');
-            if (icon) icon.className = `bi ${willShow ? 'bi-eye-slash' : 'bi-eye'}`;
+            if (icon) icon.className = `bi ${willShow ? 'bi-eye' : 'bi-eye-slash'}`;
             input.focus({ preventScroll: true });
         });
     });

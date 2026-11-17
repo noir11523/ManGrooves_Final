@@ -46,9 +46,14 @@ void main() {
       await tester.enterText(email, 'guardian@example.test');
       await tester.enterText(password, 'password123');
       await tester.ensureVisible(find.byTooltip('Show password'));
+      expect(find.byIcon(Icons.visibility_off), findsOneWidget);
       await tester.tap(find.byTooltip('Show password'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Hide password'), findsOneWidget);
+      expect(find.byIcon(Icons.visibility), findsOneWidget);
+      await tester.tap(find.byTooltip('Hide password'));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.visibility_off), findsOneWidget);
       final submit = find.widgetWithText(FilledButton, 'Sign in');
       await tester.ensureVisible(submit);
       await tester.tap(submit);

@@ -10,7 +10,7 @@ function bind(form,action){form.onsubmit=async event=>{
 };}
 export function passwordField(name,label,{prefix='register',help=false,current=false}={}){
   const id=`${prefix}-${name}`;
-  return `<div class="field registration-password"><label for="${id}">${label}</label><div class="password-control"><input id="${id}" name="${name}" type="password" required ${current?'autocomplete="current-password"':'minlength="8" maxlength="25" autocomplete="new-password"'} ${help?'aria-describedby="register-password-help"':''}><button type="button" class="password-toggle" aria-controls="${id}" aria-label="Show ${label.toLowerCase()}" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="password-eye-slash" d="m3 3 18 18" hidden/></svg></button></div>${help?'<div class="password-length" role="progressbar" aria-label="Password length" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0"><span></span></div><small id="register-password-help" aria-live="polite">Use 8 to 25 characters. No special symbols required.</small>':''}</div>`;
+  return `<div class="field registration-password"><label for="${id}">${label}</label><div class="password-control"><input id="${id}" name="${name}" type="password" required ${current?'autocomplete="current-password"':'minlength="8" maxlength="25" autocomplete="new-password"'} ${help?'aria-describedby="register-password-help"':''}><button type="button" class="password-toggle" aria-controls="${id}" aria-label="Show ${label.toLowerCase()}" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="password-eye-slash" d="m3 3 18 18"/></svg></button></div>${help?'<div class="password-length" role="progressbar" aria-label="Password length" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0"><span></span></div><small id="register-password-help" aria-live="polite">Use 8 to 25 characters. No special symbols required.</small>':''}</div>`;
 }
 export function bindPasswordToggles(form){
   form.querySelectorAll('.password-toggle').forEach(button=>button.addEventListener('click',()=>{
@@ -18,7 +18,7 @@ export function bindPasswordToggles(form){
     input.type=visible?'text':'password';button.setAttribute('aria-pressed',String(visible));
     const label=input.labels?.[0]?.textContent.trim().toLowerCase()||'password';
     button.setAttribute('aria-label',`${visible?'Hide':'Show'} ${label}`);
-    button.querySelector('.password-eye-slash').toggleAttribute('hidden',!visible);
+    button.querySelector('.password-eye-slash').toggleAttribute('hidden',visible);
   }));
 }
 function bindRegistrationPasswords(form){

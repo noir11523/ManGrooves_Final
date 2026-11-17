@@ -513,8 +513,8 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
                       }),
                 icon: Icon(
                   _visiblePasswords.contains(name)
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
                 ),
               )
             : null,

@@ -250,8 +250,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                               icon: Icon(
                                 _hidePassword
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
                               ),
                             ),
                           ),

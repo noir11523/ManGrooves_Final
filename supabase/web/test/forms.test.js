@@ -730,10 +730,13 @@ test('registration separates account, code, and profile; invalid code and missin
 test('registration keeps each password visibility separate and explains the length rule',async()=>{
   authApi();await ui.registrationPage(authLayout);
   const first=$('[name=password]'),second=$('[name=password_confirmation]'),toggle=$('[aria-controls=register-password]');
+  assert.equal(toggle.querySelector('.password-eye-slash').hasAttribute('hidden'),false);
   first.value='short';first.dispatchEvent(new Event('input'));assert.match($('#register-password-help').textContent,/8 to 25/);
   first.value='abcdefgh';first.dispatchEvent(new Event('input'));assert.match($('#register-password-help').textContent,/length accepted/);
   toggle.click();assert.equal(first.type,'text');assert.equal(second.type,'password');assert.equal(toggle.getAttribute('aria-label'),'Hide password');
+  assert.equal(toggle.querySelector('.password-eye-slash').hasAttribute('hidden'),true);
   toggle.click();assert.equal(first.type,'password');assert.equal(toggle.getAttribute('aria-pressed'),'false');
+  assert.equal(toggle.querySelector('.password-eye-slash').hasAttribute('hidden'),false);
   assert.equal($('[name=privacy_consent]').checked,false);assert.equal($('[name=privacy_consent]').required,true);
 });
 test('expert ID is collected after verification, retained when going back, and sent for approval',async()=>{
