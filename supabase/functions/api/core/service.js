@@ -17,6 +17,7 @@ import {philippineBarangays,publicBarangay} from './barangays.js';
 import {reviewFeedback} from './review-feedback.js';
 import {queueNotification,followUpKey} from './notifications.js';
 import {reportBarangay,withReportGeography,withinPhilippineSearchBounds} from './report-geography.js';
+import {isMonitoringSiteAllowed,monitoringSiteCoverageId} from './monitoring-site-coverage.js';
 
 export class Service extends Store {
   constructor(db, auth, bucket, mailer = null) { super(db); this.auth = auth; this.bucket = bucket; this.mailer = mailer; }
@@ -105,9 +106,9 @@ export class Service extends Store {
   }
   async form(user) {
     requireRole(user, 'guardian', 'expert');
-    const [criteria, clusters, catalog, barangay, images] = await Promise.all([this.criteria(), this.clusters(user), this.rows('species'), this.get('barangays', user.barangay_id), this.get('meta','trait_images')]);
+    const [criteria, clusters, catalog, barangay, images, coverage] = await Promise.all([this.criteria(), this.clusters(user), this.rows('species'), this.get('barangays', user.barangay_id), this.get('meta','trait_images'), this.get('meta',monitoringSiteCoverageId)]);
     const species=catalog.filter(s=>!s.deleted_at && Number(s.active)!==0);
-    return {criteria, photo_credits:photoCredits, trait_images:images??{}, clusters:clusters.filter(c=>usableSite(c,user)&&Number(c.verified_count)>0&&isNamedSite(c)&&isNamedSite({name:c.sitio_name||c.name})&&reportBarangay(c.center_lat,c.center_lng)?.province==='Cebu'), species, location: {barangay, max_distance_meters:null, scope:'Cebu', max_gps_accuracy_meters: 100},
+    return {criteria, photo_credits:photoCredits, trait_images:images??{}, clusters:clusters.filter(c=>usableSite(c,user)&&Number(c.verified_count)>0&&isNamedSite(c)&&isNamedSite({name:c.sitio_name||c.name})&&isMonitoringSiteAllowed(c,coverage)), species, location: {barangay, max_distance_meters:null, scope:'Cebu', max_gps_accuracy_meters: 100},
       ...await traitCatalog(this,{criteria,species:catalog.filter(s=>!s.deleted_at)})};
   }
   async preview(user, input) {
@@ -234,7 +235,8 @@ export class Service extends Store {
     const traits=await traitCatalog(this,{criteria,species:catalog}),custom=selectedCustomTraits(traits,input);
     const classification = classify(criteria, input.observations), matching = matchSpecies(catalog, input);
     const barangay=await this.findBarangay(input.latitude,input.longitude,barangays);
-    if(!barangay || barangay.province!=='Cebu')throw new AppError('Place the pin inside a Cebu barangay.');
+    if(!isMonitoringSiteAllowed(barangay,await this.get('meta',monitoringSiteCoverageId)))
+      throw new AppError('Place the pin inside an allowed Cebu monitoring area.');
     const location = validateLocation(input, barangay);
     if (!isNamedSite({name:input.sitio_name}) || (input.address_state && input.address_state !== 'ready')) {
       throw new AppError('Choose an address before continuing.');
@@ -273,6 +275,8 @@ export class Service extends Store {
     try {
       const result = await this.db.runTransaction(async tx => {
         const actor = await tx.get(this.ref('users', user.uid)); requireRole(actor.data(), 'guardian', 'expert');
+        const coverage = (await tx.get(this.ref('meta',monitoringSiteCoverageId))).data();
+        if(!isMonitoringSiteAllowed(barangay,coverage)) throw new AppError('Monitoring-site coverage changed. Choose an allowed location.',409);
         if (actor.data().barangay_id !== user.barangay_id) throw new AppError('Your barangay changed. Reload the report form.', 409);
         const claim = await tx.get(claimRef);
         if (claim.exists) return this.repeatedSubmission(claim.data(), digest, submissionToken);
