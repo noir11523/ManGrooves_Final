@@ -272,6 +272,41 @@ class _SearchApi extends _Api {
   };
 }
 
+class _CoverageApi extends _SearchApi {
+  bool allowed = false;
+  bool offline = false;
+  @override
+  Future<Map<String, dynamic>> reportForm() async => {
+    ...await super.reportForm(),
+    'location': {
+      'monitoring_coverage': {
+        'mode': 'cities',
+        'cities': ['Cebu City'],
+      },
+    },
+  };
+  @override
+  Future<Map<String, dynamic>> cloudRequest(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? query,
+    bool anonymous = false,
+  }) async {
+    if (query?['q'] != null) return super.cloudRequest(path, query: query);
+    expect(query?['report_coverage'], '1');
+    if (offline) throw const ApiException('Offline');
+    return {
+      'places': [
+        {'label': 'Coastal barangay'},
+      ],
+      'monitoring_coverage': {
+        'allowed': allowed,
+        'message': 'Choose a location in Cebu City.',
+      },
+    };
+  }
+}
+
 const _flowerKey = 'trait_category_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 class _CustomTraitsApi extends _Api {
@@ -480,6 +515,67 @@ Future<void> openLocation(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+    'coverage blocks both steps and recovers after a successful retry',
+    (tester) async {
+      final old = GeolocatorPlatform.instance;
+      GeolocatorPlatform.instance = _DeniedGps();
+      addTearDown(() => GeolocatorPlatform.instance = old);
+      final api = _CoverageApi(), drafts = _Drafts();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SubmitReportScreen(
+              api: api,
+              draftOwner: 'coverage',
+              draftStore: drafts,
+              onSubmitted: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'))
+            .onPressed,
+        isNotNull,
+      );
+      await tap(tester, find.text('Unable to count'));
+      await tester.enterText(field('Search a barangay or landmark'), 'Pier');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      await tap(tester, find.text('Pier 3, Cebu City'));
+      // A plausible label cannot override the backend coordinate decision.
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'))
+            .onPressed,
+        isNull,
+      );
+      expect(find.text('Choose a location in Cebu City.'), findsWidgets);
+      await tap(tester, find.text('Change location'));
+      final next = find.byKey(const ValueKey('location-next'));
+      expect(tester.widget<FilledButton>(next).onPressed, isNull);
+      api.offline = true;
+      await tap(tester, find.text('Retry address'));
+      expect(tester.widget<FilledButton>(next).onPressed, isNull);
+      api.offline = false;
+      api.allowed = true;
+      await tap(tester, find.text('Retry address'));
+      expect(tester.widget<FilledButton>(next).onPressed, isNotNull);
+      tester.widget<Stepper>(find.byType(Stepper)).onStepTapped!(0);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'))
+            .onPressed,
+        isNotNull,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    },
+  );
   testWidgets(
     'new trait validates, saves in the draft, previews and submits using the shared choice',
     (tester) async {

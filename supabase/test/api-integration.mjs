@@ -741,6 +741,23 @@ try {
     assert.equal(detail.status,'pending');
   }
   pass('final submission accepts decodable blur, motion blur, exposure, contrast and low-resolution photos for expert review');
+  const coverageRef=db.collection('meta').doc('monitoring_site_coverage');
+  const outsideCity={...traitAnswers,latitude:10.33,longitude:123.94};
+  assert.deepEqual((await request('report-form.php',appearanceUser)).location.monitoring_coverage,{mode:'cities',cities:['Cebu City']});
+  const deniedPin=await request('places.php?latitude=10.33&longitude=123.94&report_coverage=1',appearanceUser);
+  assert.equal(deniedPin.monitoring_coverage.allowed,false);
+  assert.equal(deniedPin.barangay.city_municipality,'Mandaue City');
+  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,outsideCity)).body,422);
+  await coverageRef.set({mode:'cities',cities:['Mandaue City']});
+  assert.deepEqual((await request('report-form.php',appearanceUser)).location.monitoring_coverage,{mode:'cities',cities:['Mandaue City']});
+  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,outsideCity)).body,201);
+  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,traitAnswers)).body,422);
+  await coverageRef.set({mode:'province'});
+  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,outsideCity)).body,201);
+  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,{...traitAnswers,latitude:9.65,longitude:123.85})).body,422);
+  await coverageRef.set({mode:'cities',cities:['Cebu City']});
+  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,outsideCity)).body,422);
+  pass('coverage defaults to Cebu City, switches to selected cities or all Cebu, and rejects stale or forged out-of-area submissions');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

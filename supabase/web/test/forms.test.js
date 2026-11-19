@@ -43,6 +43,48 @@ const submit = () => { const form = $('#report-form'); return form.onsubmit({pre
 const finishCategories = async () => { for(const c of reference.criteria)if(!(ui.reportDraft.observations[c.code]?.length))$(`[name=obs_${c.code}][value="${c.options.find(o=>o.code==='none_of_the_above'||o.code==='no_animals')?.id??c.options[0].id}"]`).click();for(let i=0;i<reference.criteria.length+3&&ui.reportDraft.step===2;i++)await submit(); };
 const closeConfirm = answer => { const dialog = $('#confirm'); dialog.returnValue = answer; dialog.open = false; dialog.dispatchEvent(new Event('close')); };
 
+test('coverage blocks Details and Location, survives photo work and recovers after moving the pin',async()=>{
+  let allowed=false,offline=false;
+  globalThis.testApi=async(path,{query}={})=>{
+    if(path==='report-form.php')return {criteria:[],clusters:[],location:{monitoring_coverage:{mode:'cities',cities:['Cebu City']}}};
+    assert.equal(query.report_coverage,'1');
+    if(offline)throw Error('Offline');
+    return {places:[{label:'Coastal barangay'}],monitoring_coverage:{allowed,message:'Choose a location in Cebu City.'}};
+  };
+  ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:0,owner:undefined,
+    photo:new File(['overview'],'one.jpg',{type:'image/jpeg'}),closeupPhoto:new File(['closeup'],'two.jpg',{type:'image/jpeg'}),
+    fields:{latitude:10.33,longitude:123.94,location_source:'manual',sitio_name:'Mandaue coast',observed_alive_count:'4'}});
+  resolvedAddress(ui.reportDraft.fields);
+  const dispose=await ui.reportWizard($('#page'),{});await tick();
+  try{
+    assert.equal($('#next').disabled,true);assert.match($('#step-body').textContent,/Choose a location in Cebu City/);
+    const extra=$('#extra-photos');assert.equal(extra.multiple,true);
+    Object.defineProperty(extra,'files',{configurable:true,value:[new File(['extra-a'],'a.jpg',{type:'image/jpeg'}),new File(['extra-b'],'b.jpg',{type:'image/jpeg'})]});change(extra);
+    for(let i=0;i<100&&ui.reportDraft.extraPhotos.length<2;i++)await new Promise(r=>setTimeout(r,10));
+    assert.equal(ui.reportDraft.extraPhotos.length,2);assert.equal($('#next').disabled,true);
+    await submit();assert.equal(ui.reportDraft.step,0);
+    [...$('#step-body').querySelectorAll('button')].find(b=>b.textContent==='Change location').click();await tick();await tick();
+    assert.equal(ui.reportDraft.step,1);assert.equal($('#next').disabled,true);
+    allowed=true;globalThis.testMarker.setLatLng([10.28,123.88]);globalThis.testMarker.events.dragend();
+    assert.equal($('#next').disabled,true);await new Promise(r=>setTimeout(r,300));await tick();
+    assert.equal($('#next').disabled,false);
+    offline=true;globalThis.testMarker.setLatLng([10.281,123.881]);globalThis.testMarker.events.dragend();
+    await new Promise(r=>setTimeout(r,300));await tick();assert.equal($('#next').disabled,true);
+    offline=false;$('#retry-address').click();await tick();assert.equal($('#next').disabled,false);
+    $('#previous').click();await tick();await tick();assert.equal($('#next').disabled,false);
+    assert.equal(ui.reportDraft.extraPhotos.length,2);assert.equal(ui.reportDraft.photo.name,'one.jpg');
+  }finally{dispose();ui.reportDraft.reset();}
+});
+
+test('coverage permits fresh Details to reach Location to choose the first pin',async()=>{
+  globalThis.testApi=async()=>({criteria:[],clusters:[],location:{monitoring_coverage:{mode:'cities',cities:['Cebu City']}}});
+  ui.reportDraft.reset();Object.assign(ui.reportDraft,{dirty:true,step:0,owner:undefined,
+    photo:new File(['overview'],'one.jpg',{type:'image/jpeg'}),closeupPhoto:new File(['closeup'],'two.jpg',{type:'image/jpeg'}),fields:{observed_alive_count:'4'}});
+  const dispose=await ui.reportWizard($('#page'),{});
+  try{assert.equal($('#next').disabled,false);await submit();assert.equal(ui.reportDraft.step,1);assert.equal($('#next').disabled,true);}
+  finally{dispose();ui.reportDraft.reset();}
+});
+
 test('delete user identifies the account, supports cancel/retry and refreshes without exposing self deletion',async()=>{
  let removed=false,fail=false;const writes=[];
  globalThis.testApi=async(path,{body}={})=>{

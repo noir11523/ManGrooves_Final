@@ -131,6 +131,18 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   int _addressRequest = 0;
   ReportLocation? _addressPoint;
   String? _addressName;
+  ReportLocation? _coveragePoint;
+  bool _coverageAllowed = false;
+  String? _coverageMessage;
+  bool get _coverageEnabled =>
+      (_form?['location'] as Map?)?['monitoring_coverage'] != null;
+  bool get _coverageReady =>
+      !_coverageEnabled || (_coverageAllowed && _coveragePoint == _location);
+  bool get _detailsCoverageBlocked =>
+      _location != null &&
+      (!_coverageReady ||
+          _resolvingAddress ||
+          (_coverageEnabled && !_addressReady));
   bool get _addressReady =>
       _location != null &&
       _addressPoint == _location &&
@@ -522,7 +534,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       }
       if (!_parentsFailed) _error = null;
       if (_placeSearch.text.isEmpty) _placeSearch.text = _sitio.text;
-      if (mounted && _step == 1 && _location != null && !_addressReady) {
+      if (_coverageEnabled && _step > 1 && _location != null) _step = 1;
+      if (mounted &&
+          _location != null &&
+          (_coverageEnabled || (_step == 1 && !_addressReady))) {
         unawaited(_fillNearbyAddress(_location!, replace: true));
       }
       if (mounted) unawaited(_tryAutoCapture());
@@ -670,7 +685,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   }
 
   Future<void> _continuePhotos() async {
-    if (_pickingPhoto || _checkingPhotos) return;
+    if (_pickingPhoto || _checkingPhotos || _detailsCoverageBlocked) return;
     if (_photo == null || _closeupPhoto == null) {
       _showPhotoFailure(
         const ApiException('Add both photos before continuing.'),
@@ -690,7 +705,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         _closeupPhoto!.path,
         ..._extraPhotos.map((p) => p.path),
       ]);
-      if (mounted) _editStep(1);
+      if (mounted && !_detailsCoverageBlocked) _editStep(1);
     } catch (error) {
       _showPhotoFailure(error);
     } finally {
@@ -1207,6 +1222,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       _resolvingAddress = true;
       _addressFailed = false;
       _reportBarangay = null;
+      if (_coverageEnabled) {
+        _coverageAllowed = false;
+        _coverageMessage = 'Checking report location...';
+      }
     });
     try {
       final result = await widget.api.cloudRequest(
@@ -1214,9 +1233,22 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         query: {
           'latitude': '${point.latitude}',
           'longitude': '${point.longitude}',
+          if (_coverageEnabled) 'report_coverage': '1',
         },
       );
       if (!current()) return;
+      if (_coverageEnabled) {
+        final coverage = result['monitoring_coverage'] as Map?;
+        setState(() {
+          _coveragePoint = point;
+          _coverageAllowed = coverage?['allowed'] == true;
+          _coverageMessage = _coverageAllowed
+              ? null
+              : coverage?['message']?.toString() ?? 'Could not check this location. Retry or choose another pin.';
+          if (!_coverageAllowed) _addressFailed = true;
+        });
+        if (!_coverageAllowed) return;
+      }
       final places = result['places'] as List? ?? [];
       final label = places.isEmpty ? null : places.first['label']?.toString();
       if (!isReportAddress(label) && knownName == null) {
@@ -1236,7 +1268,12 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     } catch (_) {
       if (!current()) return;
       setState(() {
-        if (knownName != null) {
+        if (_coverageEnabled) {
+          _coverageAllowed = false;
+          _coverageMessage =
+              'Could not check this location. Retry or choose another pin.';
+          _addressFailed = true;
+        } else if (knownName != null) {
           _markAddressReady();
         } else {
           _addressFailed = true;
@@ -1392,11 +1429,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       );
       return;
     }
-    if (_resolvingAddress || !_addressReady) {
+    if (_resolvingAddress || !_addressReady || !_coverageReady) {
       setState(
         () => _error = _resolvingAddress
             ? 'Finding the address. Please wait.'
-            : 'Choose an address or retry the pin.',
+            : _coverageMessage ?? 'Choose an address or retry the pin.',
       );
       return;
     }
@@ -1479,7 +1516,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   void _editStep(int step) {
     if (step == 1 &&
         _location != null &&
-        !_addressReady &&
+        (!_addressReady || _coverageEnabled) &&
         !_resolvingAddress) {
       unawaited(_fillNearbyAddress(_location!, replace: true));
     }
@@ -1528,7 +1565,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
 
   Future<void> _submit() async {
     if (_busy || _confirmingSubmit || _step != 3) return;
-    if (!_addressReady || _resolvingAddress) {
+    if (!_addressReady || _resolvingAddress || !_coverageReady) {
       _editStep(1);
       return;
     }
@@ -2169,9 +2206,18 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (_countUnknown || _parentReportId != null) _siteSelector(),
       if (_countUnknown && _clusterId == null)
         ..._placeFields(showBarangay: false),
+      if (_detailsCoverageBlocked) ...[
+        Text(_coverageMessage ?? 'Checking report location...'),
+        TextButton(
+          onPressed: () => _editStep(1),
+          child: const Text('Change location'),
+        ),
+      ],
       const SizedBox(height: 16),
       FilledButton(
-        onPressed: _pickingPhoto || _checkingPhotos ? null : _continuePhotos,
+        onPressed: _pickingPhoto || _checkingPhotos || _detailsCoverageBlocked
+            ? null
+            : _continuePhotos,
         child: Text(_checkingPhotos ? 'Preparing photos...' : 'Continue'),
       ),
     ],
@@ -2222,7 +2268,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         crossAxisAlignment: WrapCrossAlignment.center,
         spacing: 8,
         children: [
-          const Text('Address not found. Retry or search a place.'),
+          Text(
+            _coverageMessage ?? 'Address not found. Retry or search a place.',
+          ),
           TextButton(
             onPressed: _location == null
                 ? null
@@ -2438,7 +2486,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       ],
       FilledButton.icon(
         key: const ValueKey('location-next'),
-        onPressed: _gettingLocation || _resolvingAddress || !_addressReady
+        onPressed:
+            _gettingLocation ||
+                _resolvingAddress ||
+                !_addressReady ||
+                !_coverageReady
             ? null
             : _nextFromSite,
         icon: const Icon(Icons.arrow_forward),

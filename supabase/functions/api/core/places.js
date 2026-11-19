@@ -2,6 +2,7 @@ import {AppError,text,distanceMeters} from './domain.js';
 import {reportBarangay,barangaySearchPoint,withinPhilippineSearchBounds} from './report-geography.js';
 import {philippineBarangays} from './barangays.js';
 import localReferences from '../data/local-places.json' with {type:'json'};
+import {isMonitoringSiteAllowed,monitoringSiteCoverageId,monitoringCoverageMessage} from './monitoring-site-coverage.js';
 
 const barangays=philippineBarangays().filter(b=>b.province==='Cebu');
 const cebuBounds=[123.2,9.3,124.6,11.7];
@@ -87,6 +88,20 @@ export function placeResults(data,term='',latitude=null,longitude=null) {
 }
 const caches=new WeakMap();
 export async function searchPlaces(service,user,query,fetcher=fetch) {
+  if(query.report_coverage !== '1')return cachedSearchPlaces(service,user,query,fetcher);
+  const latitude=Number(query.latitude),longitude=Number(query.longitude);
+  if(!String(query.latitude??'').trim() || !String(query.longitude??'').trim()
+    || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude)>90 || Math.abs(longitude)>180)
+    throw new AppError('Choose a valid location.');
+  await service.limited(`report-coverage:${user.uid}`,120);
+  // Read current coverage outside the geocoder cache. Never trust a search
+  // label or the account's home address to determine report eligibility.
+  const [area,coverage]=await Promise.all([service.findBarangay(latitude,longitude),service.get('meta',monitoringSiteCoverageId)]);
+  const monitoring_coverage={allowed:isMonitoringSiteAllowed(area,coverage),message:monitoringCoverageMessage(coverage)};
+  if(!monitoring_coverage.allowed)return {places:[],barangay:area,monitoring_coverage};
+  return {...await cachedSearchPlaces(service,user,query,fetcher),monitoring_coverage};
+}
+async function cachedSearchPlaces(service,user,query,fetcher) {
   const reverse = query.latitude != null || query.longitude != null;
   const latitude = Number(query.latitude), longitude = Number(query.longitude);
   if(reverse && (!String(query.latitude ?? '').trim() || !String(query.longitude ?? '').trim() || !isCebuPoint(latitude,longitude))) throw new AppError('Choose a location in Cebu.');

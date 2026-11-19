@@ -42,7 +42,7 @@ test('weak or conflicting species traits never produce a confident identificatio
 test('shared verified sites are available across home barangays; coordinate placeholders stay out',async()=>{
   const service=new Service({});
   service.rows=async name=>name==='clusters'?[
-    {id:1,name:'Cebu coast',visibility:'shared',active:1,verified_count:1,barangay_id:5,center_lat:10.28,center_lng:123.88},
+    {id:1,name:'Cebu coast',visibility:'shared',active:1,verified_count:1,barangay_id:5,center_lat:10.28,center_lng:123.88,province:'Cebu',city_municipality:'Cebu City'},
     {id:2,name:'Pending coast',visibility:'personal',created_by:7,verified_count:0},
     {id:3,name:'Pinned location (10.28, 123.88)',visibility:'personal',created_by:9,verified_count:1}]:[];
   service.get=async()=>null;

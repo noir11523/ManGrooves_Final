@@ -1,10 +1,15 @@
 import {isNamedSite} from './site-access.js';
 import {randomUUID} from 'node:crypto';
 import {AppError,integer,text,now,requireRole,validateLocation} from './domain.js';
+import {isMonitoringSiteAllowed,monitoringSiteCoverageId} from './monitoring-site-coverage.js';
 
 export async function manageSites(service,user,input) {
   requireRole(user,'system_admin','expert');
-  if (!input) return {sites:(await service.rows('clusters')).filter(s=>!s.deleted_at).sort((a,b)=>String(a.name).localeCompare(String(b.name))),barangays:(await service.rows('barangays')).filter(b=>b.province==='Cebu')};
+  if (!input) {
+    const [sites,barangays,coverage]=await Promise.all([service.rows('clusters'),service.rows('barangays'),service.get('meta',monitoringSiteCoverageId)]);
+    return {sites:sites.filter(s=>!s.deleted_at).sort((a,b)=>String(a.name).localeCompare(String(b.name))),
+      barangays:barangays.filter(b=>isMonitoringSiteAllowed(b,coverage))};
+  }
   const id=input.id?integer(input.id,'site'):(await service.ids())[0];
   if(input.action==='approve')throw new AppError('Sites are added to the shared list after their first report is verified.',409);
   if(input.action==='delete')return service.db.runTransaction(async tx=>{
@@ -32,6 +37,11 @@ export async function manageSites(service,user,input) {
     if(input.id&&!previous)throw new AppError('Site not found.',404);
     if(previous?.deleted_at)throw new AppError('Site not found.',404);
     if(previous&&input.version!==undefined&&input.version!==(previous.version??''))throw new AppError('This site changed. Reload before saving.',409);
+    const coverage=(await tx.get(service.ref('meta',monitoringSiteCoverageId))).data();
+    const siteMoved=!previous || Number(previous.barangay_id)!==barangayId
+      || Number(previous.center_lat)!==location.latitude || Number(previous.center_lng)!==location.longitude;
+    if(siteMoved&&!isMonitoringSiteAllowed(barangay,coverage))
+      throw new AppError('Choose a monitoring site inside an allowed Cebu area.');
     const lockRef=service.ref('meta','clusters'),lock=(await tx.get(lockRef)).data();
     const sites=await service.transactionRows(tx,'clusters',[['barangay_id','==',barangayId]]);
     if(active&&sites.some(s=>s.id!==id&&!s.deleted_at&&Number(s.active)!==0&&(s.visibility!=='personal'||s.created_by===previous?.created_by)&&s.name.trim().toLowerCase()===name.toLowerCase()))throw new AppError('An active site with this name already exists in this barangay.',409);

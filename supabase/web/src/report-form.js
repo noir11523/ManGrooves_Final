@@ -1,6 +1,6 @@
 import {bindPhotoPreview} from './photo-preview.js';
 import {prepareReportPhoto} from './photo-quality.js';
-import {namedAddress,addressReady,resolvedAddress} from './report-address.js';
+import {namedAddress,addressReady,resolvedAddress,addressPoint} from './report-address.js';
 import {resolveAnimalChoices} from './observation-selection.js';
 import {traitLabels,traitHeadings} from './trait-labels.js';
 import {validateReportPhotos,checkReportPhotos,isPhotoConflict,photoConflictMessage} from './report-photos.js';
@@ -27,6 +27,32 @@ export async function reportWizard(node, query, user = null) {
   const clearPhotos=async()=>{await closeupStorage.clear();await Promise.all(extraStorage.map(s=>s.clear()));};
   let extraUrls=[],photoWork=Promise.resolve();
   const checkPhotos=photos=>checkReportPhotos(photos,api,draft.fields.submission_token);
+  const coverageEnabled=Boolean(data.location?.monitoring_coverage);
+  let coveragePoint='',coverageAllowed=false,coverageMessage='',coverageGeneration=0;
+  const coverageReady=()=>!coverageEnabled || (coverageAllowed && coveragePoint===addressPoint(draft.fields));
+  const detailsCoverageBlocked=()=>coverageEnabled && Boolean(draft.fields.location_source) && !coverageReady();
+  const coverageQuery=()=>coverageEnabled?{report_coverage:'1'}:{};
+  const acceptCoverage=result=>{
+    if(!coverageEnabled)return;
+    coveragePoint=addressPoint(draft.fields);
+    coverageAllowed=result.monitoring_coverage?.allowed===true;
+    coverageMessage=coverageAllowed?'':result.monitoring_coverage?.message||'Could not check this location. Retry or choose another pin.';
+  };
+  async function checkDetailsCoverage(){
+    if(!coverageEnabled)return;
+    const generation=++coverageGeneration,point=addressPoint(draft.fields);
+    coverageAllowed=false;coverageMessage='Checking report location...';updateAddressControls();
+    if(!draft.fields.location_source){coverageMessage='';updateAddressControls();return;}
+    try{
+      const result=await api('places.php',{query:{latitude:draft.fields.latitude,longitude:draft.fields.longitude,...coverageQuery()}});
+      if(stopped||draft.step!==0||generation!==coverageGeneration||point!==addressPoint(draft.fields))return;
+      acceptCoverage(result);
+    }catch{
+      if(stopped||draft.step!==0||generation!==coverageGeneration||point!==addressPoint(draft.fields))return;
+      coverageMessage='Could not check this location. Retry or choose another pin.';
+    }
+    updateAddressControls();
+  }
   let draftMessage = '', saveWarning = '';
   let closeupUrl=null;
   if (scope != null || !draft.dirty || draft.owner !== scope) {
@@ -60,7 +86,7 @@ export async function reportWizard(node, query, user = null) {
   }
   if(!namedAddress(draft.fields.sitio_name))draft.fields.sitio_name='';
   if(!namedAddress(draft.fields.place_query))draft.fields.place_query='';
-  if(draft.step>1&&!addressReady(draft.fields))draft.step=1;
+  if(draft.step>1&&(!addressReady(draft.fields)||!coverageReady()))draft.step=1;
   draft.fields.submission_token ||= crypto.randomUUID();
   draft.owner = scope;
   let showObservationCategory = () => {};
@@ -186,6 +212,7 @@ export async function reportWizard(node, query, user = null) {
       button.disabled = true;handlingForm=true;
       try {
         await photoWork;
+        if(detailsCoverageBlocked() || (draft.step>=1&&!coverageReady()))throw new Error(coverageMessage||'Choose a location inside the monitoring area.');
         if (draft.step === 0 || draft.step === 3) await validateReportPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos]);
         if (draft.step === 0 && (!draft.photo || !draft.closeupPhoto)) throw new Error('Add a site overview and a close-up photo from this visit.');
         if(draft.step===0 && draft.fields.count_unknown==='1' && !draft.fields.cluster_id && !(draft.fields.sitio_name||draft.fields.place_query)?.trim())throw new Error('Select a site or enter a barangay first.');
@@ -250,7 +277,19 @@ export async function reportWizard(node, query, user = null) {
       bindPhotoPreview($('#'+id),`Enlarge ${label} photo`);
     }
     photoGrid.insertAdjacentHTML('afterend', '<div class="extra-photo-picker" aria-label="Extra photos (optional)"><div id="extra-previews"></div><button type="button" class="outline add-photo" id="add-photos" aria-label="Add another photo"><span aria-hidden="true">＋</span> Photo</button><small id="extra-count"></small><input id="extra-photos" name="extra_photos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></div>');
-    let photoBusy=false;
+    let photoBusy=false,followupBlocked=false;
+    const coverageNotice=document.createElement('div');coverageNotice.className='notice';coverageNotice.hidden=true;
+    coverageNotice.innerHTML='<span role="status"></span> <button type="button" class="outline">Change location</button>';
+    $('#step-body').append(coverageNotice);
+    coverageNotice.querySelector('button').onclick=()=>{save($('#report-form'));draft.step=1;void render();};
+    updateAddressControls=()=>{
+      if(draft.step!==0)return;
+      const blocked=detailsCoverageBlocked();
+      $('#next').disabled=photoBusy||followupBlocked||blocked;
+      coverageNotice.hidden=!blocked;
+      coverageNotice.querySelector('span').textContent=coverageMessage||'Checking report location...';
+    };
+    addressEdited=()=>{coverageGeneration++;coverageAllowed=false;coverageMessage='Choose a result or change the location pin.';updateAddressControls();};
     const showPhoto = () => {
       extraUrls.forEach(URL.revokeObjectURL);extraUrls=draft.extraPhotos.map(p=>URL.createObjectURL(p));
       $('#extra-previews').innerHTML=extraUrls.map((url,i)=>`<figure><img class="inline-photo" src="${url}" alt="Additional photo ${i+1}"><button type="button" class="remove-photo" aria-label="Remove photo ${i+1}" data-remove-photo="${i}">×</button></figure>`).join('');
@@ -273,7 +312,7 @@ export async function reportWizard(node, query, user = null) {
         node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=true);
         try{status.textContent=await work()||'Photos ready.';}
         catch(error){const message=node.querySelector('#report-form .error');status.hidden=true;if(!stopped&&draft.step===0&&message)showError(message,detailsPhotoMessage(error));}
-        finally{photoBusy=false;next.disabled=wasDisabled;node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=false);}
+        finally{photoBusy=false;next.disabled=wasDisabled;node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=false);updateAddressControls();}
       });return photoWork;
     };
     const addPhotos=files=>changePhotos(async()=>{
@@ -329,11 +368,11 @@ export async function reportWizard(node, query, user = null) {
       const preferred=draft.fields.parent_report_id,next=$('#next');
       draft.followup=Boolean(preferred);$('#followup').checked=draft.followup;
       target.hidden = true;target.innerHTML='';
-      next.disabled=false;
+      followupBlocked=false;updateAddressControls();
       if (!preferred) { draft.fields.parent_report_code='';changed();return; }
-      if (!cluster) { target.hidden=false;target.innerHTML='<p class="notice">This follow-up site is unavailable. Return to the original report to check its status.</p>';next.disabled=true;return; }
+      if (!cluster) { target.hidden=false;target.innerHTML='<p class="notice">This follow-up site is unavailable. Return to the original report to check its status.</p>';followupBlocked=true;updateAddressControls();return; }
       target.innerHTML = '<p class="muted">Loading your previous visits…</p>';
-      target.hidden=false;next.disabled=true;
+      target.hidden=false;followupBlocked=true;updateAddressControls();
       let reports;
       try { ({reports}=await api('previous-reports.php', {query: {cluster_id: cluster}})); }
       catch(error) {
@@ -343,10 +382,10 @@ export async function reportWizard(node, query, user = null) {
         return;
       }
       if (current !== generation || !target.isConnected) return;
-      next.disabled=false;
+      followupBlocked=false;updateAddressControls();
       const requested=reports.find(r=>String(r.id)===String(preferred));
       target.hidden=false;
-      if(!requested){target.innerHTML='<p class="notice">This follow-up is no longer available. Return to the report to check its status.</p><button type="button" class="outline">Retry previous visits</button>';target.querySelector('button').onclick=followups;next.disabled=true;return;}
+      if(!requested){target.innerHTML='<p class="notice">This follow-up is no longer available. Return to the report to check its status.</p><button type="button" class="outline">Retry previous visits</button>';target.querySelector('button').onclick=followups;followupBlocked=true;updateAddressControls();return;}
       target.innerHTML=`<p class="notice">Follow-up visit · An expert requested a new observation.</p>${select('parent_report_id','Previous visit',[[requested.id,`${requested.report_code} · ${requested.health}`]],preferred,'required')}`;
       const rememberVisit = () => {
         const selected=target.querySelector('[name=parent_report_id]')?.value;
@@ -375,6 +414,7 @@ export async function reportWizard(node, query, user = null) {
       draft.fields.place_query=placeInput.value;$('#place-search').value=placeInput.value;
       $('#place-results').replaceChildren();
       followups().catch(e=>toast(friendly(e)));
+      void checkDetailsCoverage();
     };
     if (draft.fields.cluster_id) {
       const site=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
@@ -389,8 +429,9 @@ export async function reportWizard(node, query, user = null) {
       $('[name=cluster_id]').value='';placeInput.value=place.label.slice(0,120);
       Object.assign(draft.fields,{cluster_id:'',parent_report_id:'',sitio_name:placeInput.value,place_query:place.label,
         latitude:place.latitude,longitude:place.longitude,location_source:'manual',location_accuracy:'',location_selection:'search',selected_place_label:placeInput.value,report_barangay:''});
-      resolvedAddress(draft.fields);draft.followup=false;updateCount();changed();
+      resolvedAddress(draft.fields);draft.followup=false;updateCount();changed();void checkDetailsCoverage();
     });
+    void checkDetailsCoverage();
   }
   function bindPlaceSearch(input,target,onSelect,bias=()=>({lat:Number(draft.fields.latitude)||Number(data.location.barangay?.center_lat)||10.3157,lng:Number(draft.fields.longitude)||Number(data.location.barangay?.center_lng)||123.8854})) {
     input.oninput=()=>{
@@ -451,7 +492,7 @@ export async function reportWizard(node, query, user = null) {
     updateAddressControls=()=>{
       if(draft.step!==1||canvas!==currentCanvas)return;
       const pending=draft.fields.address_state==='pending';
-      $('#next').disabled=pending||gpsButton.getAttribute('aria-busy')==='true'||!addressReady(draft.fields);
+      $('#next').disabled=pending||gpsButton.getAttribute('aria-busy')==='true'||!addressReady(draft.fields)||!coverageReady();
       $('#next').textContent=pending?'Finding address...':'Next';
       locationInput.setAttribute('aria-busy',String(pending));
       $('#retry-address').hidden=draft.fields.address_state!=='error';
@@ -467,12 +508,15 @@ export async function reportWizard(node, query, user = null) {
       const generation=++addressGeneration;
       const knownName=(draft.fields.cluster_id||addressReady(draft.fields)||['site','search'].includes(draft.fields.location_selection))&&namedAddress(draft.fields.sitio_name)?draft.fields.sitio_name:'';
       draft.fields.address_state='pending';
+      if(coverageEnabled)coverageAllowed=false;
       $('#nearby-address').textContent='Finding the address...';updateAddressControls();
       const current=()=>!stopped&&draft.step===1&&canvas===currentCanvas&&generation===addressGeneration
         &&Math.abs(Number(draft.fields.latitude)-Number(lat))<0.0000001&&Math.abs(Number(draft.fields.longitude)-Number(lng))<0.0000001;
       try {
-        const result=await api('places.php',{query:{latitude:lat,longitude:lng}});
+        const result=await api('places.php',{query:{latitude:lat,longitude:lng,...coverageQuery()}});
         if(!current())return;
+        acceptCoverage(result);
+        if(!coverageReady()){draft.fields.address_state='error';$('#nearby-address').textContent=coverageMessage;return;}
         const label=result.places?.[0]?.label;
         if(!namedAddress(label)&&!knownName)throw new Error('Address not found.');
         draft.fields.report_barangay=result.barangay?[result.barangay.name,result.barangay.city_municipality].filter(Boolean).join(', '):'';
@@ -482,7 +526,8 @@ export async function reportWizard(node, query, user = null) {
         resolvedAddress(draft.fields);$('#nearby-address').textContent='';
       } catch {
         if(!current())return;
-        if(knownName){resolvedAddress(draft.fields);$('#nearby-address').textContent='';}
+        if(coverageEnabled){coverageAllowed=false;draft.fields.address_state='error';$('#nearby-address').textContent='Could not check this location. Retry or choose another pin.';}
+        else if(knownName){resolvedAddress(draft.fields);$('#nearby-address').textContent='';}
         else {draft.fields.address_state='error';$('#nearby-address').textContent='Address not found. Retry or search a place.';}
       } finally {if(current()){updateAddressControls();void persist();}}
     }
@@ -514,6 +559,7 @@ export async function reportWizard(node, query, user = null) {
         locationInput.readOnly=Boolean(draft.fields.parent_report_id);
         if(draft.fields.cluster_id){draft.fields.sitio_name=site.sitio_name||site.name;}
         else {draft.fields.sitio_name='';}
+        if(coverageEnabled)coverageAllowed=false;
         draft.fields.address_state='pending';$('#nearby-address').textContent='Finding the address...';updateAddressControls();
         locationInput.value=draft.fields.sitio_name;draft.fields.place_query=locationInput.value;
         draft.fields.report_barangay='';$('#report-barangay').textContent='Finding barangay…';
