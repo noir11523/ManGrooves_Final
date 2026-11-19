@@ -36,7 +36,7 @@ export async function reportWizard(node, query, user = null) {
     if(!coverageEnabled)return;
     coveragePoint=addressPoint(draft.fields);
     coverageAllowed=result.monitoring_coverage?.allowed===true;
-    coverageMessage=coverageAllowed?'':result.monitoring_coverage?.message||'Could not check this location. Retry or choose another pin.';
+    coverageMessage=coverageAllowed?'':result.monitoring_coverage?.message||'Could not check this location. Select a search result or move the pin.';
   };
   async function checkDetailsCoverage(){
     if(!coverageEnabled)return;
@@ -49,7 +49,7 @@ export async function reportWizard(node, query, user = null) {
       acceptCoverage(result);
     }catch{
       if(stopped||draft.step!==0||generation!==coverageGeneration||point!==addressPoint(draft.fields))return;
-      coverageMessage='Could not check this location. Retry or choose another pin.';
+      coverageMessage='Could not check this location. Select a search result or move the pin.';
     }
     updateAddressControls();
   }
@@ -279,14 +279,14 @@ export async function reportWizard(node, query, user = null) {
     photoGrid.insertAdjacentHTML('afterend', '<div class="extra-photo-picker" aria-label="Extra photos (optional)"><div id="extra-previews"></div><button type="button" class="outline add-photo" id="add-photos" aria-label="Add another photo"><span aria-hidden="true">＋</span> Photo</button><small id="extra-count"></small><input id="extra-photos" name="extra_photos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></div>');
     let photoBusy=false,followupBlocked=false;
     const coverageNotice=document.createElement('div');coverageNotice.className='notice';coverageNotice.hidden=true;
-    coverageNotice.innerHTML='<span role="status"></span> <button type="button" class="outline">Change location</button>';
+    coverageNotice.innerHTML='<span role="status"></span>';
     $('#step-body').append(coverageNotice);
-    coverageNotice.querySelector('button').onclick=()=>{save($('#report-form'));draft.step=1;void render();};
     updateAddressControls=()=>{
       if(draft.step!==0)return;
       const blocked=detailsCoverageBlocked();
       $('#next').disabled=photoBusy||followupBlocked||blocked;
       coverageNotice.hidden=!blocked;
+      if(blocked&&!draft.fields.parent_report_id){siteRow.hidden=false;locationField.hidden=false;}
       coverageNotice.querySelector('span').textContent=coverageMessage||'Checking report location...';
     };
     addressEdited=()=>{coverageGeneration++;coverageAllowed=false;coverageMessage='Choose a result or change the location pin.';updateAddressControls();};
@@ -348,7 +348,7 @@ export async function reportWizard(node, query, user = null) {
     $('#extra-photos').onchange=event=>{void addPhotos([...event.target.files]);event.target.value='';};
     const countInput=$('[name=observed_alive_count]');
     countInput.closest('.row').insertAdjacentHTML('afterend',`<div class="count-choice"><label class="count-toggle"><input id="count-unknown" type="checkbox" aria-describedby="count-hint" ${draft.fields.count_unknown==='1'?'checked':''}><span>Unable to count</span></label><p id="count-hint" role="status" hidden></p></div>`);
-    const updateCount=()=>{const unknown=$('#count-unknown').checked;draft.fields.count_unknown=unknown?'1':'0';countInput.disabled=unknown;countInput.required=!unknown;countInput.closest('.row').hidden=unknown;$('#count-hint').hidden=!unknown;$('#count-hint').textContent='Select a site or enter a barangay.';siteRow.hidden=!unknown&&!draft.fields.parent_report_id;$('[name=sitio_name]').required=unknown&&!draft.fields.cluster_id;};
+    const updateCount=()=>{const unknown=$('#count-unknown').checked;draft.fields.count_unknown=unknown?'1':'0';countInput.disabled=unknown;countInput.required=!unknown;countInput.closest('.row').hidden=unknown;$('#count-hint').hidden=!unknown;$('#count-hint').textContent='Select a site or enter a barangay.';siteRow.hidden=!unknown&&!draft.fields.parent_report_id&&!detailsCoverageBlocked();$('[name=sitio_name]').required=unknown&&!draft.fields.cluster_id;};
     siteRow.before(node.querySelector('.count-choice'));updateCount();$('#count-unknown').onchange=()=>{updateCount();changed();};
     const placeInput = $('[name=sitio_name]');placeInput.required=draft.fields.count_unknown==='1'&&!draft.fields.cluster_id;
     const useCamera=async closeup=>{try{const photo=await capturePhoto();if(!photo||!node.isConnected)return;await replacePhoto(photo,closeup);}catch(error){toast(friendly(error));}};
@@ -460,7 +460,7 @@ export async function reportWizard(node, query, user = null) {
     };
   }
   function locationStep() {
-    $('#step-body').innerHTML = `<div class="report-location"><div class="location-tools"><h2>Where is the mangrove?</h2><label class="field"><span>Search a barangay or landmark</span><input id="place-search" name="place_query" type="search" autocomplete="off" placeholder="Barangay, street, or landmark"><small>Choose a result or move the pin.</small></label><div id="place-results" class="list" role="status"></div><div class="actions location-actions"><button type="button" id="gps" aria-describedby="location-status">Use my location</button><button type="button" id="manual-pin" class="outline">Adjust pin</button></div><p id="location-status" class="muted" role="status">Check the pin.</p><div class="address-status" aria-live="polite"><span id="nearby-address"></span><button type="button" id="retry-address" class="outline" hidden>Retry address</button></div><p id="report-barangay" role="status"></p></div><div id="location-map" class="map"></div></div><input type="hidden" name="latitude" value="${esc(draft.fields.latitude??'')}"><input type="hidden" name="longitude" value="${esc(draft.fields.longitude??'')}">`;
+    $('#step-body').innerHTML = `<div class="report-location"><div class="location-tools"><h2>Where is the mangrove?</h2><label class="field"><span>Search a barangay or landmark</span><input id="place-search" name="place_query" type="search" autocomplete="off" placeholder="Barangay, street, or landmark"><small>Choose a result or move the pin.</small></label><div id="place-results" class="list" role="status"></div><div class="actions location-actions"><button type="button" id="gps" aria-describedby="location-status">Use my location</button><button type="button" id="manual-pin" class="outline">Adjust pin</button></div><p id="location-status" class="muted" role="status">Check the pin.</p><div class="address-status" aria-live="polite"><span id="nearby-address"></span></div><p id="report-barangay" role="status"></p></div><div id="location-map" class="map"></div></div><input type="hidden" name="latitude" value="${esc(draft.fields.latitude??'')}"><input type="hidden" name="longitude" value="${esc(draft.fields.longitude??'')}">`;
     const locationInput = $('#place-search');
     locationInput.readOnly=Boolean(draft.fields.parent_report_id);
     const gpsButton = $('#gps');
@@ -495,8 +495,7 @@ export async function reportWizard(node, query, user = null) {
       $('#next').disabled=pending||gpsButton.getAttribute('aria-busy')==='true'||!addressReady(draft.fields)||!coverageReady();
       $('#next').textContent=pending?'Finding address...':'Next';
       locationInput.setAttribute('aria-busy',String(pending));
-      $('#retry-address').hidden=draft.fields.address_state!=='error';
-      $('#nearby-address').parentElement.hidden=!$('#nearby-address').textContent&&$('#retry-address').hidden;
+      $('#nearby-address').parentElement.hidden=!$('#nearby-address').textContent;
     };
     addressEdited=()=>{
       ++addressGeneration;clearTimeout(addressTimer);
@@ -526,12 +525,11 @@ export async function reportWizard(node, query, user = null) {
         resolvedAddress(draft.fields);$('#nearby-address').textContent='';
       } catch {
         if(!current())return;
-        if(coverageEnabled){coverageAllowed=false;draft.fields.address_state='error';$('#nearby-address').textContent='Could not check this location. Retry or choose another pin.';}
+        if(coverageEnabled){coverageAllowed=false;draft.fields.address_state='error';$('#nearby-address').textContent='Could not check this location. Select a search result or move the pin.';}
         else if(knownName){resolvedAddress(draft.fields);$('#nearby-address').textContent='';}
-        else {draft.fields.address_state='error';$('#nearby-address').textContent='Address not found. Retry or search a place.';}
+        else {draft.fields.address_state='error';$('#nearby-address').textContent='Address not found. Select a search result or move the pin.';}
       } finally {if(current()){updateAddressControls();void persist();}}
     }
-    $('#retry-address').onclick=()=>void address(Number(draft.fields.latitude),Number(draft.fields.longitude));
     function choose(lat, lng, source, accuracy, restoring = false) {
       const selectedSite=data.clusters.find(c=>String(c.id)===String(draft.fields.cluster_id));
       if(!restoring && draft.fields.parent_report_id && (!selectedSite || canvas.distance([lat,lng],[selectedSite.center_lat,selectedSite.center_lng])>Number(selectedSite.radius_meters||75))){

@@ -47,6 +47,7 @@ test('coverage blocks Details and Location, survives photo work and recovers aft
   let allowed=false,offline=false;
   globalThis.testApi=async(path,{query}={})=>{
     if(path==='report-form.php')return {criteria:[],clusters:[],location:{monitoring_coverage:{mode:'cities',cities:['Cebu City']}}};
+    if(query.q)return {places:[{label:'Cebu City coast',latitude:10.28,longitude:123.88}]};
     assert.equal(query.report_coverage,'1');
     if(offline)throw Error('Offline');
     return {places:[{label:'Coastal barangay'}],monitoring_coverage:{allowed,message:'Choose a location in Cebu City.'}};
@@ -63,14 +64,19 @@ test('coverage blocks Details and Location, survives photo work and recovers aft
     for(let i=0;i<100&&ui.reportDraft.extraPhotos.length<2;i++)await new Promise(r=>setTimeout(r,10));
     assert.equal(ui.reportDraft.extraPhotos.length,2);assert.equal($('#next').disabled,true);
     await submit();assert.equal(ui.reportDraft.step,0);
-    [...$('#step-body').querySelectorAll('button')].find(b=>b.textContent==='Change location').click();await tick();await tick();
-    assert.equal(ui.reportDraft.step,1);assert.equal($('#next').disabled,true);
+    assert.equal([...$('#step-body').querySelectorAll('button')].some(b=>b.textContent==='Change location'),false);
+    assert.equal($('#place-search').closest('.field').hidden,false);
+    assert.equal($('#place-search').closest('.field').parentElement.hidden,false);
+    const search=$('#place-search');search.value='Cebu';search.dispatchEvent(new Event('input',{bubbles:true}));
+    await new Promise(r=>setTimeout(r,380));allowed=true;$('.place-result').click();await tick();
+    assert.equal($('#next').disabled,false);await submit();await tick();
+    assert.equal(ui.reportDraft.step,1);assert.equal($('#retry-address'),null);
     allowed=true;globalThis.testMarker.setLatLng([10.28,123.88]);globalThis.testMarker.events.dragend();
     assert.equal($('#next').disabled,true);await new Promise(r=>setTimeout(r,300));await tick();
     assert.equal($('#next').disabled,false);
     offline=true;globalThis.testMarker.setLatLng([10.281,123.881]);globalThis.testMarker.events.dragend();
     await new Promise(r=>setTimeout(r,300));await tick();assert.equal($('#next').disabled,true);
-    offline=false;$('#retry-address').click();await tick();assert.equal($('#next').disabled,false);
+    offline=false;testMap.events.click({latlng:{lat:10.28,lng:123.88}});await new Promise(r=>setTimeout(r,300));await tick();assert.equal($('#next').disabled,false);
     $('#previous').click();await tick();await tick();assert.equal($('#next').disabled,false);
     assert.equal(ui.reportDraft.extraPhotos.length,2);assert.equal(ui.reportDraft.photo.name,'one.jpg');
   }finally{dispose();ui.reportDraft.reset();}
@@ -928,16 +934,16 @@ test('an unresolved pin blocks Next, retries without losing details and rejects 
   assert.match($('#nearby-address').textContent,/Finding the address/);
   await submit();assert.equal(ui.reportDraft.step,1);
   requests[0].resolve({places:[]});await tick();
-  assert.equal($('#next').disabled,true);assert.equal($('#retry-address').hidden,false);
-  assert.match($('#nearby-address').textContent,/Retry or search/);assert.equal(ui.reportDraft.fields.sitio_name,'');
-  $('#retry-address').click();requests[1].resolve({places:[{label:'Parian, Cebu City'}],barangay:{name:'Parian',city_municipality:'Cebu City'}});await tick();
+  assert.equal($('#next').disabled,true);assert.equal($('#retry-address'),null);
+  assert.match($('#nearby-address').textContent,/Select a search result or move the pin/);assert.equal(ui.reportDraft.fields.sitio_name,'');
+  testMap.events.click({latlng:{lat:10.28,lng:123.88}});await new Promise(r=>setTimeout(r,280));requests[1].resolve({places:[{label:'Parian, Cebu City'}],barangay:{name:'Parian',city_municipality:'Cebu City'}});await tick();
   assert.equal($('#next').disabled,false);assert.equal($('#place-search').value,'Parian, Cebu City');
   testMap.events.click({latlng:{lat:10.29,lng:123.89}});assert.equal($('#next').disabled,true);assert.equal($('#place-search').value,'');
   await new Promise(r=>setTimeout(r,280));
   testMap.events.click({latlng:{lat:10.30,lng:123.90}});await new Promise(r=>setTimeout(r,280));
   requests[2].resolve({places:[{label:'Old place'}]});await tick();assert.equal($('#next').disabled,true);assert.equal($('#place-search').value,'');
   requests[3].reject(new Error('offline'));await tick();assert.equal($('#next').disabled,true);
-  $('#retry-address').click();requests[4].resolve({places:[{label:'New coast, Cebu City'}]});await tick();
+  testMap.events.click({latlng:{lat:10.30,lng:123.90}});await new Promise(r=>setTimeout(r,280));requests[4].resolve({places:[{label:'New coast, Cebu City'}]});await tick();
   assert.equal($('#next').disabled,false);assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep this note');
   await submit();assert.equal(ui.reportDraft.step,2);
  }finally{dispose();ui.reportDraft.reset();}
