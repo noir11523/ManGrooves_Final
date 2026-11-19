@@ -214,15 +214,21 @@ export async function reportWizard(node, query, user = null) {
         if (node.isConnected && !stopped) {
           if (isPhotoConflict(e)) {
             draft.step=0; await render();
-            showError(node.querySelector('#report-form .error'),photoConflictMessage(e));
+            showError(node.querySelector('#report-form .error'),detailsPhotoMessage(e));
           } else showError(error, friendly(e));
         }
       }
       finally { button.disabled = false;handlingForm=false;updateAddressControls(); }
     };
   }
+  const detailsPhotoMessage=error=>error?.code==='photo_already_submitted'
+      ? 'Already used in a previous report. Choose a different photo.'
+      : error?.code==='photo_duplicate'
+      ? 'Already selected for this report. Choose a different photo.'
+      : isPhotoConflict(error)?photoConflictMessage(error):friendly(error);
   async function details() {
-    $('#step-body').innerHTML = `<h2>What did you observe?</h2><div class="field report-photo-picker"><span>Site overview</span><small>Show the whole mangrove and site. Use a clear, well-lit photo.</small><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden><input type="file" id="camera-photo" accept="image/*" capture="environment" hidden><div class="actions"><button type="button" class="outline" id="take-photo">Camera</button><button type="button" class="outline" id="choose-photo">Gallery</button></div><small>JPG, PNG, or WebP · Up to 5 MB</small></div><img id="photo-preview" class="preview-photo" alt="Your selected photo" ${draft.photo ? '' : 'hidden'}>
+    node.querySelector('#report-form .error').style.whiteSpace='pre-line';
+    $('#step-body').innerHTML = `<h2>What did you observe?</h2><div class="field report-photo-picker"><span>Site overview</span><small>Show the whole mangrove and its surroundings.</small><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden><input type="file" id="camera-photo" accept="image/*" capture="environment" hidden><div class="actions"><button type="button" class="outline" id="take-photo">Camera</button><button type="button" class="outline" id="choose-photo">Gallery</button></div><small>JPG, PNG, or WebP · Up to 5 MB</small></div><img id="photo-preview" class="preview-photo" alt="Your selected photo" ${draft.photo ? '' : 'hidden'}>
       <div class="row">${select('cluster_id', 'Site', [['', 'New site'], ...data.clusters.map(c => [c.id, c.name])], draft.fields.cluster_id, draft.fields.parent_report_id?'disabled':'')}${field('sitio_name', 'Location name', draft.fields.sitio_name, 'text', 'required maxlength="120" placeholder="Sitio or nearby landmark"')}</div>${draft.fields.parent_report_id?'<p class="muted">This follow-up stays linked to its requested site.</p>':''}
       <input type="checkbox" id="followup" name="followup" hidden ${draft.fields.parent_report_id ? 'checked' : ''}><div id="followup-options" ${draft.fields.parent_report_id ? '' : 'hidden'}></div>
       <div class="row count-row">${field('observed_alive_count', 'Living mangroves counted', draft.fields.observed_alive_count, 'number', 'required min="0" max="1000000" step="1"')}</div>
@@ -234,7 +240,7 @@ export async function reportWizard(node, query, user = null) {
     locationField.hidden=Boolean(draft.fields.cluster_id);
     const locationName=document.createElement('input');locationName.type='hidden';locationName.name='sitio_name';locationName.value=draft.fields.sitio_name;
     siteRow.after(locationName);
-    $('#photo-preview').insertAdjacentHTML('afterend','<div class="field report-photo-picker"><span>Close-up</span><small>Show leaves, roots, or damage up close. Avoid blurry photos.</small><input type="file" name="closeup_photo" accept="image/jpeg,image/png,image/webp" hidden><div class="actions"><button type="button" class="outline" id="closeup-camera">Camera</button><button type="button" class="outline" id="closeup-gallery">Gallery</button></div><img id="closeup-preview" class="preview-photo" alt="Your close-up photo" hidden></div>');
+    $('#photo-preview').insertAdjacentHTML('afterend','<div class="field report-photo-picker"><span>Close-up</span><small>Show leaves, roots, or any visible damage up close.</small><input type="file" name="closeup_photo" accept="image/jpeg,image/png,image/webp" hidden><div class="actions"><button type="button" class="outline" id="closeup-camera">Camera</button><button type="button" class="outline" id="closeup-gallery">Gallery</button></div><img id="closeup-preview" class="preview-photo" alt="Your close-up photo" hidden></div>');
     const photoGrid=document.createElement('div');photoGrid.className='report-photo-grid';
     const overview=node.querySelector('.report-photo-picker'),closeup=$('#closeup-preview').closest('.report-photo-picker');
     overview.before(photoGrid);photoGrid.append(overview,closeup);overview.append($('#photo-preview'));
@@ -263,10 +269,10 @@ export async function reportWizard(node, query, user = null) {
       photoWork=photoWork.then(async()=>{
         if(stopped||draft.step!==0)return;
         const status=node.querySelector('#photo-status'),next=node.querySelector('#next'),wasDisabled=next.disabled;
-        photoBusy=true;status.textContent='Checking photo quality...';status.hidden=false;next.disabled=true;
+        photoBusy=true;status.textContent='Preparing photos...';status.hidden=false;next.disabled=true;
         node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=true);
-        try{status.textContent=await work()||'Photo quality passed.';}
-        catch(error){const message=node.querySelector('#report-form .error');status.hidden=true;if(!stopped&&draft.step===0&&message)showError(message,isPhotoConflict(error)?photoConflictMessage(error):friendly(error));}
+        try{status.textContent=await work()||'Photos ready.';}
+        catch(error){const message=node.querySelector('#report-form .error');status.hidden=true;if(!stopped&&draft.step===0&&message)showError(message,detailsPhotoMessage(error));}
         finally{photoBusy=false;next.disabled=wasDisabled;node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=false);}
       });return photoWork;
     };
@@ -282,13 +288,13 @@ export async function reportWizard(node, query, user = null) {
             await checkPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos,photo]);
             if(stopped||draft.step!==0)return;
             draft.extraPhotos.push(photo);added++;changed();showPhoto();
-          }catch(error){failures.push(`${file.name}: ${isPhotoConflict(error)?photoConflictMessage(error):friendly(error)}`);}
+          }catch(error){failures.push(`${file.name}: ${detailsPhotoMessage(error)}`);}
         }
         const message=$('#report-form .error');
         if(failures.length){
           if(!added)throw new Error(failures.join('\n'));
           showError(message,failures.join('\n'));
-          return `${added} ${added===1?'photo':'photos'} added. ${failures.length} rejected.`;
+          return `${added} ${added===1?'photo':'photos'} added. ${failures.length} skipped.`;
         }
         message.textContent='';
     });

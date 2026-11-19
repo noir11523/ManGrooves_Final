@@ -9,7 +9,7 @@ import 'api_client.dart';
 import 'photo_quality.dart';
 
 // Keep original bytes when possible. Decode oversized camera images directly to
-// a bounded bitmap; never upscale an inadequate original or distort its shape.
+// a bounded bitmap; never upscale an original or distort its shape.
 Future<XFile> preparePhoto(XFile file) async {
   final c = await photoQualityConfig();
   if (await file.length() > c['maxBytes']) {
@@ -54,12 +54,6 @@ Future<XFile> preparePhoto(XFile file) async {
     buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
     descriptor = await ui.ImageDescriptor.encoded(buffer);
     final w = descriptor.width, h = descriptor.height;
-    if (math.min(w, h) < c['minSide']) {
-      throw const ApiException(
-        'Photo resolution is too low. Please upload a higher-quality photo.',
-        code: 'photo_unclear',
-      );
-    }
     if (w * h <= c['maxPixels']) return file;
     if (w * h > 64000000) {
       throw const ApiException(
@@ -67,10 +61,7 @@ Future<XFile> preparePhoto(XFile file) async {
         code: 'photo_unclear',
       );
     }
-    final scale = math.max(
-      (c['minSide'] as num) / math.min(w, h),
-      math.min(1.0, (c['uploadSide'] as num) / math.max(w, h)),
-    );
+    final scale = math.min(1.0, (c['uploadSide'] as num) / math.max(w, h));
     final tw = (w * scale).round(), th = (h * scale).round();
     if (tw * th > c['maxPixels']) {
       throw const ApiException(

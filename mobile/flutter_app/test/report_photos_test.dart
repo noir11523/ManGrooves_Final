@@ -6,13 +6,32 @@ import 'package:mangrooves_mobile/core/report_photos.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('structural failures identify the affected photo and enforce ten photos', () async {
-    await expectLater(validateReportPhotos([
-      '../../supabase/test/fixtures/quality/clear.jpg',
-      '../../supabase/test/fixtures/quality/low-resolution.jpg',
-    ]), throwsA(isA<ApiException>().having((e) => e.photoIndices, 'affected slot', [1]).having((e) => e.message, 'resolution', contains('resolution is too low'))));
-    await expectLater(validateReportPhotos(List.filled(11, 'unused.jpg')), throwsA(isA<ApiException>().having((e) => e.message, 'limit', 'Use up to 10 photos.')));
-  });
+  test(
+    'structural failures identify the affected photo and enforce ten photos',
+    () async {
+      await expectLater(
+        validateReportPhotos([
+          '../../supabase/test/fixtures/quality/clear.jpg',
+          '../../supabase/test/fixtures/quality/clear.jpg',
+        ]),
+        throwsA(
+          isA<ApiException>()
+              .having((e) => e.photoIndices, 'affected slot', [1])
+              .having((e) => e.code, 'duplicate', 'photo_duplicate'),
+        ),
+      );
+      await expectLater(
+        validateReportPhotos(List.filled(11, 'unused.jpg')),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'limit',
+            'Use up to 10 photos.',
+          ),
+        ),
+      );
+    },
+  );
   test(
     'renaming a photo cannot bypass duplicate checking in any slot',
     () async {
@@ -21,9 +40,8 @@ void main() {
       );
       try {
         final first = await File('${directory.path}/overview.jpg').writeAsBytes(
-          await File(
-            '../../supabase/test/fixtures/quality/clear.jpg',
-          ).readAsBytes(),
+          await File('../../supabase/test/fixtures/quality/clear.jpg')
+              .readAsBytes(),
         );
         final second = await File('${directory.path}/closeup.jpg').writeAsBytes(
           await File('../../public/assets/img/observations/v1-green-leaf.jpg')

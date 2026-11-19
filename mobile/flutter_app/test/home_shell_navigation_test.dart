@@ -117,7 +117,11 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        expect(find.text('Report map'), findsOneWidget);
+        expect(find.text('Dashboard'), findsNothing);
+        expect(
+          find.text(role == 'system_admin' ? 'All reports' : 'Submit Report'),
+          findsWidgets,
+        );
         expect(find.byTooltip('Notifications'), findsOneWidget);
         await tester.tap(find.byTooltip('Menu'));
         await tester.pumpAndSettle();
@@ -130,15 +134,11 @@ void main() {
           of: menu,
           matching: find.text('Submit report'),
         );
-        expect(dashboard, findsOneWidget);
+        expect(dashboard, findsNothing);
         if (role == 'system_admin') {
           expect(submit, findsNothing);
         } else {
           expect(submit, findsOneWidget);
-          expect(
-            tester.getTopLeft(submit).dy,
-            greaterThan(tester.getTopLeft(dashboard).dy),
-          );
           expect(
             tester.getTopLeft(submit).dy,
             lessThan(tester.getTopLeft(find.text('Reports & Monitoring')).dy),
@@ -209,7 +209,13 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
-          expect(find.byType(BackButton), findsOneWidget);
+          final atDefault =
+              label == 'Submit Report' ||
+              (role == 'system_admin' && label == 'Reports');
+          expect(
+            find.byType(BackButton),
+            atDefault ? findsNothing : findsOneWidget,
+          );
           if (label == 'Reports') {
             expect(find.text('Report map'), findsNothing);
           }
@@ -229,9 +235,17 @@ void main() {
             isNull,
             reason: '$role $label must fit a small phone',
           );
-          await tester.tap(find.byType(BackButton));
+          if (!atDefault) await tester.tap(find.byType(BackButton));
           await tester.pumpAndSettle();
         }
+        // Leave the administrator's default Reports tab before testing re-entry.
+        await tester.tap(
+          find.descendant(
+            of: find.byType(NavigationBar),
+            matching: find.text('Account'),
+          ),
+        );
+        await tester.pumpAndSettle();
         final priorLoads = api.reportLoads;
         await tester.tap(
           find.descendant(

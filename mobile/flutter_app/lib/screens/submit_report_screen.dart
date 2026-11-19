@@ -173,7 +173,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   bool _clearingDraft = false;
   bool _pickingPhoto = false;
   bool _checkingPhotos = false;
-  bool _photoQualityPassed = false;
   String? _lastDraft;
   final _draftStatus = ValueNotifier<String>('');
   String? get _draftScope => widget.draftOwner == null
@@ -369,6 +368,10 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (draft['picking_photo'] == true && Platform.isAndroid) {
         final lost = await _picker.retrieveLostData();
         if (lost.files?.isNotEmpty == true) {
+          if (draft['picking_extra'] == true) {
+            await _addExtraPhotos(lost.files!);
+            return;
+          }
           final photo = await preparePhoto(lost.files!.first),
               extra = draft['picking_extra'] == true,
               closeup = draft['picking_closeup'] == true;
@@ -387,7 +390,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             } else {
               _photo = photo;
             }
-            _photoQualityPassed = true;
           } catch (error) {
             _step = 0;
             _error = error is ApiException
@@ -681,7 +683,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
     setState(() {
       _checkingPhotos = true;
-      _photoQualityPassed = false;
     });
     try {
       await _checkPhotos([
@@ -712,6 +713,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     setState(() => _pickingPhoto = true);
     try {
       await _saveDraft();
+      if (extra && source == ImageSource.gallery) {
+        final picked = await _picker.pickMultiImage(requestFullMetadata: false);
+        if (mounted) await _addExtraPhotos(picked);
+        return;
+      }
       final picked = await _picker.pickImage(
         source: source,
         requestFullMetadata: false,
@@ -720,7 +726,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       if (image != null && mounted) {
         setState(() {
           _checkingPhotos = true;
-          _photoQualityPassed = false;
         });
         await _checkPhotos([
           extra || closeup ? _photo?.path : image.path,
@@ -731,7 +736,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         if (!mounted) return;
         setState(() {
           _error = null;
-          _photoQualityPassed = true;
           if (extra) {
             _extraPhotos.add(image);
           } else if (closeup) {
@@ -753,6 +757,37 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         });
       }
       await _saveDraft();
+    }
+  }
+
+  Future<void> _addExtraPhotos(List<XFile> files) async {
+    final failures = <String>[];
+    for (final file in files) {
+      if (!mounted) return;
+      try {
+        if (_extraPhotos.length >= 8) {
+          throw const ApiException(
+            'Add up to eight additional photos (10 total).',
+          );
+        }
+        final photo = await preparePhoto(file);
+        await _checkPhotos([
+          _photo?.path,
+          _closeupPhoto?.path,
+          ..._extraPhotos.map((p) => p.path),
+          photo.path,
+        ]);
+        if (!mounted) return;
+        setState(() => _extraPhotos.add(photo));
+        await _saveDraft();
+      } catch (error) {
+        failures.add(
+          '${file.name}: ${error is ApiException ? photoConflictMessage(error) : 'Could not read this photo. Choose another.'}',
+        );
+      }
+    }
+    if (mounted) {
+      setState(() => _error = failures.isEmpty ? null : failures.join('\n'));
     }
   }
 
@@ -1963,15 +1998,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   Widget _photosStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      if (_checkingPhotos || _photoQualityPassed)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Text(
-            _checkingPhotos
-                ? 'Checking photo quality...'
-                : 'Photo quality passed.',
-          ),
-        ),
       _Section(
         title: 'Site overview',
         subtitle: 'Show the whole mangrove and its surroundings.',
@@ -1984,7 +2010,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 remove: () {
                   setState(() {
                     _photo = null;
-                    _photoQualityPassed = false;
                   });
                   _draftEdited();
                 },
@@ -2035,7 +2060,6 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 remove: () {
                   setState(() {
                     _closeupPhoto = null;
-                    _photoQualityPassed = false;
                   });
                   _draftEdited();
                 },
@@ -2148,7 +2172,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
       const SizedBox(height: 16),
       FilledButton(
         onPressed: _pickingPhoto || _checkingPhotos ? null : _continuePhotos,
-        child: Text(_checkingPhotos ? 'Checking photo quality...' : 'Continue'),
+        child: Text(_checkingPhotos ? 'Preparing photos...' : 'Continue'),
       ),
     ],
   );
@@ -2691,7 +2715,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                   _busy
                       ? 'Submitting...'
                       : _confirmingSubmit
-                      ? 'Checking photo quality...'
+                      ? 'Preparing photos...'
                       : 'Submit report',
                 ),
               ),

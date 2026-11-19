@@ -1,7 +1,7 @@
 // Raster container validation and metadata removal without native Sharp/libvips.
 // Avoids decoding huge bitmaps in the memory/CPU-limited Edge runtime.
 // Photos remain capped at 5 MB; clients should resize before uploading.
-function dimensions(w,h) { if(w<100||h<100||w>12000||h>12000||w*h>50000000) throw new Error('Photo dimensions'); }
+function dimensions(w,h) { if(w<1||h<1||w>12000||h>12000||w*h>50000000) throw new Error('Photo dimensions'); }
 function orientation(data) {
   try {
     if(data.subarray(0,6).toString('binary')!=='Exif\0\0') return 1;

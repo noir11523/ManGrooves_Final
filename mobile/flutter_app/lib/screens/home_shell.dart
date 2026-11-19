@@ -11,7 +11,6 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import 'analytics_screen.dart';
 import 'badges_screen.dart';
-import 'dashboard_screen.dart';
 import 'profile_screen.dart';
 import 'reports_screen.dart';
 import 'submit_report_screen.dart';
@@ -56,6 +55,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _user = Map<String, dynamic>.from(widget.user);
+    _index = _user['role'] == 'system_admin' ? 1 : 0;
     WidgetsBinding.instance.addObserver(this);
     _notificationTimer = Timer.periodic(
       const Duration(seconds: 20),
@@ -98,15 +98,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  void _startFollowUp(Map<String, dynamic> reminder) {
-    setState(() {
-      _followUpReportId = reminder['id'] as int?;
-      _followUpClusterId = reminder['cluster_id'] as int?;
-      _submissionKey = GlobalKey<SubmitReportScreenState>();
-      _index = 2;
-    });
-  }
-
   void _updateUser(Map<String, dynamic> user) {
     setState(() {
       if (_user['barangay_id'] != user['barangay_id']) {
@@ -119,27 +110,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   void _openSubmit() {
-    if (_guardian) {
-      setState(() => _index = 2);
-      return;
-    }
-    Navigator.push(
-      context,
-      MaterialPageRoute<void>(
-        builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Submit Report')),
-          body: SubmitReportScreen(
-            api: widget.api,
-            draftOwner: '${_user['uid'] ?? _user['id']}',
-            onSubmitted: () {
-              Navigator.pop(context);
-              setState(() => _reportsVersion++);
-            },
-            onExit: () => Navigator.pop(context),
-          ),
-        ),
-      ),
-    );
+    setState(() => _index = 0);
   }
 
   Future<void> _openMenu() async {
@@ -185,11 +156,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             Expanded(
               child: ListView(
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.dashboard_outlined),
-                    title: const Text('Dashboard'),
-                    onTap: () => Navigator.pop(context, 'dashboard'),
-                  ),
                   if (!admin)
                     ListTile(
                       leading: const Icon(Icons.add_a_photo_outlined),
@@ -224,10 +190,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       ),
     );
     if (choice == null || !mounted) return;
-    if (choice == 'dashboard') {
-      setState(() => _index = 0);
-      return;
-    }
     if (choice == 'submit') {
       _openSubmit();
       return;
@@ -259,27 +221,24 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final titles = _guardian
-        ? ['Dashboard', 'My reports', 'Submit Report', 'My badges', 'Account']
-        : ['Dashboard', 'All reports', 'Report map', 'Analytics', 'Account'];
+        ? ['Submit Report', 'My reports', 'My badges', 'Account']
+        : [
+            'Submit Report',
+            'All reports',
+            'Report map',
+            'Analytics',
+            'Account',
+          ];
     final pages = _guardian
         ? <Widget>[
-            DashboardScreen(
-              api: widget.api,
-              active: _index == 0,
-              onStartFollowUp: _startFollowUp,
-            ),
-            ReportsScreen(
-              key: ValueKey(_reportsVersion),
-              api: widget.api,
-              active: _index == 1,
-            ),
             SubmitReportScreen(
               key: _submissionKey,
               api: widget.api,
               draftOwner: '${_user['uid'] ?? _user['id']}',
               initialParentReportId: _followUpReportId,
-              active: _index == 2,
-              onExit: () => setState(() => _index = 0),
+              active: _index == 0,
+              handleSystemBack: _index == 0,
+              onExit: () => setState(() => _index = 1),
               initialClusterId: _followUpClusterId,
               onSubmitted: () {
                 setState(() {
@@ -290,7 +249,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 });
               },
             ),
-            BadgesScreen(api: widget.api, active: _index == 3),
+            ReportsScreen(
+              key: ValueKey(_reportsVersion),
+              api: widget.api,
+              active: _index == 1,
+            ),
+            BadgesScreen(api: widget.api, active: _index == 2),
             ProfileScreen(
               initialUser: _user,
               api: widget.api,
@@ -299,7 +263,27 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             ),
           ]
         : <Widget>[
-            DashboardScreen(api: widget.api, active: _index == 0),
+            if (_user['role'] != 'system_admin')
+              SubmitReportScreen(
+                key: _submissionKey,
+                api: widget.api,
+                draftOwner: '${_user['uid'] ?? _user['id']}',
+                initialParentReportId: _followUpReportId,
+                active: _index == 0,
+                handleSystemBack: _index == 0,
+                onExit: () => setState(() => _index = 1),
+                initialClusterId: _followUpClusterId,
+                onSubmitted: () {
+                  setState(() {
+                    _reportsVersion++;
+                    _followUpReportId = null;
+                    _followUpClusterId = null;
+                    _index = 1;
+                  });
+                },
+              )
+            else
+              const SizedBox.shrink(),
             ReportHistoryScreen(
               key: ValueKey(_reportsVersion),
               api: widget.api,
@@ -319,21 +303,25 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           ];
 
     void back() {
-      if (_guardian && _index == 2) {
+      if (_user['role'] != 'system_admin' && _index == 0) {
         _submissionKey.currentState?.goBack();
       } else {
-        setState(() => _index = 0);
+        setState(() => _index = _user['role'] == 'system_admin' ? 1 : 0);
       }
     }
 
     return PopScope(
-      canPop: _index == 0,
+      canPop: _index == (_user['role'] == 'system_admin' ? 1 : 0),
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !(_guardian && _index == 2)) back();
+        if (!didPop && !(_user['role'] != 'system_admin' && _index == 0)) {
+          back();
+        }
       },
       child: Scaffold(
         appBar: AppBar(
-          leading: _index == 0 ? null : BackButton(onPressed: back),
+          leading: _index == (_user['role'] == 'system_admin' ? 1 : 0)
+              ? null
+              : BackButton(onPressed: back),
           actions: [
             IconButton(
               tooltip: 'Menu',
@@ -394,17 +382,19 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             : null,
         bottomNavigationBar: NavigationBar(
           labelPadding: const EdgeInsets.fromLTRB(2, 4, 2, 0),
-          selectedIndex: _index,
+          selectedIndex: _user['role'] == 'system_admin' ? _index - 1 : _index,
           onDestinationSelected: (value) => setState(() {
-            _index = value;
-            if (!_guardian && value == 2) _mapVisited = true;
+            _index = _user['role'] == 'system_admin' ? value + 1 : value;
+            if (!_guardian && _index == 2) _mapVisited = true;
           }),
           destinations: [
-            const NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard),
-              label: 'Home',
-            ),
+            if (_user['role'] != 'system_admin')
+              const NavigationDestination(
+                icon: Icon(Icons.add_a_photo_outlined),
+                selectedIcon: Icon(Icons.add_a_photo),
+                label: 'Submit',
+                tooltip: 'Submit report',
+              ),
             NavigationDestination(
               icon: Icon(
                 _guardian
@@ -416,19 +406,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               ),
               label: 'Reports',
             ),
-            if (_guardian)
-              const NavigationDestination(
-                icon: Icon(
-                  Icons.add_a_photo_outlined,
-                  semanticLabel: 'Submit report',
-                ),
-                selectedIcon: Icon(
-                  Icons.add_a_photo,
-                  semanticLabel: 'Submit report',
-                ),
-                label: 'Submit',
-                tooltip: 'Submit report',
-              ),
+
             if (_guardian)
               const NavigationDestination(
                 icon: Icon(Icons.workspace_premium_outlined),

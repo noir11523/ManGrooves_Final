@@ -86,11 +86,11 @@ test('compact photos reject renamed copies and a new site accepts an unknown cou
  try{
   assert.equal($('#extra-photo-menu'),null);let galleryOpened=false;$('#extra-photos').click=()=>galleryOpened=true;$('#add-photos').click();assert.equal(galleryOpened,true);assert.equal($('#extra-camera'),null);
   choose('[name=photo]',[photo('overview contents','one.jpg')]);await waitFor(()=>ui.reportDraft.photo);
-  choose('[name=closeup_photo]',[photo('overview contents','renamed.jpg')]);await waitFor(()=>$('#report-form .error').textContent.includes('already added'));
+  choose('[name=closeup_photo]',[photo('overview contents','renamed.jpg')]);await waitFor(()=>$('#report-form .error').textContent.includes('Already selected'));
   assert.equal(ui.reportDraft.closeupPhoto,null);
   choose('[name=closeup_photo]',[photo('close-up contents','two.jpg')]);await waitFor(()=>ui.reportDraft.closeupPhoto);
   assert.equal($('#report-form .error').textContent,'');
-  choose('#extra-photos',[photo('close-up contents','extra.jpg')]);await waitFor(()=>$('#report-form .error').textContent.includes('already added'));
+  choose('#extra-photos',[photo('close-up contents','extra.jpg')]);await waitFor(()=>$('#report-form .error').textContent.includes('Already selected'));
   assert.equal(ui.reportDraft.extraPhotos.length,0);
   assert.equal($('#count-hint').hidden,true);$('#count-unknown').click();
   assert.equal($('#count-hint').hidden,false);assert.equal($('#count-hint').textContent,'Select a site or enter a barangay.');
@@ -117,8 +117,8 @@ test('earlier-report photos fail in Details immediately; offline checks can retr
  const wait=async predicate=>{for(let i=0;i<100&&!predicate();i++)await new Promise(r=>setTimeout(r,10));assert.ok(predicate());};
  const choose=()=>{const input=$('[name=photo]');Object.defineProperty(input,'files',{configurable:true,value:[new File(['new bytes'],'photo.jpg',{type:'image/jpeg'})]});change(input);};
  try{
-  set('guardian_remarks','Keep my notes');choose();await wait(()=>$('.error').textContent==='Photo already used. Choose a new one.');
-  assert.equal(ui.reportDraft.step,0);assert.equal(ui.reportDraft.photo,null);assert.equal($('.error').textContent,'Photo already used. Choose a new one.');
+  set('guardian_remarks','Keep my notes');choose();await wait(()=>$('.error').textContent==='Already used in a previous report. Choose a different photo.');
+  assert.equal(ui.reportDraft.step,0);assert.equal(ui.reportDraft.photo,null);assert.equal($('.error').textContent,'Already used in a previous report. Choose a different photo.');
   failure='offline';choose();await wait(()=>$('.error').textContent.includes('connection'));assert.equal(ui.reportDraft.photo,null);
   failure='';choose();await wait(()=>ui.reportDraft.photo);assert.equal($('.error').textContent,'');
   assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep my notes');assert.equal($('#next').disabled,false);assert.equal(calls,3);
@@ -138,7 +138,7 @@ test('a late photo conflict returns Review to Details while preserving every ans
  const dispose=await ui.reportWizard($('#page'),{});
  try{
   $('#field-confirm').click();const sending=submit();await tick();closeConfirm('confirm');await sending;
-  assert.equal(ui.reportDraft.step,0);assert.equal($('.error').textContent,'Photo already used. Choose a new one.');
+  assert.equal(ui.reportDraft.step,0);assert.equal($('.error').textContent,'Already used in a previous report. Choose a different photo.');
   assert.equal(ui.reportDraft.fields.sitio_name,'Coast');assert.equal(ui.reportDraft.fields.latitude,10.28);
   assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep notes');assert.deepEqual(ui.reportDraft.observations,{roots:[11]});
   assert.equal(ui.reportDraft.photo.name,'one.jpg');assert.equal(ui.reportDraft.closeupPhoto.name,'two.jpg');
@@ -974,12 +974,12 @@ test('photo checking blocks Next; failed candidates never preview; accepted phot
  try {
   choose('[name=photo]',new File(['clear'],'clear.jpg',{type:'image/jpeg'}));
   await wait(()=>resolveCheck);
-  assert.equal($('#photo-status').textContent,'Checking photo quality...');assert.equal($('#next').disabled,true);assert.equal($('#photo-preview').hidden,true);
+  assert.equal($('#photo-status').textContent,'Preparing photos...');assert.equal($('#next').disabled,true);assert.equal($('#photo-preview').hidden,true);
   resolveCheck({ok:true});await wait(()=>ui.reportDraft.photo);await tick();
-  assert.equal($('#photo-status').textContent,'Photo quality passed.');assert.equal($('#next').disabled,false);
+  assert.equal($('#photo-status').textContent,'Photos ready.');assert.equal($('#next').disabled,false);
   $('#photo-preview').click();assert.equal($('.photo-enlarge').open,true);$('.photo-enlarge button').click();assert.equal($('.photo-enlarge'),null);
-  globalThis.testPhotoApi=async()=>{throw Object.assign(Error('Photo is blurry. Please take a clearer photo.'),{code:'photo_unclear',photo_indices:[0]});};
-  choose('[name=photo]',new File(['blurry'],'bad.jpg',{type:'image/jpeg'}));await wait(()=>$('.error').textContent.includes('blurry'));
+  globalThis.testPhotoApi=async()=>{throw Object.assign(Error('Could not read this photo. Please choose another.'),{code:'photo_unclear',photo_indices:[0]});};
+  choose('[name=photo]',new File(['blurry'],'bad.jpg',{type:'image/jpeg'}));await wait(()=>$('.error').textContent.includes('Could not read'));
   assert.equal(ui.reportDraft.photo.name,'clear.jpg');assert.equal($('#photo-preview').hidden,false);
   $('[data-remove-main="photo"]').click();assert.equal(ui.reportDraft.photo,null);assert.equal($('#photo-preview').hidden,true);
   globalThis.testPhotoApi=async()=>({ok:true});
@@ -989,14 +989,14 @@ test('photo checking blocks Next; failed candidates never preview; accepted phot
  }finally{dispose();delete globalThis.testPhotoApi;ui.reportDraft.reset();}
 });
 
-test('mixed multi-photo selection retains clear photos and identifies only rejected candidates',async()=>{
+test('mixed multi-photo selection retains decodable photos regardless of appearance and identifies only rejected candidates',async()=>{
  globalThis.testApi=async()=>({criteria:[],clusters:[],location:{}});
  const requests=[];
  globalThis.testPhotoApi=async(path,{body})=>{
   const names=[...body.entries()].filter(([key])=>key.startsWith('photo_')).map(([,file])=>file.name);
   requests.push(names);
-  const bad=names.findIndex(name=>name==='blur.jpg'||name==='used.jpg');
-  if(bad>=0)throw Object.assign(Error(names[bad]==='blur.jpg'?'Photo is blurry. Please take a clearer photo.':'Photo already used.'),{code:names[bad]==='blur.jpg'?'photo_unclear':'photo_already_submitted',photo_indices:[bad]});
+  const bad=names.findIndex(name=>name==='used.jpg');
+  if(bad>=0)throw Object.assign(Error('Photo already used.'),{code:'photo_already_submitted',photo_indices:[bad]});
   return {ok:true};
  };
  const owner='mixed-photos-'+Date.now();ui.reportDraft.reset();let dispose=await ui.reportWizard($('#page'),{},{id:owner});
@@ -1008,17 +1008,17 @@ test('mixed multi-photo selection retains clear photos and identifies only rejec
   choose('[name=closeup_photo]',[photo('close','close.jpg')]);await wait(()=>ui.reportDraft.closeupPhoto);
   set('guardian_remarks','Keep these notes');
   choose('#extra-photos',[photo('blur','blur.jpg'),photo('a','clear-a.jpg'),photo('bad','unsupported.gif','image/gif'),photo('a','renamed.jpg'),photo('used','used.jpg'),photo('b','clear-b.jpg')]);
-  await wait(()=>$('#photo-status').textContent==='2 photos added. 4 rejected.');
-  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['clear-a.jpg','clear-b.jpg']);
-  assert.equal($('#extra-previews').querySelectorAll('img').length,2);assert.equal($('#next').disabled,false);
+  await wait(()=>$('#photo-status').textContent==='3 photos added. 3 skipped.');
+  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['blur.jpg','clear-a.jpg','clear-b.jpg']);
+  assert.equal($('#extra-previews').querySelectorAll('img').length,3);assert.equal($('#next').disabled,false);
   const error=$('#report-form .error').textContent;
-  for(const text of ['blur.jpg: Photo is blurry','unsupported.gif: Unsupported image format','renamed.jpg: Photo already added','used.jpg: Photo already used'])assert.ok(error.includes(text),error);
+  for(const text of ['unsupported.gif: Unsupported image format','renamed.jpg: Already selected for this report','used.jpg: Already used in a previous report'])assert.ok(error.includes(text),error);
   assert.doesNotMatch(error,/clear-a|clear-b/);
-  assert.deepEqual(requests.at(-1),['overview.jpg','close.jpg','clear-a.jpg','clear-b.jpg']);
+  assert.deepEqual(requests.at(-1),['overview.jpg','close.jpg','blur.jpg','clear-a.jpg','clear-b.jpg']);
   const flush=ui.reportDraft.flush;dispose();await flush();ui.reportDraft.reset();dispose=await ui.reportWizard($('#page'),{},{id:owner});
-  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['clear-a.jpg','clear-b.jpg']);
+  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['blur.jpg','clear-a.jpg','clear-b.jpg']);
   assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep these notes');
-  choose('#extra-photos',[photo('c','replacement.jpg')]);await wait(()=>ui.reportDraft.extraPhotos.length===3);await tick();
+  choose('#extra-photos',[photo('c','replacement.jpg')]);await wait(()=>ui.reportDraft.extraPhotos.length===4);await tick();
   assert.equal($('#report-form .error').textContent,'');
  }finally{dispose();delete globalThis.testPhotoApi;ui.reportDraft.reset();}
 });
@@ -1032,7 +1032,7 @@ test('batch selection skips oversized photos and retains available slots without
  const wait=async fn=>{for(let n=0;n<200&&!fn();n++)await new Promise(r=>setTimeout(r,5));assert.ok(fn());};
  try{
   choose([photo(new Uint8Array(5*1024*1024+1),'large.jpg'),...Array.from({length:9},(_,i)=>photo(`distinct-${i}`,`clear-${i}.jpg`))]);
-  await wait(()=>$('#photo-status').textContent==='8 photos added. 2 rejected.');
+  await wait(()=>$('#photo-status').textContent==='8 photos added. 2 skipped.');
   assert.equal(ui.reportDraft.extraPhotos.length,8);assert.equal($('#add-photos').disabled,true);
   assert.match($('#report-form .error').textContent,/large.jpg: Photo exceeds the 5 MB limit/);
   assert.match($('#report-form .error').textContent,/clear-8.jpg: Add up to eight additional photos/);

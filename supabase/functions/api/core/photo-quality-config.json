@@ -1,27 +1,5 @@
 {
-  "version": 2,
   "maxBytes": 5242880,
-  "minSide": 800,
   "maxPixels": 6000000,
-  "sampleSide": 512,
-  "tileGrid": 4,
-  "minLaplacian": 45,
-  "minSharpTileLaplacian": 100,
-  "minSharpTiles": 2,
-  "minGradient": 3,
-  "minBrightness": 22,
-  "maxBrightness": 240,
-  "darkPercentile": 45,
-  "brightPercentile": 220,
-  "minContrast": 9,
-  "minTonalRange": 22,
-  "uploadSide": 2200,
-  "focusGrid": 16,
-  "minFocusEnergy": 25,
-  "motionCoherence": 0.85,
-  "focusCoherence": 0.65,
-  "minFocusRatio": 0.5,
-  "minMotionCells": 16,
-  "minMotionFraction": 0.5,
-  "maxFocusedFraction": 0.06
+  "uploadSide": 2200
 }

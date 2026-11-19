@@ -141,7 +141,7 @@ Future<void> fillDetails(WidgetTester tester) async {
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
-    'creating a verified guardian account opens the real dashboard without another sign-in',
+    'creating a verified guardian account opens Submit Report without another sign-in',
     (tester) async {
       final api = _EmailApi();
       await tester.pumpWidget(ManGroovesApp(api: api));
@@ -165,7 +165,7 @@ void main() {
       expect(find.byType(HomeShell), findsOneWidget);
       expect(find.byType(LoginScreen), findsNothing);
       expect(find.byType(EmailAccountScreen), findsNothing);
-      expect(find.text('Dashboard'), findsOneWidget);
+      expect(find.text('Submit Report'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -391,7 +391,7 @@ void main() {
       expect(field('Password'), findsNothing);
       expect(api.logins, 1);
       api.failLogin = false;
-      await tap(tester, find.text('Continue to dashboard'));
+      await tap(tester, find.text('Continue to Submit Report'));
       expect(api.logins, 2);
       expect(
         api.calls.where((c) => c == 'complete-registration.php').length,

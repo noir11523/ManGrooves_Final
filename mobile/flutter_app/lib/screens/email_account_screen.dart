@@ -387,8 +387,8 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
       if (mounted) {
         setState(
           () => _error = error is ApiException
-              ? 'Could not open your dashboard. ${error.message}'
-              : 'Could not open your dashboard. Check your connection and try again.',
+              ? 'Could not open Submit Report. ${error.message}'
+              : 'Could not open Submit Report. Check your connection and try again.',
         );
       }
     } finally {
@@ -848,7 +848,7 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
                     const SizedBox(height: 20),
                     Text(
                       _busy
-                          ? 'Opening your dashboard...'
+                          ? 'Opening Submit Report...'
                           : 'Your account is ready.',
                       textAlign: TextAlign.center,
                     ),
@@ -868,7 +868,7 @@ class _EmailAccountScreenState extends State<EmailAccountScreen> {
                       const SizedBox(height: 20),
                       FilledButton(
                         onPressed: _busy ? null : _openCreatedAccount,
-                        child: const Text('Continue to dashboard'),
+                        child: const Text('Continue to Submit Report'),
                       ),
                     ],
                   ],

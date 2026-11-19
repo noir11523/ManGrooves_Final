@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {AppError, requireRole, text} from './domain.js';
 import {cleanImage} from './images.js';
-import {validatePhotoQuality} from './photo-quality.js';
+import {validatePhotoFile} from './photo-quality.js';
 
 export function photoError(code, indices = []) {
   const message = code === 'photo_duplicate'
@@ -17,7 +17,7 @@ export function reportPhotoHashes(photos) {
   if (photos.reduce((sum,p) => sum + p.length, 0) > 12 * 1024 * 1024) throw new AppError('Keep all photos together under 12 MB.');
   // Sequential decoding bounds memory. Both preflight and final submission call
   // this before any report image, database row, or photo claim is written.
-  photos.forEach((photo,index)=>validatePhotoQuality(photo,index));
+  photos.forEach((photo,index)=>validatePhotoFile(photo,index));
   const images=photos.map(p=>cleanImage(p));
   const hashes=images.map(image=>createHash('sha256').update(image.bytes).digest('hex'));
   const duplicates = hashes.flatMap((hash,i) => hashes.indexOf(hash) < i ? [i] : []);

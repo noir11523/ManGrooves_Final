@@ -4,7 +4,6 @@ import {traitCatalog,editTraits} from '../functions/api/core/trait-catalog.js';
 import {matchSpecies} from '../functions/api/core/domain.js';
 import {Service} from '../functions/api/core/service.js';
 import {isNamedSite} from '../functions/api/core/site-access.js';
-import {clarityProblem} from '../web/src/photo-quality.js';
 
 function fixture(){
   const admin={uid:'admin',id:1,role:'system_admin',status:'active'},data=new Map([['users/admin',admin]]);
@@ -51,13 +50,6 @@ test('shared verified sites are available across home barangays; coordinate plac
     assert.deepEqual((await service.form(user)).clusters.map(c=>c.id),[1]);
   }
   for(const name of ['','Pinned location (10.28, 123.88)','Loading address','10.28, 123.88'])assert.equal(isNamedSite({name}),false);
-});
-test('photo clarity distinguishes tiny/blank photos from detailed photos',()=>{
-  const flat=new Uint8Array(192*192*4).fill(128);
-  assert.match(clarityProblem(128,128,flat),/resolution is too low/);
-  assert.match(clarityProblem(800,800,flat),/quality is too low/);
-  const detailed=flat.map((_,i)=>i%4===3?255:((i>>2)+Math.floor((i>>2)/192))%2?255:0);
-  assert.equal(clarityProblem(800,800,detailed),'');
 });
 
 test('trait category metadata and order persist independently without changing species matching',async()=>{

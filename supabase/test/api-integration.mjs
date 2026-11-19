@@ -464,13 +464,11 @@ try {
   const photoState=async()=>({images:images.size,...Object.fromEntries(await Promise.all(['reports','photo_claims','clusters','notifications','audit_logs'].map(async name=>[name,JSON.stringify((await db.collection(name).get()).docs.map(d=>d.data()))])))});
   const beforePhotoCheck=await photoState();
   for(const filename of ['blur.jpg','out-of-focus.jpg','dark.jpg','bright.jpg','low-contrast.jpg','low-resolution.jpg']) {
-    const invalid=await readFile(new URL(`./fixtures/quality/${filename}`,import.meta.url));
-    const checked=await photoCheck(photoUser,[views.bytes,invalid],'quality-reject',422);assert.equal(checked.code,'photo_unclear');assert.deepEqual(checked.photo_indices,[1]);
-    const failed=await submission(photoUser,{checklist_versions:versions,submission_token:'quality-reject'},invalid);
-    assert.equal((await request('submit-report.php',photoUser,failed.body,422)).code,'photo_unclear');
+    const photo=await readFile(new URL(`./fixtures/quality/${filename}`,import.meta.url));
+    await photoCheck(photoUser,[views.bytes,photo],'appearance-accepted');
     assert.deepEqual(await photoState(),beforePhotoCheck);
   }
-  pass('quality failures in preflight and final submission never write photos, reports, claims, sites or notifications');
+  pass('photo selection accepts blur, exposure, contrast and low resolution without writing data');
   await photoCheck(photoUser,[views.bytes,fixture]);
   await photoCheck(photoUser,[views.bytes,fixture]);
   await photoCheck(null,[views.bytes],'new-visit',401);
@@ -733,6 +731,16 @@ try {
   assert.equal((await request('report-form.php',expert)).trait_categories[traitKey].name,'Flower shade');
   await request('trait-images.php',admin,{action:'delete_choice',trait:traitKey,value:white},409);
   pass('new trait selections affect species suggestions, retain condition scoring, and preserve historical answers after renaming');
+  const appearanceUser=await account(780,'guardian');
+  for(const filename of ['blur.jpg','out-of-focus.jpg','motion-trails.jpg','dark.jpg','bright.jpg','low-contrast.jpg','low-resolution.jpg']) {
+    const bytes=await readFile(new URL(`./fixtures/quality/${filename}`,import.meta.url));
+    const candidate=await submission(appearanceUser,traitAnswers,bytes);
+    const accepted=await request('submit-report.php',appearanceUser,candidate.body,201);
+    assert.ok(accepted.report.report_id);
+    const detail=(await request(`report.php?id=${accepted.report.report_id}`,appearanceUser)).report;
+    assert.equal(detail.status,'pending');
+  }
+  pass('final submission accepts decodable blur, motion blur, exposure, contrast and low-resolution photos for expert review');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {
   await new Promise(resolve => server.close(resolve)); await pg.close();

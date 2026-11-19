@@ -123,6 +123,7 @@ class _Api extends ApiClient {
   int submissions = 0;
   int previews = 0;
   Map<String, String>? sent;
+  List<String>? sentPhotos;
   @override
   Future<Map<String, dynamic>> reportPreview(Map<String, dynamic> input) async {
     previews++;
@@ -238,6 +239,7 @@ class _Api extends ApiClient {
   }) async {
     submissions++;
     sent = fields;
+    sentPhotos = [photoPath, ?closeupPhotoPath, ...extraPhotoPaths];
     if (submitFailure != null) throw submitFailure!;
     if (failSubmit) {
       throw const ApiException('Connection interrupted. Try again.');
@@ -397,7 +399,7 @@ Future<void> tap(
           .evaluate()
           .any((element) => (element.widget as FilledButton).onPressed == null);
       final checking =
-          (find.text('Checking photo quality...').evaluate().isNotEmpty ||
+          (find.text('Preparing photos...').evaluate().isNotEmpty ||
               find.text('Checking photos…').evaluate().isNotEmpty) &&
           find.byType(AlertDialog).evaluate().isEmpty;
       waiting =
@@ -1060,13 +1062,12 @@ void main() {
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       const channel = MethodChannel('plugins.flutter.io/image_picker');
-      messenger.setMockMethodCallHandler(
-        channel,
-        (_) async =>
-            File('../../supabase/test/fixtures/quality/clear.jpg')
-                .absolute
-                .path,
-      );
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        final path = File('../../supabase/test/fixtures/quality/clear.jpg')
+            .absolute
+            .path;
+        return call.method == 'pickMultiImage' ? [path] : path;
+      });
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final drafts = _Drafts();
       await tester.pumpWidget(
@@ -1510,12 +1511,21 @@ void main() {
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       const channel = MethodChannel('plugins.flutter.io/image_picker');
       var picked = 0;
-      messenger.setMockMethodCallHandler(
-        channel,
-        (_) async => File(
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'pickMultiImage') {
+          return ['blur.jpg', 'dark.jpg', 'low-resolution.jpg']
+              .map(
+                (name) =>
+                    File('../../supabase/test/fixtures/quality/$name')
+                        .absolute
+                        .path,
+              )
+              .toList();
+        }
+        return File(
           '../../supabase/test/fixtures/quality/${picked++ == 0 ? 'clear' : 'close-up'}.jpg',
-        ).absolute.path,
-      );
+        ).absolute.path;
+      });
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final api = _Api();
       final drafts = _Drafts();
@@ -1547,6 +1557,21 @@ void main() {
       );
       await tap(tester, find.text('Gallery').first, photoIO: true);
       await tap(tester, find.text('Gallery').last, photoIO: true);
+      await tap(
+        tester,
+        find.widgetWithText(OutlinedButton, 'Photo'),
+        photoIO: true,
+      );
+      expect(find.text('3/8'), findsOneWidget);
+      expect(find.byTooltip('Remove photo 3'), findsOneWidget);
+      // A second selection must append, and duplicates must not replace earlier photos.
+      await tap(
+        tester,
+        find.widgetWithText(OutlinedButton, 'Photo'),
+        photoIO: true,
+      );
+      expect(find.text('3/8'), findsOneWidget);
+      expect(find.textContaining('Photo already added'), findsOneWidget);
       await tap(
         tester,
         find.widgetWithText(FilledButton, 'Continue').first,
@@ -1722,7 +1747,9 @@ void main() {
       expect(find.text('Connection interrupted. Try again.'), findsOneWidget);
       expect(
         drafts.saved.entries
-            .where((e) => !e.key.endsWith(':closeup'))
+            .where(
+              (e) => !e.key.endsWith(':closeup') && !e.key.contains(':extra'),
+            )
             .single
             .value['guardian_remarks'],
         'Updated note',
@@ -1735,6 +1762,18 @@ void main() {
         photoIO: true,
       );
       expect(api.submissions, 2);
+      expect(
+        api.sentPhotos!
+            .map((p) => p.replaceAll('\\', '/').split('/').last)
+            .toList(),
+        [
+          'clear.jpg',
+          'close-up.jpg',
+          'blur.jpg',
+          'dark.jpg',
+          'low-resolution.jpg',
+        ],
+      );
       expect(drafts.saved, isEmpty);
       expect(api.previews, greaterThan(0));
       expect(submitted, 1);

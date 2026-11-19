@@ -37,9 +37,14 @@ Future<void> validateReportPhotos(List<String> paths) async {
   }
   for (var index = 0; index < contents.length; index++) {
     try {
-      await checkPhotoClarity(contents[index]);
+      await checkPhotoFile(contents[index]);
     } on ApiException catch (error) {
-      throw ApiException(error.message, code: error.code, statusCode: error.statusCode, photoIndices: [index]);
+      throw ApiException(
+        error.message,
+        code: error.code,
+        statusCode: error.statusCode,
+        photoIndices: [index],
+      );
     }
   }
 }

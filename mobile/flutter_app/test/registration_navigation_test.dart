@@ -93,7 +93,7 @@ Future<void> _fillRegistration(
 
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
-  testWidgets('registration opens dashboard and removes the form route', (
+  testWidgets('registration opens Submit Report and removes the form route', (
     tester,
   ) async {
     final api = _RegistrationApi();
@@ -112,8 +112,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HomeShell), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.text('Submit Report'), findsOneWidget);
+    expect(find.text('Dashboard'), findsNothing);
     expect(find.byType(RegisterScreen, skipOffstage: false), findsNothing);
     expect(
       Navigator.of(tester.element(find.byType(HomeShell))).canPop(),
