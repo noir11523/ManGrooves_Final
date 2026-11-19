@@ -70,7 +70,7 @@ html[data-theme="dark"] .btn-outline-success {--bs-btn-color:#a6d3a0;--bs-btn-bo
 .report-location .address-status{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:.9rem}
 .report-location .address-status button{padding:8px 12px;min-height:40px}
 .report-location #report-barangay{font-size:.9rem;font-weight:600;overflow-wrap:anywhere}
-.report-location .place-result{padding:10px 12px}
+.report-location .place-result{flex:0 0 auto;min-width:0;padding:10px 12px;white-space:normal;overflow-wrap:anywhere}
 .report-location #place-results{max-height:220px;overflow-y:auto}
 @media(max-width:680px){.report-location{grid-template-columns:minmax(0,1fr);gap:12px}.report-location #location-map{height:260px;min-height:240px}}
 
