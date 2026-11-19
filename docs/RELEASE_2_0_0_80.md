@@ -75,6 +75,27 @@ fields; that test fixture was corrected and the full suite then passed.
 Physical Android camera/gallery testing and Play Store publication are not part
 of this verification. Android distribution uses the existing direct APK download.
 
+## Publication and source control
+
+Published on 19 November 2026 at https://mangrooves-php.vercel.app with the matching
+Supabase Edge API. Production deployment:
+https://mangrooves-pa9r97mug-clements-projects-5174d0c3.vercel.app.
+APK: https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk.
+
+Independent live verification completed at 15:18 Asia/Manila:
+
+- Public PHP pages and configuration/explore API responses passed.
+- Served JavaScript equals the tested bundle; removed quality warnings are absent,
+  multiple-photo input remains, and website Dashboard continuation remains.
+- Full APK download: 60,465,305 bytes, matching the SHA-256 above.
+- All nine deployed photo/coverage backend files equal local tested source.
+- Publisher verified APK headers/checksum metadata and production CORS.
+
+Source commits `f0a49db` and merge `09b528c` were pushed to `origin/main`.
+The merge includes GitHub coverage commit `9f6a9bd` as its second parent.
+Evidence logs/results are under `tmp/coverage-*`; generated APK and website package
+remain in their existing ignored build directories.
+
 ## MySQL reference
 
 The active backend is Supabase/PostgreSQL. The old MySQL implementation is archived
