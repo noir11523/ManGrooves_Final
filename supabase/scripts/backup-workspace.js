@@ -15,7 +15,8 @@ if(extra.length || (mode && (!archive || !['verify','restore'].includes(mode) ||
   throw Error('Usage: node backup-workspace.js [verify FOLDER | restore FOLDER EMPTY_DIRECTORY]');
 }
 function tar(args,stdio) {
-  const child=spawn('tar.exe',args,{stdio,windowsHide:true});
+  // Larger tape blocks avoid a Windows pipe round trip for each 10 KiB of the archive.
+  const child=spawn('tar.exe',['-b','512',...args],{stdio,windowsHide:true});
   const done=new Promise((ok,fail)=>{
     child.on('error',fail);
     child.on('close',code=>code===0?ok():fail(Error('Archive operation failed (tar exit '+code+').')));
@@ -32,7 +33,7 @@ if(!mode){
   await writeFile(keyFile,protectKey('Protect',key),{flag:'wx'});
   const cipher=createCipheriv('aes-256-gcm',key,iv);
   const {child,done}=tar(['-cf','-','-C',root,'.'],['ignore','pipe','inherit']);
-  await Promise.all([pipeline(child.stdout,cipher,createWriteStream(packed,{flags:'wx'})),done]);
+  await Promise.all([pipeline(child.stdout,cipher,createWriteStream(packed,{flags:'wx',highWaterMark:1024*1024})),done]);
   await writeFile(infoFile,JSON.stringify({iv:iv.toString('hex'),tag:cipher.getAuthTag().toString('hex')}),{flag:'wx'});
 }
 const key=protectKey('Unprotect',await readFile(keyFile));
@@ -41,7 +42,7 @@ async function replay(args) {
   const decipher=createDecipheriv('aes-256-gcm',key,Buffer.from(iv,'hex'));
   decipher.setAuthTag(Buffer.from(tag,'hex'));
   const {child,done}=tar(args,['pipe','ignore','inherit']);
-  await Promise.all([pipeline(createReadStream(packed),decipher,child.stdin),done]);
+  await Promise.all([pipeline(createReadStream(packed,{highWaterMark:1024*1024}),decipher,child.stdin),done]);
 }
 await replay(['-tf','-']);
 console.log('Encrypted project archive verified: '+folder);
