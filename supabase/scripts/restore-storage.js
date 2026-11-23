@@ -42,9 +42,26 @@ if (target) {
       if(result.error) {
         const status=Number(result.error.statusCode??result.error.status);
         if(status!==404 && !/^(object|resource) not found$/i.test(result.error.message)) throw Error('Could not inspect an existing target object.');
-        const put=await bucket.upload(file.path,await fileBytes(file),{
-          contentType:file.metadata?.mimetype,cacheControl:String(file.metadata?.cacheControl??'3600').replace(/^max-age=/,''),upsert:false});
-        if(put.error) throw Error('Could not restore an object. Existing files are protected.');
+        const options={contentType:file.metadata?.mimetype,cacheControl:String(file.metadata?.cacheControl??'3600').replace(/^max-age=/,'')};
+        const bytes=await fileBytes(file);
+        const put=await bucket.upload(file.path,bytes,{...options,upsert:false});
+        if(put.error) {
+          if(Number(put.error.statusCode??put.error.status)!==409 && !/already exists|duplicate/i.test(put.error.message)) {
+            throw Error('Could not restore an object ('+String(put.error.statusCode??put.error.status)+').');
+          }
+          // Physical clones can retain the catalog row while its file bytes are missing.
+          const split=file.path.lastIndexOf('/'), base=file.path.slice(split+1), prefix=file.path.slice(0,Math.max(0,split));
+          const listing=await bucket.list(prefix,{search:base,limit:100});
+          const entry=listing.data?.find(item=>item.name===base);
+          if(listing.error || !entry || entry.id!==file.id) throw Error('Conflicting target object. Restore stopped.');
+          const again=await bucket.download(file.path);
+          if(!again.error) {
+            if(sha256(Buffer.from(await again.data.arrayBuffer()))!==file.sha256) throw Error('Target object changed. Restore stopped.');
+          } else {
+            const missing=Number(again.error.statusCode??again.error.status)===404 || /^(object|resource) not found$/i.test(again.error.message);
+            if(!missing || (await bucket.update(file.path,bytes,options)).error) throw Error('Could not recover the missing bytes for a restored catalog row.');
+          }
+        }
         result=await bucket.download(file.path);
       }
       if(result.error || sha256(Buffer.from(await result.data.arrayBuffer()))!==file.sha256) throw Error('Target checksum differs. Restore stopped.');
