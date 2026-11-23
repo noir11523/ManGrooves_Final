@@ -15,7 +15,7 @@ export async function checkPhotoFile(file,prepare=false){
     const problem=resolutionProblem(width,height,prepare?{...config,maxPixels:64000000}:config);if(problem)throw Object.assign(Error(problem),{code:'photo_unclear'});
     if(prepare&&width*height>config.maxPixels){
       // Preserve aspect ratio while bounding server memory.
-      const scale=Math.min(1,config.uploadSide/Math.max(width,height));
+      const scale=Math.max(config.minSide/Math.min(width,height),Math.min(1,config.uploadSide/Math.max(width,height)));
       const target=document.createElement('canvas');target.width=Math.round(width*scale);target.height=Math.round(height*scale);
       const targetProblem=resolutionProblem(target.width,target.height);if(targetProblem)throw Object.assign(Error(targetProblem),{code:'photo_unclear'});
       const painter=target.getContext('2d');if(!painter)throw Object.assign(Error(qualityMessages.pixels),{code:'photo_unclear'});

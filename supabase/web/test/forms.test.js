@@ -1022,9 +1022,9 @@ test('photo checking blocks Next; failed candidates never preview; accepted phot
  try {
   choose('[name=photo]',new File(['clear'],'clear.jpg',{type:'image/jpeg'}));
   await wait(()=>resolveCheck);
-  assert.equal($('#photo-status').textContent,'Preparing photos...');assert.equal($('#next').disabled,true);assert.equal($('#photo-preview').hidden,true);
+  assert.equal($('#photo-status').textContent,'Checking photo quality...');assert.equal($('#next').disabled,true);assert.equal($('#photo-preview').hidden,true);
   resolveCheck({ok:true});await wait(()=>ui.reportDraft.photo);await tick();
-  assert.equal($('#photo-status').textContent,'Photos ready.');assert.equal($('#next').disabled,false);
+  assert.equal($('#photo-status').textContent,'Photo accepted.');assert.equal($('#next').disabled,false);
   $('#photo-preview').click();assert.equal($('.photo-enlarge').open,true);$('.photo-enlarge button').click();assert.equal($('.photo-enlarge'),null);
   globalThis.testPhotoApi=async()=>{throw Object.assign(Error('Could not read this photo. Please choose another.'),{code:'photo_unclear',photo_indices:[0]});};
   choose('[name=photo]',new File(['blurry'],'bad.jpg',{type:'image/jpeg'}));await wait(()=>$('.error').textContent.includes('Could not read'));
@@ -1037,12 +1037,14 @@ test('photo checking blocks Next; failed candidates never preview; accepted phot
  }finally{dispose();delete globalThis.testPhotoApi;ui.reportDraft.reset();}
 });
 
-test('mixed multi-photo selection retains decodable photos regardless of appearance and identifies only rejected candidates',async()=>{
+test('mixed multi-photo selection retains clear photos on either side of a quality failure',async()=>{
  globalThis.testApi=async()=>({criteria:[],clusters:[],location:{}});
  const requests=[];
  globalThis.testPhotoApi=async(path,{body})=>{
   const names=[...body.entries()].filter(([key])=>key.startsWith('photo_')).map(([,file])=>file.name);
   requests.push(names);
+  const {candidate_index:i}=JSON.parse(body.get('payload'));
+  if(names[i]==='blur.jpg')throw Object.assign(Error('Photo is blurry. Retake it.'),{code:'photo_unclear',photo_indices:[i]});
   const bad=names.findIndex(name=>name==='used.jpg');
   if(bad>=0)throw Object.assign(Error('Photo already used.'),{code:'photo_already_submitted',photo_indices:[bad]});
   return {ok:true};
@@ -1056,17 +1058,17 @@ test('mixed multi-photo selection retains decodable photos regardless of appeara
   choose('[name=closeup_photo]',[photo('close','close.jpg')]);await wait(()=>ui.reportDraft.closeupPhoto);
   set('guardian_remarks','Keep these notes');
   choose('#extra-photos',[photo('blur','blur.jpg'),photo('a','clear-a.jpg'),photo('bad','unsupported.gif','image/gif'),photo('a','renamed.jpg'),photo('used','used.jpg'),photo('b','clear-b.jpg')]);
-  await wait(()=>$('#photo-status').textContent==='3 photos added. 3 skipped.');
-  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['blur.jpg','clear-a.jpg','clear-b.jpg']);
-  assert.equal($('#extra-previews').querySelectorAll('img').length,3);assert.equal($('#next').disabled,false);
+  await wait(()=>$('#photo-status').textContent==='2 photos added. 4 skipped.');
+  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['clear-a.jpg','clear-b.jpg']);
+  assert.equal($('#extra-previews').querySelectorAll('img').length,2);assert.equal($('#next').disabled,false);
   const error=$('#report-form .error').textContent;
-  for(const text of ['unsupported.gif: Unsupported image format','renamed.jpg: Already selected for this report','used.jpg: Already used in a previous report'])assert.ok(error.includes(text),error);
+  for(const text of ['blur.jpg: Photo is blurry','unsupported.gif: Unsupported image format','renamed.jpg: Already selected for this report','used.jpg: Already used in a previous report'])assert.ok(error.includes(text),error);
   assert.doesNotMatch(error,/clear-a|clear-b/);
-  assert.deepEqual(requests.at(-1),['overview.jpg','close.jpg','blur.jpg','clear-a.jpg','clear-b.jpg']);
+  assert.deepEqual(requests.at(-1),['overview.jpg','close.jpg','clear-a.jpg','clear-b.jpg']);
   const flush=ui.reportDraft.flush;dispose();await flush();ui.reportDraft.reset();dispose=await ui.reportWizard($('#page'),{},{id:owner});
-  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['blur.jpg','clear-a.jpg','clear-b.jpg']);
+  assert.deepEqual(ui.reportDraft.extraPhotos.map(p=>p.name),['clear-a.jpg','clear-b.jpg']);
   assert.equal(ui.reportDraft.fields.guardian_remarks,'Keep these notes');
-  choose('#extra-photos',[photo('c','replacement.jpg')]);await wait(()=>ui.reportDraft.extraPhotos.length===4);await tick();
+  choose('#extra-photos',[photo('c','replacement.jpg')]);await wait(()=>ui.reportDraft.extraPhotos.length===3);await tick();
   assert.equal($('#report-form .error').textContent,'');
  }finally{dispose();delete globalThis.testPhotoApi;ui.reportDraft.reset();}
 });

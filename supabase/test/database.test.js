@@ -35,6 +35,7 @@ test('PostgreSQL migrations, atomic writes, conflicts, pagination and permission
   assert.equal((await ref.get()).data().n,7,'conflict does not overwrite');
   const queryTx=db.batch(); await queryTx.get(db.collection('reports').where('user_id','==',1));
   await db.collection('reports').where('photo_sha256','==','sample').get();
+  await db.collection('users').doc('00000000-0000-0000-0000-000000000001').set({id:1});
   await db.collection('reports').doc('1').set({id:1,user_id:1});
   queryTx.set(ref,{n:99}); await assert.rejects(queryTx.commit(),e=>e.code==='PT409');
   const duplicate=db.batch();duplicate.create(ref,{n:100});

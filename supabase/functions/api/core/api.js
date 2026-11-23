@@ -152,7 +152,7 @@ export function createApi({db, auth, bucket, projectId, mailer = null}) {
           const {input,files} = await readInput(req);
           const entries = Object.entries(files).sort(([a],[b]) => a.localeCompare(b));
           if (entries.some(([key],i) => key !== `photo_${i}`)) throw new AppError('Choose your photos again.');
-          return send(res, await checkReportPhotos(service,user,entries.map(([,bytes])=>bytes),input.submission_token ?? ''));
+          return send(res, await checkReportPhotos(service,user,entries.map(([,bytes])=>bytes),input.submission_token ?? '', input.candidate_index ?? null));
         }
         case 'report-preview.php': only('POST'); return send(res, await service.preview(user, req.body ?? {}));
         case 'submit-report.php': {

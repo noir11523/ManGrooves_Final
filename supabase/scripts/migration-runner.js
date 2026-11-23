@@ -66,16 +66,32 @@ export async function applyImport(prepared, {db,auth,bucket}, log=()=>{}) {
     if (c.guide_image?.includes('checklist/')) c.guide_image = `../mobile-api/checklist-photo.php?path=${encodeURIComponent(await upload(c.guide_image, true))}`;
     for (const o of [...c.options, ...c.archived_options]) if (o.image_path?.includes('checklist/')) o.image_path = `../mobile-api/checklist-photo.php?path=${encodeURIComponent(await upload(o.image_path, true))}`;
   }
+  // The old export contains forward and circular references (site to latest
+  // report, parent to child). Install those links after all parents exist.
+  const deferred=[];
   for (const [collection, records] of Object.entries(converted.documents)) {
     for (let start = 0; start < records.length; start += 400) {
       const batch = db.batch();
-      for (const row of records.slice(start, start + 400)) batch.set(db.collection(collection).doc(String(collection === 'users' ? row.uid : row.id)), {...row, migration_hash: hash});
+      for (const row of records.slice(start,start+400)) {
+        const ref=db.collection(collection).doc(String(collection==='users'?row.uid:row.id));
+        const data={...row,migration_hash:hash},links={};
+        for(const field of collection==='clusters'?['latest_report_id']:collection==='reports'?['active_child_id','parent_report_id']:[]){
+          if(data[field]!=null){links[field]=data[field];data[field]=null;}
+        }
+        batch.set(ref,data);
+        if(Object.keys(links).length)deferred.push({ref,links});
+      }
       await batch.commit();
     }
     let count = 0, cursor;
     do { const part = await (cursor ? db.collection(collection).startAfter(cursor) : db.collection(collection)).limit(500).get(); count += part.size; cursor = part.size === 500 ? part.docs.at(-1) : null; } while (cursor);
     if (count !== records.length) throw new Error(`Count mismatch in ${collection}. Migration stays locked; investigate before resuming.`);
     log(`${collection}: ${count} verified`);
+  }
+  for(let start=0;start<deferred.length;start+=400){
+    const batch=db.batch();
+    for(const {ref,links} of deferred.slice(start,start+400))batch.update(ref,links);
+    await batch.commit();
   }
   const batch = db.batch(); batch.set(db.collection('meta').doc('sequence'), {next: converted.nextId});
   batch.update(migrationRef, {status: 'complete', completed_at: new Date().toISOString()}); await batch.commit();

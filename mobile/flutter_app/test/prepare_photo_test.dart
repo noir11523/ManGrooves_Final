@@ -8,13 +8,7 @@ import 'package:mangrooves_mobile/core/api_client.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const base = '../../supabase/test/fixtures/quality/';
-  for (final name in [
-    'clear.jpg',
-    'clear.png',
-    'clear.webp',
-    'close-up.jpg',
-    'low-resolution.jpg',
-  ]) {
+  for (final name in ['clear.jpg', 'clear.png', 'clear.webp', 'close-up.jpg']) {
     test('keeps original full-resolution bytes for $name', () async {
       final file = XFile('$base$name'),
           prepared = await preparePhoto(XFile('$base$name'));
@@ -22,6 +16,18 @@ void main() {
       expect(await prepared.readAsBytes(), await file.readAsBytes());
     });
   }
+  test('never upscales a low-resolution original', () async {
+    await expectLater(
+      preparePhoto(XFile('${base}low-resolution.jpg')),
+      throwsA(
+        isA<ApiException>().having(
+          (e) => e.message,
+          'message',
+          contains('resolution'),
+        ),
+      ),
+    );
+  });
   test('rejects unsupported files before decoding', () async {
     final dir = await Directory.systemTemp.createTemp('photo-format-test');
     try {

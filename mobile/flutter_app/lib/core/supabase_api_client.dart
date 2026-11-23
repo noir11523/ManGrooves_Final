@@ -314,14 +314,16 @@ class SupabaseApiClient extends ApiClient {
   @override
   Future<void> checkReportPhotos(
     List<String> paths,
-    String submissionToken,
-  ) async {
+    String submissionToken, {
+    int? candidateIndex,
+  }) async {
     final request = http.MultipartRequest(
       'POST',
       resolve('check-report-photos.php'),
     );
     request.fields['payload'] = jsonEncode({
       'submission_token': submissionToken,
+      'candidate_index': ?candidateIndex,
     });
     for (var i = 0; i < paths.length; i++) {
       request.files.add(

@@ -1,7 +1,7 @@
 import {PGlite} from '@electric-sql/pglite';
 import {readFile} from 'node:fs/promises';
 import {Database} from '../functions/api/database.js';
-export async function databaseFixture() {
+export async function databaseFixture({relational=true}={}) {
   const pg=new PGlite();
   await pg.exec(`create role anon; create role authenticated; create role service_role;
     create schema auth; create schema storage;
@@ -13,6 +13,7 @@ export async function databaseFixture() {
   await pg.exec(await readFile(new URL('../migrations/202610050001_public_summary.sql',import.meta.url),'utf8'));
   await pg.exec(await readFile(new URL('../migrations/202610100001_bounded_transaction_conflicts.sql',import.meta.url),'utf8'));
   await pg.exec(await readFile(new URL('../migrations/202610220001_user_deletion_sync.sql',import.meta.url),'utf8'));
+  if(relational) await pg.exec(await readFile(new URL('../migrations/202611220001_relational_storage.sql',import.meta.url),'utf8'));
   const client={async rpc(name,args) {
     if(!/^app_[a-z_]+$/.test(name)) throw new Error('Bad test RPC');
     const entries=Object.entries(args), parameters=entries.map(([key],i)=>`${key} := $${i+1}`).join(',');

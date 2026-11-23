@@ -64,8 +64,8 @@ async function submission(user, changes = {}, photo) {
   const body = new FormData(); body.set('payload', JSON.stringify(fields)); body.set('photo', new Blob([bytes], {type: 'image/jpeg'}), 'field.jpg');
   return {body, bytes};
 }
-async function photoCheck(user, photos, token='new-visit', expected=200) {
-  const body=new FormData();body.set('payload',JSON.stringify({submission_token:token}));
+async function photoCheck(user, photos, token='new-visit', expected=200, candidate_index=null) {
+  const body=new FormData();body.set('payload',JSON.stringify({submission_token:token,candidate_index}));
   photos.forEach((bytes,i)=>body.set(`photo_${i}`,new Blob([bytes],{type:'image/jpeg'}),`renamed-${i}.jpg`));
   return request('check-report-photos.php',user,body,expected);
 }
@@ -464,11 +464,20 @@ try {
   const photoState=async()=>({images:images.size,...Object.fromEntries(await Promise.all(['reports','photo_claims','clusters','notifications','audit_logs'].map(async name=>[name,JSON.stringify((await db.collection(name).get()).docs.map(d=>d.data()))])))});
   const beforePhotoCheck=await photoState();
   for(const filename of ['blur.jpg','out-of-focus.jpg','dark.jpg','bright.jpg','low-contrast.jpg','low-resolution.jpg']) {
-    const photo=await readFile(new URL(`./fixtures/quality/${filename}`,import.meta.url));
-    await photoCheck(photoUser,[views.bytes,photo],'appearance-accepted');
+    const invalid=await readFile(new URL(`./fixtures/quality/${filename}`,import.meta.url));
+    const checked=await photoCheck(photoUser,[views.bytes,invalid],'quality-reject',422);assert.equal(checked.code,'photo_unclear');assert.deepEqual(checked.photo_indices,[1]);
+    const failed=await submission(photoUser,{checklist_versions:versions,submission_token:'quality-reject'},invalid);
+    assert.equal((await request('submit-report.php',photoUser,failed.body,422)).code,'photo_unclear');
     assert.deepEqual(await photoState(),beforePhotoCheck);
   }
-  pass('photo selection accepts blur, exposure, contrast and low resolution without writing data');
+  const blurry=await readFile(new URL('./fixtures/quality/blur.jpg',import.meta.url));
+  await photoCheck(photoUser,[blurry,fixture],'candidate',200,1);
+  const invalid=await photoCheck(photoUser,[blurry,fixture],'candidate',422,0);
+  assert.deepEqual(invalid.photo_indices,[0]);
+  const duplicateCandidate=await photoCheck(photoUser,[fixture,fixture],'candidate',422,0);
+  assert.deepEqual(duplicateCandidate.photo_indices,[0]);
+  pass('a blurry draft photo cannot reject an independent clear selection, or bypass the final check');
+  pass('quality failures in preflight and final submission never write photos, reports, claims, sites or notifications');
   await photoCheck(photoUser,[views.bytes,fixture]);
   await photoCheck(photoUser,[views.bytes,fixture]);
   await photoCheck(null,[views.bytes],'new-visit',401);
@@ -731,32 +740,23 @@ try {
   assert.equal((await request('report-form.php',expert)).trait_categories[traitKey].name,'Flower shade');
   await request('trait-images.php',admin,{action:'delete_choice',trait:traitKey,value:white},409);
   pass('new trait selections affect species suggestions, retain condition scoring, and preserve historical answers after renaming');
-  const appearanceUser=await account(780,'guardian');
-  for(const filename of ['blur.jpg','out-of-focus.jpg','motion-trails.jpg','dark.jpg','bright.jpg','low-contrast.jpg','low-resolution.jpg']) {
-    const bytes=await readFile(new URL(`./fixtures/quality/${filename}`,import.meta.url));
-    const candidate=await submission(appearanceUser,traitAnswers,bytes);
-    const accepted=await request('submit-report.php',appearanceUser,candidate.body,201);
-    assert.ok(accepted.report.report_id);
-    const detail=(await request(`report.php?id=${accepted.report.report_id}`,appearanceUser)).report;
-    assert.equal(detail.status,'pending');
-  }
-  pass('final submission accepts decodable blur, motion blur, exposure, contrast and low-resolution photos for expert review');
+  const coverageUser=await account(780,'guardian');
   const coverageRef=db.collection('meta').doc('monitoring_site_coverage');
   const outsideCity={...traitAnswers,latitude:10.33,longitude:123.94};
-  assert.deepEqual((await request('report-form.php',appearanceUser)).location.monitoring_coverage,{mode:'cities',cities:['Cebu City']});
-  const deniedPin=await request('places.php?latitude=10.33&longitude=123.94&report_coverage=1',appearanceUser);
+  assert.deepEqual((await request('report-form.php',coverageUser)).location.monitoring_coverage,{mode:'cities',cities:['Cebu City']});
+  const deniedPin=await request('places.php?latitude=10.33&longitude=123.94&report_coverage=1',coverageUser);
   assert.equal(deniedPin.monitoring_coverage.allowed,false);
   assert.equal(deniedPin.barangay.city_municipality,'Mandaue City');
-  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,outsideCity)).body,422);
+  await request('submit-report.php',coverageUser,(await submission(coverageUser,outsideCity)).body,422);
   await coverageRef.set({mode:'cities',cities:['Mandaue City']});
-  assert.deepEqual((await request('report-form.php',appearanceUser)).location.monitoring_coverage,{mode:'cities',cities:['Mandaue City']});
-  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,outsideCity)).body,201);
-  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,traitAnswers)).body,422);
+  assert.deepEqual((await request('report-form.php',coverageUser)).location.monitoring_coverage,{mode:'cities',cities:['Mandaue City']});
+  await request('submit-report.php',coverageUser,(await submission(coverageUser,outsideCity)).body,201);
+  await request('submit-report.php',coverageUser,(await submission(coverageUser,traitAnswers)).body,422);
   await coverageRef.set({mode:'province'});
-  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,outsideCity)).body,201);
-  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,{...traitAnswers,latitude:9.65,longitude:123.85})).body,422);
+  await request('submit-report.php',coverageUser,(await submission(coverageUser,outsideCity)).body,201);
+  await request('submit-report.php',coverageUser,(await submission(coverageUser,{...traitAnswers,latitude:9.65,longitude:123.85})).body,422);
   await coverageRef.set({mode:'cities',cities:['Cebu City']});
-  await request('submit-report.php',appearanceUser,(await submission(appearanceUser,outsideCity)).body,422);
+  await request('submit-report.php',coverageUser,(await submission(coverageUser,outsideCity)).body,422);
   pass('coverage defaults to Cebu City, switches to selected cities or all Cebu, and rejects stale or forged out-of-area submissions');
   console.log(`\n${checks} Supabase integration checks passed.`);
 } finally {

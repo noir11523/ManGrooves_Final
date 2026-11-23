@@ -4,12 +4,24 @@ const readBytes = file => file.arrayBuffer ? file.arrayBuffer() : new Promise((r
 });
 const sameBytes=(a,b)=>a.length===b.length&&a.every((value,index)=>value===b[index]);
 // Check file contents, not names: renaming a duplicate must not make it new.
-export async function validateReportPhotos(photos) {
+export async function validateReportPhotos(photos, candidate = null) {
   const files=photos.filter(Boolean);
   if(files.length>10)throw new Error('Use up to 10 photos.');
-  if(files.some(f=>!['image/jpeg','image/png','image/webp'].includes(f.type)))throw Object.assign(Error('Unsupported image format. Please upload JPG, PNG, or WebP.'),{code:'photo_unclear'});
-  if(files.some(f=>f.size>5*1024*1024))throw Object.assign(Error('Photo exceeds the 5 MB limit.'),{code:'photo_unclear'});
+  const checked = candidate === null ? files : [photos[candidate]];
+  if(checked.some(f=>!['image/jpeg','image/png','image/webp'].includes(f.type)))throw Object.assign(Error('Unsupported image format. Please upload JPG, PNG, or WebP.'),{code:'photo_unclear'});
+  if(checked.some(f=>f.size>5*1024*1024))throw Object.assign(Error('Photo exceeds the 5 MB limit.'),{code:'photo_unclear'});
   if(files.reduce((sum,file)=>sum+file.size,0)>12*1024*1024)throw new Error('Photos must total 12 MB or less. Remove a photo or use smaller files.');
+  // The server compares normalized fingerprints, including renamed/re-encoded metadata.
+  if (candidate !== null) {
+    const file=photos[candidate], bytes=new Uint8Array(await readBytes(file));
+    for (const [index,other] of photos.entries()) {
+      if (other && other.size===file.size && index!==candidate && sameBytes(bytes,new Uint8Array(await readBytes(other)))) {
+        throw Object.assign(new Error('Photo already added. Choose another.'),{code:'photo_duplicate',photo_indices:[candidate]});
+      }
+    }
+    await checkPhotoFile(file);
+    return;
+  }
   const contents=[];
   for(const [index,file] of photos.entries()){
     if(!file)continue;
@@ -26,12 +38,12 @@ export function photoConflictMessage(error) {
   if(error.code==='photo_already_submitted')return 'Photo already used. Choose a new one.';
   return error.message;
 }
-export async function checkReportPhotos(photos, request, submissionToken) {
-  await validateReportPhotos(photos);
+export async function checkReportPhotos(photos, request, submissionToken, candidate = null) {
+  await validateReportPhotos(photos, candidate);
   const selected = photos.map((photo,index)=>({photo,index})).filter(item=>item.photo);
   if (!selected.length) return;
   const body = new FormData();
-  body.set('payload', JSON.stringify({submission_token:submissionToken}));
+  body.set('payload', JSON.stringify({submission_token:submissionToken,...(candidate === null ? {} : {candidate_index:selected.findIndex(item=>item.index===candidate)})}));
   selected.forEach((item,index)=>body.set(`photo_${index}`,item.photo));
   try { await request('check-report-photos.php',{body}); }
   catch (error) {

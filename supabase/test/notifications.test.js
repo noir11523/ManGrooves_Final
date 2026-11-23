@@ -58,6 +58,7 @@ test('notification events, recipient isolation, catch-up and cross-device read s
       const events=await userNotifications(service,profile);assert.ok(events.some(n=>n.type==='expert_application_decision'&&n.title==='Expert application approved'));
       assert.equal(notificationSummary(await userNotifications(service,users['second-admin'])).unread,0);
     });
+    await service.ref('clusters',201).set({id:201,name:'Test site'});
     const pending={id:101,uid:guardian.uid,user_id:guardian.id,status:'pending',report_code:'Report #1',submitted_at:'2026-01-02T00:00:00Z',barangay_id:1,cluster_id:201,sitio_name:'Test site'};
     await service.ref('reports',101).set(pending);
     await service.ref('reports',102).set({...pending,id:102,uid:expert.uid,user_id:expert.id});
@@ -79,6 +80,7 @@ test('notification events, recipient isolation, catch-up and cross-device read s
       await service.updateFollowUp(expert,{report_id:101,needs_follow_up:true,expert_feedback:'Another visit is needed.'});
       notices=await userNotifications(service,guardian);assert.equal(notices.filter(n=>n.type==='followup_requested'&&!n.read_at).length,1);
       assert.ok(notices.find(n=>n.id===333).read_at);
+      await service.ref('reports',999).set({...pending,id:999,parent_report_id:101,status:'verified'});
       await service.ref('reports',101).update({active_child_id:999});assert.ok((await userNotifications(service,guardian)).filter(n=>n.type==='followup_requested').every(n=>n.read_at));
     });
     await t.test('expert-owned verified reports also get follow-up notices',async()=>{

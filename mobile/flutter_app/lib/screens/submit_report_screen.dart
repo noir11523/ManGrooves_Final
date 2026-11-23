@@ -185,6 +185,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
   bool _clearingDraft = false;
   bool _pickingPhoto = false;
   bool _checkingPhotos = false;
+  Timer? _photoNoticeTimer;
   String? _lastDraft;
   final _draftStatus = ValueNotifier<String>('');
   String? get _draftScope => widget.draftOwner == null
@@ -384,20 +385,16 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             await _addExtraPhotos(lost.files!);
             return;
           }
-          final photo = await preparePhoto(lost.files!.first),
-              extra = draft['picking_extra'] == true,
-              closeup = draft['picking_closeup'] == true;
+          final closeup = draft['picking_closeup'] == true;
           try {
             _checkingPhotos = true;
+            final photo = await preparePhoto(lost.files!.first);
             await _checkPhotos([
-              extra || closeup ? _photo?.path : photo.path,
-              extra || !closeup ? _closeupPhoto?.path : photo.path,
+              closeup ? _photo?.path : photo.path,
+              closeup ? photo.path : _closeupPhoto?.path,
               ..._extraPhotos.map((p) => p.path),
-              if (extra) photo.path,
-            ]);
-            if (extra && _extraPhotos.length < 8) {
-              _extraPhotos.add(photo);
-            } else if (closeup) {
+            ], candidate: closeup ? 1 : 0);
+            if (closeup) {
               _closeupPhoto = photo;
             } else {
               _photo = photo;
@@ -407,6 +404,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
             _error = error is ApiException
                 ? error.message
                 : 'Could not check this photo. Choose it again.';
+            _expirePhotoNotice();
           } finally {
             _checkingPhotos = false;
           }
@@ -445,6 +443,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
 
   @override
   void dispose() {
+    _photoNoticeTimer?.cancel();
     _draftEdited();
     _placeTimer?.cancel();
     _placeRequest++;
@@ -646,11 +645,18 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     await _saveDraft();
   }
 
-  Future<void> _checkPhotos(List<String?> paths) async {
+  Future<void> _checkPhotos(List<String?> paths, {int? candidate}) async {
     final selected = paths.whereType<String>().toList();
     try {
-      await validateReportPhotos(selected);
-      await widget.api.checkReportPhotos(selected, _submissionToken);
+      final index = candidate == null
+          ? null
+          : paths.take(candidate).whereType<String>().length;
+      await validateReportPhotos(selected, candidate: index);
+      await widget.api.checkReportPhotos(
+        selected,
+        _submissionToken,
+        candidateIndex: index,
+      );
     } on ApiException catch (error) {
       final slots = paths
           .asMap()
@@ -670,6 +676,15 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
   }
 
+  void _expirePhotoNotice() {
+    final text = _error;
+    _photoNoticeTimer?.cancel();
+    if (text == null) return;
+    _photoNoticeTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted && _error == text) setState(() => _error = null);
+    });
+  }
+
   void _showPhotoFailure(Object error) {
     if (!mounted) return;
     setState(() {
@@ -680,6 +695,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
                 : error.message)
           : 'Could not check the photos. Try again.';
     });
+    _expirePhotoNotice();
     _draftEdited();
     _scrollToQuestion();
   }
@@ -725,7 +741,11 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
     _pickingExtra = extra;
     _pickingCloseup = closeup;
-    setState(() => _pickingPhoto = true);
+    _photoNoticeTimer?.cancel();
+    setState(() {
+      _error = null;
+      _pickingPhoto = true;
+    });
     try {
       await _saveDraft();
       if (extra && source == ImageSource.gallery) {
@@ -742,12 +762,19 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         setState(() {
           _checkingPhotos = true;
         });
-        await _checkPhotos([
-          extra || closeup ? _photo?.path : image.path,
-          extra || !closeup ? _closeupPhoto?.path : image.path,
-          ..._extraPhotos.map((p) => p.path),
-          if (extra) image.path,
-        ]);
+        await _checkPhotos(
+          [
+            extra || closeup ? _photo?.path : image.path,
+            extra || !closeup ? _closeupPhoto?.path : image.path,
+            ..._extraPhotos.map((p) => p.path),
+            if (extra) image.path,
+          ],
+          candidate: extra
+              ? 2 + _extraPhotos.length
+              : closeup
+              ? 1
+              : 0,
+        );
         if (!mounted) return;
         setState(() {
           _error = null;
@@ -791,7 +818,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
           _closeupPhoto?.path,
           ..._extraPhotos.map((p) => p.path),
           photo.path,
-        ]);
+        ], candidate: 2 + _extraPhotos.length);
         if (!mounted) return;
         setState(() => _extraPhotos.add(photo));
         await _saveDraft();
@@ -803,6 +830,7 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
     }
     if (mounted) {
       setState(() => _error = failures.isEmpty ? null : failures.join('\n'));
+      _expirePhotoNotice();
     }
   }
 
@@ -2218,7 +2246,9 @@ class SubmitReportScreenState extends State<SubmitReportScreen>
         onPressed: _pickingPhoto || _checkingPhotos || _detailsCoverageBlocked
             ? null
             : _continuePhotos,
-        child: Text(_checkingPhotos ? 'Preparing photos...' : 'Continue'),
+        child: Text(
+          _checkingPhotos || _pickingPhoto ? 'Checking photos...' : 'Continue',
+        ),
       ),
     ],
   );

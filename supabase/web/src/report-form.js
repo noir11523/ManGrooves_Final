@@ -25,8 +25,8 @@ export async function reportWizard(node, query, user = null) {
   const closeupStorage=new ReportDraftStore(scope==null?null:`${apiUrl('report-form.php')}:${scope}:closeup`);
   const extraStorage=Array.from({length:8},(_,i)=>new ReportDraftStore(scope==null?null:`${apiUrl('report-form.php')}:${scope}:extra${i}`));
   const clearPhotos=async()=>{await closeupStorage.clear();await Promise.all(extraStorage.map(s=>s.clear()));};
-  let extraUrls=[],photoWork=Promise.resolve();
-  const checkPhotos=photos=>checkReportPhotos(photos,api,draft.fields.submission_token);
+  let extraUrls=[],photoWork=Promise.resolve(),photoNoticeTimer;
+  const checkPhotos=(photos,candidate=null)=>checkReportPhotos(photos,api,draft.fields.submission_token,candidate);
   const coverageEnabled=Boolean(data.location?.monitoring_coverage);
   let coveragePoint='',coverageAllowed=false,coverageMessage='',coverageGeneration=0;
   const coverageReady=()=>!coverageEnabled || (coverageAllowed && coveragePoint===addressPoint(draft.fields));
@@ -173,7 +173,7 @@ export async function reportWizard(node, query, user = null) {
   };
   const leaving = () => { void flush(); };
   document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', leaving);
-  const dispose = () => { void flush(); stopped = true; clearTimeout(searchTimer);searchGeneration++;stopGps(); canvas?.remove(); canvas = null; if (photoUrl) URL.revokeObjectURL(photoUrl); if(closeupUrl) URL.revokeObjectURL(closeupUrl); extraUrls.forEach(URL.revokeObjectURL); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', leaving); window.removeEventListener('popstate',browserBack); draft.flush = async () => {}; };
+  const dispose = () => { void flush(); stopped = true; clearTimeout(photoNoticeTimer); clearTimeout(searchTimer);searchGeneration++;stopGps(); canvas?.remove(); canvas = null; if (photoUrl) URL.revokeObjectURL(photoUrl); if(closeupUrl) URL.revokeObjectURL(closeupUrl); extraUrls.forEach(URL.revokeObjectURL); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', leaving); window.removeEventListener('popstate',browserBack); draft.flush = async () => {}; };
   async function render() {
     clearTimeout(searchTimer); searchGeneration++;addressEdited=()=>{};updateAddressControls=()=>{};
     stopGps(); canvas?.remove(); canvas = null; marker = null; accuracyCircle = null;
@@ -308,11 +308,18 @@ export async function reportWizard(node, query, user = null) {
       photoWork=photoWork.then(async()=>{
         if(stopped||draft.step!==0)return;
         const status=node.querySelector('#photo-status'),next=node.querySelector('#next'),wasDisabled=next.disabled;
-        photoBusy=true;status.textContent='Preparing photos...';status.hidden=false;next.disabled=true;
+        clearTimeout(photoNoticeTimer);$('#report-form .error').textContent='';
+        photoBusy=true;status.textContent='Checking photo quality...';status.hidden=false;next.disabled=true;
         node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=true);
-        try{status.textContent=await work()||'Photos ready.';}
+        try{status.textContent=await work()||'Photo accepted.';}
         catch(error){const message=node.querySelector('#report-form .error');status.hidden=true;if(!stopped&&draft.step===0&&message)showError(message,detailsPhotoMessage(error));}
-        finally{photoBusy=false;next.disabled=wasDisabled;node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=false);updateAddressControls();}
+        finally{
+          const message=node.querySelector('#report-form .error'),text=message?.textContent;
+          photoNoticeTimer=setTimeout(()=>{
+            if(message&&message.textContent===text)message.textContent='';
+            status.hidden=true;
+          },8000);
+          photoBusy=false;next.disabled=wasDisabled;node.querySelectorAll('.remove-photo').forEach(b=>b.disabled=false);updateAddressControls();}
       });return photoWork;
     };
     const addPhotos=files=>changePhotos(async()=>{
@@ -324,7 +331,7 @@ export async function reportWizard(node, query, user = null) {
           try{
             if(draft.extraPhotos.length>=8)throw new Error('Add up to eight additional photos (10 total).');
             const photo=await prepareReportPhoto(file);
-            await checkPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos,photo]);
+            await checkPhotos([draft.photo,draft.closeupPhoto,...draft.extraPhotos,photo],2+draft.extraPhotos.length);
             if(stopped||draft.step!==0)return;
             draft.extraPhotos.push(photo);added++;changed();showPhoto();
           }catch(error){failures.push(`${file.name}: ${detailsPhotoMessage(error)}`);}
@@ -339,7 +346,7 @@ export async function reportWizard(node, query, user = null) {
     });
     const replacePhoto=(photo,closeup)=>changePhotos(async()=>{
       photo=await prepareReportPhoto(photo);
-      await checkPhotos([closeup?draft.photo:photo,closeup?photo:draft.closeupPhoto,...draft.extraPhotos]);
+      await checkPhotos([closeup?draft.photo:photo,closeup?photo:draft.closeupPhoto,...draft.extraPhotos],closeup?1:0);
       if(stopped||draft.step!==0)return;
       if(closeup)draft.closeupPhoto=photo;else draft.photo=photo;
       changed();showPhoto();$('#report-form .error').textContent='';

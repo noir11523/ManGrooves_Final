@@ -368,8 +368,9 @@ class ApiClient {
 
   Future<void> checkReportPhotos(
     List<String> paths,
-    String submissionToken,
-  ) async {
+    String submissionToken, {
+    int? candidateIndex,
+  }) async {
     // The archived LAN/PHP API does not advertise preflight. Cloud builds
     // override this method and always check before accepting a photo.
     if (_configurationCache?['photo_preflight'] != true) return;
@@ -381,6 +382,7 @@ class ApiClient {
       request.headers.addAll(_headers());
       request.fields['payload'] = jsonEncode({
         'submission_token': submissionToken,
+        'candidate_index': ?candidateIndex,
       });
       for (var i = 0; i < paths.length; i++) {
         request.files.add(

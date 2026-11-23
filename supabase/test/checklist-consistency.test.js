@@ -31,7 +31,7 @@ test('observation presentation uses configured category/choice order and preserv
 test('manual supporting migration is idempotent and never changes reports or logs',async t=>{
  const {pg,db}=await databaseFixture();t.after(()=>pg.close());
  for(const c of criteria)await db.collection('criteria').doc(String(c.id)).set(c);
- for(const name of ['reports','verification_logs','audit_logs'])await db.collection(name).doc('history').set({points:2,health_score:6,observation_snapshots:criteria});
+ for(const name of ['reports','verification_logs','audit_logs'])await db.collection(name).doc('1').set({id:1,points:2,health_score:6,observation_snapshots:criteria});
  const before=(await pg.query("select collection,document_id,data,revision from app_documents where collection <> 'criteria' order by collection,document_id")).rows;
  const sql=readFileSync(new URL('../manual-migrations/supporting-points-zero.sql',import.meta.url),'utf8');await pg.exec(sql);
  const once=(await pg.query("select data,revision from app_documents where collection='criteria' order by document_id")).rows;

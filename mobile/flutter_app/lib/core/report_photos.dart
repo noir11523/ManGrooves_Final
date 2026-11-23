@@ -5,14 +5,14 @@ import 'package:flutter/foundation.dart';
 import 'api_client.dart';
 import 'photo_quality.dart';
 
-Future<void> validateReportPhotos(List<String> paths) async {
+Future<void> validateReportPhotos(List<String> paths, {int? candidate}) async {
   if (paths.length > 10) throw const ApiException('Use up to 10 photos.');
   var total = 0;
   final contents = <Uint8List>[];
   for (var index = 0; index < paths.length; index++) {
     final path = paths[index];
     final file = File(path), size = await File(path).length();
-    if (size > 5 * 1024 * 1024) {
+    if ((candidate == null || candidate == index) && size > 5 * 1024 * 1024) {
       throw ApiException(
         'Photo exceeds the 5 MB limit.',
         code: 'photo_unclear',
@@ -26,7 +26,8 @@ Future<void> validateReportPhotos(List<String> paths) async {
       );
     }
     final bytes = await file.readAsBytes();
-    if (contents.any((previous) => listEquals(previous, bytes))) {
+    if (candidate == null &&
+        contents.any((previous) => listEquals(previous, bytes))) {
       throw ApiException(
         'Photo already added. Choose another.',
         code: 'photo_duplicate',
@@ -36,6 +37,19 @@ Future<void> validateReportPhotos(List<String> paths) async {
     contents.add(bytes);
   }
   for (var index = 0; index < contents.length; index++) {
+    if (candidate != null && index != candidate) continue;
+    if (candidate != null &&
+        contents.asMap().entries.any(
+          (entry) =>
+              entry.key != candidate &&
+              listEquals(entry.value, contents[candidate]),
+        )) {
+      throw ApiException(
+        'Photo already added. Choose another.',
+        code: 'photo_duplicate',
+        photoIndices: [candidate],
+      );
+    }
     try {
       await checkPhotoFile(contents[index]);
     } on ApiException catch (error) {

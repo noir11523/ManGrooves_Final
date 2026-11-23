@@ -113,11 +113,19 @@ class _Api extends ApiClient {
   @override
   Future<void> checkReportPhotos(
     List<String> paths,
-    String submissionToken,
-  ) async {
+    String submissionToken, {
+    int? candidateIndex,
+  }) async {
     photoChecks++;
     expect(submissionToken, isNotEmpty);
     if (photoFailure != null) throw photoFailure!;
+    if (candidateIndex != null && paths[candidateIndex].endsWith('blur.jpg')) {
+      throw ApiException(
+        'Photo is blurry. Take a clearer photo.',
+        code: 'photo_unclear',
+        photoIndices: [candidateIndex],
+      );
+    }
   }
 
   int submissions = 0;
@@ -1609,7 +1617,7 @@ void main() {
       var picked = 0;
       messenger.setMockMethodCallHandler(channel, (call) async {
         if (call.method == 'pickMultiImage') {
-          return ['blur.jpg', 'dark.jpg', 'low-resolution.jpg']
+          return ['clear.png', 'blur.jpg', 'clear.webp']
               .map(
                 (name) =>
                     File('../../supabase/test/fixtures/quality/$name')
@@ -1658,15 +1666,16 @@ void main() {
         find.widgetWithText(OutlinedButton, 'Photo'),
         photoIO: true,
       );
-      expect(find.text('3/8'), findsOneWidget);
-      expect(find.byTooltip('Remove photo 3'), findsOneWidget);
+      expect(find.text('2/8'), findsOneWidget);
+      expect(find.byTooltip('Remove photo 2'), findsOneWidget);
+      expect(find.textContaining('Photo is blurry'), findsOneWidget);
       // A second selection must append, and duplicates must not replace earlier photos.
       await tap(
         tester,
         find.widgetWithText(OutlinedButton, 'Photo'),
         photoIO: true,
       );
-      expect(find.text('3/8'), findsOneWidget);
+      expect(find.text('2/8'), findsOneWidget);
       expect(find.textContaining('Photo already added'), findsOneWidget);
       await tap(
         tester,
@@ -1862,13 +1871,7 @@ void main() {
         api.sentPhotos!
             .map((p) => p.replaceAll('\\', '/').split('/').last)
             .toList(),
-        [
-          'clear.jpg',
-          'close-up.jpg',
-          'blur.jpg',
-          'dark.jpg',
-          'low-resolution.jpg',
-        ],
+        ['clear.jpg', 'close-up.jpg', 'clear.png', 'clear.webp'],
       );
       expect(drafts.saved, isEmpty);
       expect(api.previews, greaterThan(0));
