@@ -31,6 +31,16 @@ The hosted database contains 24 application tables and 33 foreign keys. The sour
 
 A hosted rollback rehearsal preserved a write made after migration and exercised the previous document adapter. The rehearsal transaction was rolled back to leave the clone relational. A disposable account tested password sign-in, the guardian report form, expert verification queue, administrator dashboard and analytics. The hosted photo endpoint accepted clear photos, rejected motion blur and duplicates, and accepted a valid candidate alongside a rejected one. The account was removed and record parity was checked again.
 
+## Production release on November 23, 2026
+
+The live migration completed on Supabase. All 480 application records matched the pre-migration archive, including their IDs, values and revisions. A user registered after the earlier 474-record comparison. The six extra records were one profile, one audit event and four rate-limit entries. One existing metadata record also changed. Production had 25 Auth accounts, 41,356 barangay boundaries, 24 relational tables and 33 foreign keys after the switch. The 41 historical references to missing reports retained their original values.
+
+The encrypted project archive passed decryption and archive verification. A separate encrypted Git and application backup includes the release commit and all 480 records. Both Storage buckets were backed up again and all 108 files passed checksum verification. These workstation backups use Windows account protection. Keep access to the originating Windows account for recovery.
+
+The release passed 213 backend and web tests, 103 API integration checks, 28 Vercel tests and 175 Flutter tests. One optional Flutter test for local-server discovery was skipped. Desktop and mobile-width browser checks covered mixed selections and replacing a rejected photo. Motion-blur testing used a synthetic light-trail fixture. A physical phone camera test remains outstanding.
+
+The production website bundle and downloaded Android APK matched the tested files. Android build `2.0.0+81` uses the same package and signing certificate as build 80. The published APK SHA-256 is `09f2d6e3cdf88b3ec49589284ed79dbb49aef5951e499818e4777aaaf631e743`. [Website](https://mangrooves-php.vercel.app) · [Android APK](https://mangrooves-php.vercel.app/downloads/ManGROOVES-Supabase.apk)
+
 ## Report photo checks
 
 Each newly selected photo is checked independently. Accepted photos stay attached when another fails. The website and Flutter app clear the old warning when a new selection starts and dismiss batch feedback after eight seconds. The API checks all report photos again before saving. Required overview and close-up photos, ten photos total, private storage and duplicate detection still apply.
