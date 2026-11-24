@@ -5,12 +5,57 @@ The migration creates 24 tables under the PostgreSQL schema `mangrooves` and 33 
 | Records | Where they live |
 | --- | --- |
 | Identity and location | `actors` links a local contributor ID to an Auth UUID. `users`, `expert_applications`, `barangay_keys`, and `barangays` hold profiles, applications and locations. Historical reports retain the contributor ID after an account is deleted. |
-| Field reporting | `reports` references users, sites, species and follow-up reports. `report_extra_photos` keeps additional photo paths in order. `clusters` stores sites. The private objects keep their original paths in Storage. |
+| Field reporting | `reports.user_id` references `actors.id` for the submitter. Reports also link to sites, species and follow-up reports. `report_extra_photos` keeps additional photo paths in order. `clusters` stores sites. The private objects keep their original paths in Storage. |
 | Species and checklist | `species`, `criteria`, and `checklist_choices` store species, questions and ordered answers. Submitted observations and traits remain snapshots so editing the checklist does not rewrite history. |
 | Review and recognition | `verification_logs`, `audit_logs`, `notifications`, `notification_keys`, `badges`, `user_badges`, and `certificate_links` keep the review, notification and award records. |
 | Operations | `photo_claims` tracks photo reuse. `rate_limits`, `migration_files`, and `meta` retain service state. `record_types` maps the API collections to SQL tables. `legacy_missing_references` records an old ID whose target was already missing at migration. |
 
 Application tables keep the existing document key and revision. Typed columns hold regular fields. JSONB preserves historical answer snapshots, versioned configuration such as custom trait catalogs, and older fields or representations required by existing clients. A compatibility view reconstructs the old API format. The original document table stays in the private archive schema. PostGIS continues to use the existing barangay boundary table and spatial index.
+
+## Core relationships for the capstone presentation
+
+These diagrams show selected physical foreign keys. Each arrow points from a referencing column to its parent. The [full physical ERD](diagrams/MANGROOVES_RELATIONAL_ERD.svg) includes the supporting tables.
+
+```mermaid
+flowchart LR
+  users -->|id to id| actors
+  reports -->|user_id or expert_id to id| actors
+  reports -->|cluster_id to id| clusters
+  reports -->|suggested_species_id or final_species_id to id| species
+  reports -->|barangay_id to id| barangay_keys
+  clusters -->|barangay_id to id| barangay_keys
+  barangays -->|id to id| barangay_keys
+  verification_logs -->|report_id to id| reports
+  verification_logs -->|verifier_id to id| actors
+  report_extra_photos -->|report_key to document_id| reports
+```
+
+Start with one report. Its submitter and reviewer each have an actor ID. Join that ID to `users.id` for the current profile. One site can have many reports. One report can have multiple review entries and extra photos. The suggested species and the expert's final species are separate decisions and can differ. Follow-up reports link back through `reports.parent_report_id`.
+
+```mermaid
+flowchart LR
+  certificate_links -->|"user_id and badge_id together"| user_badges
+  user_badges -->|user_id to id| actors
+  user_badges -->|badge_id to id| badges
+  checklist_choices -->|criterion_key to document_id| criteria
+```
+
+An award belongs to one recipient and identifies the badge they earned. PostgreSQL enforces uniqueness for each populated recipient/badge pair. A certificate share link uses that same pair as one foreign key. The checklist stores current questions and choices. Each report keeps the submitted answers as a JSONB snapshot so an edit to today's checklist preserves yesterday's answers. The snapshot is an application-level link to the checklist. Site totals and latest condition are summaries of verified reports.
+
+### Supporting tables and cleanup review
+
+| Table | Reason to retain it |
+| --- | --- |
+| `rate_limits` | Registration and email-code requests use its counters to limit repeated attempts. |
+| `notification_keys` | A unique event key per recipient prevents duplicate alerts when a request repeats. |
+| `meta` | Stores active settings such as monitoring coverage, checklist layout and report numbering. |
+| `record_types` | The SQL write function reads this registry to select the table and columns for each API record. |
+| `legacy_missing_references` | Preserves the original ID for 41 historical links whose target was already missing at migration. The corresponding SQL foreign-key fields are null. |
+| `migration_files` | The importer checks these file pointers before uploading a photo again. It had zero rows on November 24, 2026. The supported import procedure still references it. |
+
+The API uses a text `document_id` primary key on 18 tables. Business records such as reports and species also have a unique numeric `id`. Both are valid join targets when the foreign key names them. Report photos use the text key, while reviews use the numeric key. The private archive preserves the original records for recovery.
+
+**Verification on November 24, 2026.** A read-only production check counted 24 application tables, 24 primary keys and 33 validated foreign keys. All 11 reports joined to a submitter profile and monitoring site. All six recorded suggested-species IDs and the one recorded final-species ID resolved. There were zero duplicate award pairs and zero certificate share links in production. In an isolated database using the same migration, PostgreSQL accepted a valid certificate link, rejected a link for another recipient and rejected a second award for the same recipient/badge pair.
 
 ## Restore rehearsal and production switch
 
